@@ -9,11 +9,31 @@ import {
   solveHu,
   loadHuTableBrowser,
   type LoadedHuTable,
+  type McRunner,
+  type ShowdownMcResult,
 } from '@oshihiki/solver';
 // HU equity テーブルは静的アセットとして同梱（?url でハッシュ付き URL に解決）。
 import huBinUrl from '../../solver/artifacts/hu-equity-169.f32.bin?url';
 import huMetaUrl from '../../solver/artifacts/hu-equity-169.meta.json?url';
-import type { SolveRequest, SolveResponse, SolveResultDto } from './solverProtocol';
+import type {
+  McRequest,
+  McResultMsg,
+  SolveRequest,
+  SolveResponse,
+  SolveResultDto,
+} from './solverProtocol';
+
+// ショーダウン MC はメインスレッドの Web Worker プールで並列化する（入れ子 Worker は
+// Vite で不安定なため）。ここではメインへジョブを投げ、結果を待つ mcRunner を組む。
+let mcReqId = 1;
+const mcPending = new Map<number, { resolve: (r: ShowdownMcResult[]) => void; reject: (e: Error) => void }>();
+const mcRunner: McRunner = (jobs) =>
+  new Promise<ShowdownMcResult[]>((resolve, reject) => {
+    const reqId = mcReqId++;
+    mcPending.set(reqId, { resolve, reject });
+    const msg: McRequest = { kind: 'mc', reqId, jobs };
+    self.postMessage(msg);
+  });
 
 let tablePromise: Promise<LoadedHuTable> | null = null;
 function getHuTable(): Promise<LoadedHuTable> {
@@ -62,8 +82,20 @@ function toDto(r: CommonResult, playersLeft: number, heroPos: string, heroHand: 
   };
 }
 
-self.onmessage = async (e: MessageEvent<SolveRequest>): Promise<void> => {
-  const { id, state, opts } = e.data;
+self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<void> => {
+  const data = e.data;
+  // メインから返る MC 結果はここで受けて mcRunner の Promise を解決する
+  // （SolveRequest には kind が無いため、'kind' の有無で判別できる）。
+  if ('kind' in data) {
+    const p = mcPending.get(data.reqId);
+    if (!p) return;
+    mcPending.delete(data.reqId);
+    if (data.error) p.reject(new Error(data.error));
+    else p.resolve(data.results ?? []);
+    return;
+  }
+
+  const { id, state, opts } = data;
   const t0 = performance.now();
   try {
     let dto: SolveResultDto;
@@ -72,7 +104,7 @@ self.onmessage = async (e: MessageEvent<SolveRequest>): Promise<void> => {
       const r = solveHu(state, { table, ...(opts?.maxIters ? { maxIters: opts.maxIters } : {}) });
       dto = toDto(r as unknown as CommonResult, 2, state.heroPos, state.heroHand);
     } else {
-      const r = await solveMultiway(state, { workers: 0, ...opts });
+      const r = await solveMultiway(state, { workers: 0, mcRunner, ...opts });
       dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);
     }
     const res: SolveResponse = { id, ok: true, result: dto, ms: performance.now() - t0 };

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { BoardState, Position } from '@oshihiki/core';
 import { positionsForPlayersLeft, isCanonicalKey } from '@oshihiki/core';
-import { solveMultiway, evaluateMultiwayStrategy } from '../src/nwaySolver.js';
+import { solveMultiway, evaluateMultiwayStrategy, type McRunner } from '../src/nwaySolver.js';
 import { solveThreeWay } from '../src/multiwaySolver.js';
+import { computeShowdownMc } from '../src/showdownJob.js';
 
 /** 等スタック N-way（アンティ無し）を作る。 */
 function equalStacks(n: number, stack: number, sb = 0.5, bb = 1.0): BoardState {
@@ -184,6 +185,27 @@ describe('solveMultiway — cardRemoval:true 経路（M5, opt-in）', () => {
         if (differs) break;
       }
       expect(differs).toBe(true);
+    },
+    TIMEOUT,
+  );
+});
+
+describe('solveMultiway — mcRunner 注入（3-1x, ブラウザ並列の契約）', () => {
+  it(
+    '同一シードの mcRunner 注入は内蔵単一スレッド経路と bit 一致',
+    async () => {
+      const state = equalStacks(4, 10);
+      const CFG = { maxIters: 40, refreshEvery: 20, samples: 6000, seed: 5 } as const;
+      // 注入ランナーは各ジョブを同じ computeShowdownMc に同じ seed で流すだけ（順序保存）。
+      const runner: McRunner = async (jobs) =>
+        jobs.map((j) => computeShowdownMc(j.node, j.ranges, j.samples, j.seed));
+      const base = await solveMultiway(state, CFG);
+      const injected = await solveMultiway(state, { ...CFG, mcRunner: runner });
+      expect([...injected.strategies.keys()].sort()).toEqual([...base.strategies.keys()].sort());
+      for (const [key, arr] of base.strategies) {
+        expect(Array.from(injected.strategies.get(key)!)).toEqual(Array.from(arr));
+      }
+      expect(injected.exploitabilityPt).toBe(base.exploitabilityPt);
     },
     TIMEOUT,
   );

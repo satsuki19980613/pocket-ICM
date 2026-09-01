@@ -12,7 +12,7 @@ IMPLEMENTATION_PLAN Phase 3（アプリ / ローカル完結 PWA）の実装記�
 | **3-1a** | app 土台（Vite+React+PWA）＋ソルバーのブラウザ対応＋Web Worker で in-browser 求解 | ✅ |
 | **3-1b** | 手入力フォーム → 条件確認 → エラー（§7.1, §6.5） | ✅ |
 | **3-1c** | 基本の結果画面（判定・EV色バンド・13×13レンジ表・EQ・収束品質, §7.2 の一部） | ✅ |
-| 3-1x | ブラウザ多 Web Worker 並列化（5〜6人の速度・収束） | 次 |
+| **3-1x** | ショーダウン MC のブラウザ Web Worker 並列化（CPU60%） | ✅ |
 
 記録(IndexedDB=3-4)・Drill(3-6)・OCR(Phase2)・画像書き出し(Tier2)・Action tree の
 全展開(3-2)は後続。モックの SNS 系画面（auth/home/thread/profile）は SPEC 削除済みのため作らない。
@@ -47,10 +47,48 @@ IMPLEMENTATION_PLAN Phase 3（アプリ / ローカル完結 PWA）の実装記�
 - **5〜6人は単一スレッドだと「遅い上に未収束」**。150 反復では境界ハンドが荒れ、
   レンジに軽度 −EV のハンドが混じる（結果画面は `converged=false` を明示して正直に扱う）。
   A5s の EV が −0.107pt（PUSH 判定なのに負）になったのはこの未収束が原因で、バグではない。
-- 収束には ~1500 反復要（bench §4）が単一スレッドでは非現実的。したがって次は
-  **ブラウザ多 Web Worker 並列化（3-1x）**が必須。並列でショーダウン MC を分散し、
-  現実的時間で反復数を確保する（Node の worker_threads プール相当を Web Worker で用意）。
-  2〜4 人・HU は現状でも実用（HU 0.24s / converged=true）。
+- 収束には ~1500 反復要（bench §4）が単一スレッドでは非現実的。したがって
+  **ブラウザ多 Web Worker 並列化（3-1x）**を実装した（下記）。
+
+## 3-1x ショーダウン MC のブラウザ並列化
+
+ショーダウン MC（求解コストの本丸, `showdownMc`）を複数 Web Worker に分散する。
+`solveMultiway({ mcRunner })` に**並列ランナーを依存性注入**する形にし、Node の
+worker_threads プール経路（`workers`）は不変のまま、ブラウザは Web Worker プールを注入する。
+
+### 配置（入れ子 Worker を避ける）
+
+当初は求解 Worker が MC 下請け Worker を入れ子で spawn する設計にしたが、**Vite では
+入れ子 Web Worker がロードに失敗**（空の ErrorEvent, dev/prod とも）。そこで MC プールは
+**メインスレッドが所有**し、求解 Worker からの MC 要求をメインが中継する構成にした:
+
+```
+求解Worker(FP反復) ──mc要求──▶ メイン(ルーティング) ──▶ mcWorker×N(CPU60%) ──▶ 結果
+        ▲                                                              │
+        └──────────────────── mc結果 ◀────────────────────────────────┘
+```
+
+- `mcWorker.ts`: computeShowdownMc を呼ぶ下請け（Node の nwayWorker.ts 相当）。
+- `mcPool.ts`: メインが持つ Web Worker プール（`navigator.hardwareConcurrency×0.6`）。
+- `solver.worker.ts`: `mcRunner` はメインへ `{kind:'mc'}` を投げて結果を待つ。
+- `solverClient.ts`: 求解 Worker と MC プールを両方メインで生成し、`{kind:'mc'}` を中継。
+- 契約テスト（`nwaySolver.test.ts`）: 同一シードの `mcRunner` 注入が内蔵単一スレッド経路と
+  **bit 一致**することを検証（並列でも結果が変わらない保証）。
+
+### 実測（28コア機, CPU60%=16 mcWorker）
+
+| N | 反復/サンプル | 求解時間 | exploitability | 収束 |
+|---|---|---|---|---|
+| 2 (HU) | 既定 | <1s | 〜0.001 | ✓ |
+| 3 | 400 / 50k | 〜14s | 0.0136 | ほぼ床 |
+| 4 | 600 / 40k | **25s（prod）** | 0.0143 | ✓ |
+| 5 | 600 / 32k | 〜43s（dev） | 0.0166 | 床 |
+| 6 | 500 / 24k | 〜75s（dev） | 0.0244 | best-effort |
+
+- 5-way は並列化前 **88s / expl 0.0725** → **43s / 0.0166**（速度2倍・収束4倍改善）。
+  未収束由来の「PUSH なのに −EV」の破綻も解消（A5s UTG は正しく僅差 FOLD）。
+- **2〜4 人・HU は実用**（数秒〜25s, converged）。**5〜6 人は数十秒**（レビュー用途では許容だが
+  SPEC §8「数秒」には未達）。さらなる短縮は Linear-Nash warm start・MC 分散低減が候補（後続）。
 
 ## 技術選定（3-1a, さつき承認済み）
 

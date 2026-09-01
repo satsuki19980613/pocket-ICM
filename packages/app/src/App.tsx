@@ -10,19 +10,22 @@ import type { SolveResultDto } from './solverProtocol';
 
 type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error';
 
-/** 人数に応じた求解パラメータ（対話速度優先。5〜6人はブラウザ並列化まで暫定）。 */
+/**
+ * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
+ * 反復・サンプルを厚めに取れる。exploitability がしきい値に達すれば早期終了する。
+ */
 function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
   switch (n) {
     case 2:
       return {};
     case 3:
-      return { maxIters: 300, samples: 40_000 };
+      return { maxIters: 600, samples: 50_000 };
     case 4:
-      return { maxIters: 200, samples: 30_000 };
+      return { maxIters: 600, samples: 40_000 };
     case 5:
-      return { maxIters: 150, samples: 22_000 };
+      return { maxIters: 600, samples: 32_000 };
     default:
-      return { maxIters: 100, samples: 16_000 };
+      return { maxIters: 500, samples: 24_000 };
   }
 }
 

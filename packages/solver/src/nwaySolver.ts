@@ -120,6 +120,21 @@ interface NodeDesc {
   key: string;
 }
 
+/** 1 ショーダウン MC ジョブの入力（環境非依存）。 */
+export interface ShowdownMcJob {
+  node: ShowdownNode;
+  ranges: F64[];
+  samples: number;
+  seed: number;
+}
+
+/**
+ * ショーダウン MC の並列ランナー（依存性注入）。渡された全ジョブを（並列に）解いて
+ * 入力順の結果配列を返す。ブラウザは Web Worker プールで、Node は既定の worker_threads
+ * プールで実装できる。指定時は `workers` より優先される。
+ */
+export type McRunner = (jobs: ShowdownMcJob[]) => Promise<ShowdownMcResult[]>;
+
 /** N-way 求解の共通オプション。 */
 export interface MultiwayNSolveOptions {
   maxIters?: number;
@@ -147,6 +162,12 @@ export interface MultiwayNSolveOptions {
    * 将来の「完全カードリムーバル」実装への足場・再現用に opt-in で残す。
    */
   cardRemoval?: boolean;
+  /**
+   * ショーダウン MC の並列ランナー（依存性注入）。指定すると `workers`（Node の
+   * worker_threads プール）より優先し、refresh の全ジョブをこのランナーに渡す。
+   * ブラウザ（App）は Web Worker プールをここに注入して並列化する。
+   */
+  mcRunner?: McRunner;
 }
 
 export interface MultiwayNSolveResult {
@@ -177,7 +198,13 @@ function defaultSamples(n: number): number {
  * 状態から終局構造・ノード集合・ショーダウン MC を束ねた「エンジン」。
  * solve と evaluate で共用する。
  */
-function buildEngine(state: BoardState, samples: number, seed: number, workers: number) {
+function buildEngine(
+  state: BoardState,
+  samples: number,
+  seed: number,
+  workers: number,
+  mcRunner?: McRunner,
+) {
   const n = state.playersLeft;
   const order = positionsForPlayersLeft(n);
   const payouts = payoutsForPlayers(n);
@@ -297,6 +324,15 @@ function buildEngine(state: BoardState, samples: number, seed: number, workers: 
       pcEqA.set(A, m);
       smA.set(A, res.seatMarginal);
     };
+
+    // 注入された並列ランナー（ブラウザ Web Worker プール等）があれば最優先で使う。
+    if (mcRunner) {
+      const results = await mcRunner(
+        jobs.map((j) => ({ node: j.node, ranges: j.ranges, samples, seed: j.jobSeed })),
+      );
+      for (let i = 0; i < jobs.length; i++) store(jobs[i]!.A, jobs[i]!.participants, results[i]!);
+      return;
+    }
 
     const wp = await ensurePool();
     if (!wp) {
@@ -585,7 +621,7 @@ export async function solveMultiway(
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
   const cardRemoval = opts.cardRemoval ?? false;
-  const eng = buildEngine(state, samples, seed, workers);
+  const eng = buildEngine(state, samples, seed, workers, opts.mcRunner);
   const poolPt = eng.payouts.reduce((a, b) => a + b, 0);
   // ノードレベル MC の推定量バイアス + アクション確率のカードリムーバル近似で
   // 均衡でも ~プール比 0.1% の床を持つ（M3 申し送り）。しきい値は床の上に置く。
@@ -662,7 +698,7 @@ export async function evaluateMultiwayStrategy(
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
   const cardRemoval = opts.cardRemoval ?? false;
-  const eng = buildEngine(state, samples, seed, workers);
+  const eng = buildEngine(state, samples, seed, workers, opts.mcRunner);
   try {
     const strat = new Map<number, F64>();
     for (const nd of eng.nodes) {

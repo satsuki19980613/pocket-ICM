@@ -7,10 +7,10 @@
 - バックエンドなし。端末ローカル完結の PWA として配布予定（本リポジトリは Solver コアから着手）。
 - 仕様の正: [`SPEC.md`](SPEC.md) / 進め方の正: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 
-## 現在の状態: Phase 3-1c（手入力 ICM フロー）
+## 現在の状態: Phase 3-1（手入力 ICM フロー完成 / ブラウザ並列求解）
 
 Solver コア（Phase 1, 2〜6人）＋精度改善の第一実験（M5）＋**手入力→条件確認→結果の
-ICM 計算フロー**（App, 端末内求解）まで完了。次はブラウザ並列化（5〜6人の速度・収束）。
+ICM 計算フロー**（App, 端末内求解, Web Worker 並列）まで完了。次は OCR プリフィル（Phase 2）。
 
 | 項目 | 内容 | 状態 |
 |---|---|---|
@@ -28,6 +28,7 @@ ICM 計算フロー**（App, 端末内求解）まで完了。次はブラウザ
 | **M5 / §5** | **hero カードリムーバル補正（アクション確率）の実装・評価 → 負の結果（既定は card-blind 維持）** | ✅ 実験完了 |
 | **3-1a** | **App 土台（React+Vite+PWA）＋ソルバーのブラウザ対応＋Web Worker で in-browser 求解** | ✅（HU 0.24s / 4-way 11.5s 単一スレッド） |
 | **3-1b/c** | **手入力フォーム→条件確認→エラー→結果画面（判定・EV色バンド・13×13レンジ表・EQ・収束品質）** | ✅（実機で全フロー確認） |
+| **3-1x** | **ショーダウン MC のブラウザ Web Worker 並列化（mcRunner 注入, CPU60%）** | ✅（5-way 88→43s・expl 0.0725→0.0166） |
 
 M4 の要点は [`docs/NWAY_VALIDATION.md`](docs/NWAY_VALIDATION.md)。実 HRC 5-way で **EQ は
 ±0.04pt-% 以内で一致**。先手 push レンジは MC 推定量の exploitability 床（プール比 ≈0.14%）

@@ -4,6 +4,7 @@
  */
 
 import type { BoardState } from '@oshihiki/core';
+import type { ShowdownMcJob, ShowdownMcResult } from '@oshihiki/solver';
 
 export interface SolveOpts {
   maxIters?: number;
@@ -49,3 +50,22 @@ export interface SolveResultDto {
 export type SolveResponse =
   | { id: number; ok: true; result: SolveResultDto; ms: number }
   | { id: number; ok: false; error: string };
+
+/**
+ * ショーダウン MC の並列化メッセージ（Phase 3-1x）。入れ子 Web Worker は Vite で
+ * 不安定なため、MC プールは**メインスレッド**が保持し、求解 Worker はメイン経由で
+ * ジョブを投げる（求解 Worker → メイン → mcWorker 群 → メイン → 求解 Worker）。
+ */
+/** 求解 Worker → メイン: MC ジョブ群の実行要求。 */
+export interface McRequest {
+  kind: 'mc';
+  reqId: number;
+  jobs: ShowdownMcJob[];
+}
+/** メイン → 求解 Worker: MC 実行結果（入力順）。 */
+export interface McResultMsg {
+  kind: 'mcResult';
+  reqId: number;
+  results?: ShowdownMcResult[];
+  error?: string;
+}

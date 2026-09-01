@@ -9,3 +9,6 @@ coverage/
 .DS_Store
 .vitest/
 packages/*/artifacts/_partial-*
+# 実スクショ・生成テンプレはゲームアセット再配布問題のためコミットしない（SPEC §10 / R-10）
+packages/ocr/local-fixtures/
+packages/ocr/templates/

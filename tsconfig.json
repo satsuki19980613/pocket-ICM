@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/solver" },
-    { "path": "./packages/harness" }
+    { "path": "./packages/harness" },
+    { "path": "./packages/ocr" }
   ]
 }

@@ -1,5 +1,9 @@
 node_modules/
 dist/
+*.tsbuildinfo
+packages/*/scripts/*.js
+packages/*/scripts/*.js.map
+packages/*/scripts/*.d.ts
 coverage/
 *.log
 .DS_Store

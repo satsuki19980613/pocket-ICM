@@ -117,6 +117,22 @@ describe('席入れ替え対称性', () => {
   });
 });
 
+describe('実 HRC データとの一致（EQPre, 5人）', () => {
+  // さつき収集の実データ（Blinds 0.5/1/0.25 all-ante, payout シフト形 6/4/3/2/1, プール16）。
+  // cases/_reference-hrc-5way-blinds05-1-025.json 参照。
+  it('stacks [10,20,30,23,12] の EQPre が HRC と一致（表示丸め 0.01% 以内）', () => {
+    const stacks = [10, 20, 30, 23, 12];
+    const shifted = [6, 4, 3, 2, 1];
+    const pool = 16;
+    const hrcEQPrePct = [15.29, 21.05, 24.66, 22.28, 16.72];
+    const eq = icmEquities(stacks, shifted);
+    for (let i = 0; i < 5; i++) {
+      const myPct = (eq[i]! / pool) * 100;
+      expect(Math.abs(myPct - hrcEQPrePct[i]!)).toBeLessThan(0.01);
+    }
+  });
+});
+
 describe('payoutsForPlayers', () => {
   it('残り人数 n は上位 n 着の実払いを返す', () => {
     expect(payoutsForPlayers(2)).toEqual([5, 3]);

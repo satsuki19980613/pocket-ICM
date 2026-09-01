@@ -39,7 +39,10 @@ export function loadCasesFromDir(dir: string): LoadResult {
 
   let files: string[] = [];
   try {
-    files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
+    // `_` 始まりは生データ/参照用（未確定フォーマット）としてスキップする。
+    files = readdirSync(dir)
+      .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      .sort();
   } catch (e) {
     return { cases, errors: [{ file: dir, issues: [`ディレクトリ読み込み失敗: ${(e as Error).message}`] }] };
   }

@@ -1,0 +1,47 @@
+{
+  "_note": "実 HRC 参照データ（さつき収集, 2026-09-01）。ファイル名 `_` 始まりのためハーネスは自動読込しない（レンジ記法パーサ §4.6 と push/fold ソルバー M2 完成後に正式ケースへ変換する）。EQPre は M1-2 ICM と一致確認済み（差<0.005%）。payout は実払い +5/+3/+2/+1/0 のシフト形 6/4/3/2/1 = プール16 の 37.5/25/18.75/12.5/6.25%。",
+  "source": "HRC free (nashicm) 相当ツール",
+  "collectedAt": "2026-09-01",
+  "setup": {
+    "playersLeft": 5,
+    "blinds": { "sb": 0.5, "bb": 1.0 },
+    "ante": { "scheme": "all", "amount": 0.25 },
+    "prizesPct": [37.5, 25.0, 18.75, 12.5, 6.25],
+    "prizesShifted": [6, 4, 3, 2, 1],
+    "prizesRealPt": [5, 3, 2, 1, 0],
+    "poolPt": 16
+  },
+  "players": [
+    { "pos": "UTG", "stack": 10, "eqPrePct": 15.29, "eqPostPct": 15.52, "eqDiffPct": 0.230 },
+    { "pos": "CO", "stack": 20, "eqPrePct": 21.05, "eqPostPct": 21.20, "eqDiffPct": 0.152 },
+    { "pos": "BU", "stack": 30, "eqPrePct": 24.66, "eqPostPct": 24.83, "eqDiffPct": 0.168 },
+    { "pos": "SB", "stack": 23, "eqPrePct": 22.28, "eqPostPct": 22.23, "eqDiffPct": -0.050 },
+    { "pos": "BB", "stack": 12, "eqPrePct": 16.72, "eqPostPct": 16.22, "eqDiffPct": -0.500 }
+  ],
+  "strategies": [
+    { "actor": "UTG", "type": "PU", "freqPct": 19.8, "range": "22+ A2s+ ATo+ K9s+ KTo+ Q9s+ QJo J9s+ T9s" },
+    { "actor": "CO", "vs": "UTG", "type": "CA", "freqPct": 5.9, "range": "88+ AJs+ AQo+" },
+    { "actor": "BU", "vs": "UTG,CO", "type": "OC", "freqPct": 1.8, "range": "JJ+" },
+    { "actor": "SB", "vs": "UTG,CO", "type": "OC", "freqPct": 1.4, "range": "QQ+" },
+    { "actor": "BB", "vs": "UTG,CO", "type": "OC", "freqPct": 1.8, "range": "JJ+" },
+    { "actor": "BU", "vs": "UTG", "type": "CA", "freqPct": 8.9, "range": "66+ ATs+ ATo+" },
+    { "actor": "SB", "vs": "UTG,BU", "type": "OC", "freqPct": 1.4, "range": "QQ+" },
+    { "actor": "BB", "vs": "UTG,BU", "type": "OC", "freqPct": 1.8, "range": "JJ+" },
+    { "actor": "SB", "vs": "UTG", "type": "CA", "freqPct": 8.9, "range": "66+ ATs+ ATo+" },
+    { "actor": "BB", "vs": "UTG,SB", "type": "OC", "freqPct": 1.8, "range": "JJ+" },
+    { "actor": "BB", "vs": "UTG", "type": "CA", "freqPct": 8.9, "range": "66+ ATs+ ATo+" },
+    { "actor": "CO", "type": "PU", "freqPct": 24.0, "range": "88+ A2s+ A9o+ A5o-A3o K4s+ KTo+ Q9s+ QTo+ J9s+ JTo T9s" },
+    { "actor": "BU", "vs": "CO", "type": "CA", "freqPct": 5.4, "range": "99+ AJs+ AQo+" },
+    { "actor": "SB", "vs": "CO,BU", "type": "OC", "freqPct": 0.9, "range": "KK+" },
+    { "actor": "BB", "vs": "CO,BU", "type": "OC", "freqPct": 0.5, "range": "AA" },
+    { "actor": "SB", "vs": "CO", "type": "CA", "freqPct": 3.5, "range": "TT+ AKs AKo" },
+    { "actor": "BB", "vs": "CO,SB", "type": "OC", "freqPct": 0.5, "range": "AA" },
+    { "actor": "BB", "vs": "CO", "type": "CA", "freqPct": 5.9, "range": "88+ AJs+ AQo+" },
+    { "actor": "BU", "type": "PU", "freqPct": 87.3, "range": "22+ Tx+ 92s+ 95o+ 82s+ 85o+ 72s+ 74o+ 62s+ 64o+ 52s+ 53o+ 42s+ 32s" },
+    { "actor": "SB", "vs": "BU", "type": "CA", "freqPct": 3.2, "range": "88+" },
+    { "actor": "BB", "vs": "BU,SB", "type": "OC", "freqPct": 0.9, "range": "KK+" },
+    { "actor": "BB", "vs": "BU", "type": "CA", "freqPct": 15.5, "range": "66+ A5s+ A8o+ K9s+ KJo+ QJs" },
+    { "actor": "SB", "type": "PU", "freqPct": 100.0, "range": "Any two" },
+    { "actor": "BB", "vs": "SB", "type": "CA", "freqPct": 22.6, "range": "55+ A3s+ A5o+ K8s+ K9o+ QTs+ QJo" }
+  ]
+}

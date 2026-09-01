@@ -1,0 +1,30 @@
+{
+  "name": "synthetic-3way-bubble",
+  "description": "【合成・暫定】3-way バブル手前。BU の push レンジ。EV/EQ は placeholder。実 HRC 値で差し替える。",
+  "poolPt": 16,
+  "input": {
+    "street": "preflop",
+    "blinds": { "sb": 0.5, "bb": 1.0 },
+    "ante": { "scheme": "all", "amount": 0.1 },
+    "heroHand": "KQo",
+    "playersLeft": 3,
+    "seats": [
+      { "pos": "BU", "stack": 8.0, "state": "live", "bet": 0 },
+      { "pos": "SB", "stack": 12.0, "state": "live", "bet": 0.5 },
+      { "pos": "BB", "stack": 5.0, "state": "live", "bet": 1.0 }
+    ],
+    "heroPos": "BU",
+    "pot": 1.8
+  },
+  "expected": [
+    {
+      "key": "BU:P,SB:-,BB:-",
+      "actor": "BU",
+      "actionType": "PU",
+      "range": ["AA", "KK", "QQ", "JJ", "TT", "99", "88", "AKs", "AQs", "AJs", "AKo", "AQo", "KQs", "KQo"],
+      "freqPct": 21.5,
+      "equity": { "BU": { "pre": 3.2, "post": 3.35 } },
+      "ev": { "KQo": 0.15, "T9s": 0.003, "72o": -0.4 }
+    }
+  ]
+}

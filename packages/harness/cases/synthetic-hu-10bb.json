@@ -1,0 +1,30 @@
+{
+  "name": "synthetic-hu-10bb",
+  "description": "【合成・暫定】HU 10bb 均等スタック。SB(=BTN) の push レンジ。EV/EQ は placeholder。実 HRC 値で差し替える。",
+  "poolPt": 16,
+  "exactEquity": true,
+  "input": {
+    "street": "preflop",
+    "blinds": { "sb": 0.5, "bb": 1.0 },
+    "ante": { "scheme": "none", "amount": 0 },
+    "heroHand": "A5s",
+    "playersLeft": 2,
+    "seats": [
+      { "pos": "SB", "stack": 9.5, "state": "live", "bet": 0.5 },
+      { "pos": "BB", "stack": 9.0, "state": "live", "bet": 1.0 }
+    ],
+    "heroPos": "SB",
+    "pot": 1.5
+  },
+  "expected": [
+    {
+      "key": "SB:P,BB:-",
+      "actor": "SB",
+      "actionType": "PU",
+      "range": ["AA", "KK", "QQ", "JJ", "TT", "99", "88", "77", "66", "55", "44", "33", "22", "AKs", "AQs", "AJs", "ATs", "A9s", "A8s", "A7s", "A6s", "A5s", "A4s", "A3s", "A2s", "AKo", "AQo", "AJo", "ATo", "A9o", "KQs", "KJs", "KTs", "K9s", "KQo", "KJo", "QJs", "QTs", "JTs"],
+      "freqPct": 62.0,
+      "equity": { "SB": { "pre": 4.9, "post": 5.05 }, "BB": { "pre": 5.1, "post": 4.95 } },
+      "ev": { "A5s": 0.42, "JTs": 0.004, "K2o": 0.004, "72o": -0.6, "J8o": -0.12 }
+    }
+  ]
+}

@@ -10,8 +10,18 @@
 
 export type AnteScheme = 'all' | 'bb' | 'none';
 
-/** 席の視覚的プレゼンス（SPEC §6.3 #3）。 */
-export type SeatPresence = 'dealt' | 'folded' | 'empty';
+/** 席が配られているか（occupied）／不在か（empty）。position 導出では empty を除外。 */
+export type Occupancy = 'occupied' | 'empty';
+
+/**
+ * リプレイ画面が各席に表示する行動ラベル（SPEC §6.3 #3, リプレイ・プリフロップ終了フレーム）。
+ * 'none' はラベル未表示（未アクション/読めない）。プリフロップ終了フレームでは
+ * 生存席は基本 fold/call/raise/allin/check のいずれかを持つ。
+ */
+export type SeatAction = 'fold' | 'call' | 'raise' | 'allin' | 'check' | 'none';
+
+/** スタック等の数値表示モード（§6.2）。chips は BB へ正規化して読む。 */
+export type DisplayMode = 'bb' | 'chips';
 
 /** 8bit グレースケール画像。行優先、data.length === w*h。 */
 export interface Gray {
@@ -58,17 +68,20 @@ export interface RawSeatRead {
   readonly id: string;
   readonly isHero: boolean;
   readonly isButton: boolean;
-  /** 手札あり(dealt) / マック(folded) / 不在(empty)。position 導出では empty のみ除外。 */
-  readonly presence: Read<SeatPresence>;
-  /** オールインエフェクト等の視覚判定。 */
-  readonly allin: Read<boolean>;
-  /** 画面表示スタック（ベット差引後）。 */
+  /** 配られている(occupied)／不在(empty)。position 導出では empty のみ除外。 */
+  readonly occupancy: Read<Occupancy>;
+  /** リプレイの行動ラベル。fold=フォールド, allin=オールイン 等。状態復元の主信号。 */
+  readonly action: Read<SeatAction>;
+  /** 画面表示スタック（BB 換算, ベット差引後）。 */
   readonly stack: Read<number>;
-  /** 席の前に出ているチップ（このストリートの拠出）。 */
+  /** 席の前に出ているチップ（BB 換算, このストリートの拠出）。 */
   readonly bet: Read<number>;
 }
 
-/** 画像層の生読み取り一式（pipeline の入力）。 */
+/**
+ * 画像層の生読み取り一式（pipeline の入力）。金額はすべて BB 換算済み
+ * （chips 表示は抽出層で bb_chips により正規化する）。
+ */
 export interface RawReads {
   readonly street: Read<string>;
   readonly blinds: { readonly sb: Read<number>; readonly bb: Read<number> };
@@ -78,4 +91,6 @@ export interface RawReads {
   readonly heroHand: Read<string>;
   /** 時計回りの物理席リング（empty 含む, 2..6）。 */
   readonly seats: readonly RawSeatRead[];
+  /** 抽出層が判別した数値表示モード（記録・信頼度用, 任意）。 */
+  readonly displayMode?: DisplayMode;
 }

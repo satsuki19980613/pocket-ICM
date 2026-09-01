@@ -64,11 +64,11 @@ describe('boardStateToForm', () => {
       pot: { value: 1.5, conf: 1 },
       heroHand: { value: 'KQs', conf: 1 },
       seats: [
-        { id: 'BU', isHero: false, isButton: true, presence: { value: 'dealt', conf: 1 }, allin: { value: false, conf: 1 }, stack: { value: 15, conf: 1 }, bet: { value: 0, conf: 1 } },
-        { id: 'SB', isHero: false, isButton: false, presence: { value: 'dealt', conf: 1 }, allin: { value: false, conf: 1 }, stack: { value: 14.5, conf: 1 }, bet: { value: 0.5, conf: 1 } },
-        { id: 'BB', isHero: false, isButton: false, presence: { value: 'dealt', conf: 1 }, allin: { value: false, conf: 1 }, stack: { value: 14, conf: 1 }, bet: { value: 1, conf: 1 } },
-        { id: 'UTG', isHero: false, isButton: false, presence: { value: 'dealt', conf: 1 }, allin: { value: false, conf: 1 }, stack: { value: 15, conf: 1 }, bet: { value: 0, conf: 1 } },
-        { id: 'CO', isHero: true, isButton: false, presence: { value: 'dealt', conf: 1 }, allin: { value: false, conf: 1 }, stack: { value: 15, conf: 1 }, bet: { value: 0, conf: 1 } },
+        { id: 'BU', isHero: false, isButton: true, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 15, conf: 1 }, bet: { value: 0, conf: 1 } },
+        { id: 'SB', isHero: false, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 14.5, conf: 1 }, bet: { value: 0.5, conf: 1 } },
+        { id: 'BB', isHero: false, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 14, conf: 1 }, bet: { value: 1, conf: 1 } },
+        { id: 'UTG', isHero: false, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 15, conf: 1 }, bet: { value: 0, conf: 1 } },
+        { id: 'CO', isHero: true, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 15, conf: 1 }, bet: { value: 0, conf: 1 } },
       ],
     };
     const out = runOcrPipeline(reads);

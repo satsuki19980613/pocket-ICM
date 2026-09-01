@@ -81,7 +81,7 @@ export function aggregateConfidence(
     if (!s) continue;
     if (s.stack.conf < threshold) low.add(`${f.pos}.stack`);
     if (s.bet.conf < threshold) low.add(`${f.pos}.bet`);
-    if (s.presence.conf < threshold) low.add(`${f.pos}.state`);
+    if (Math.min(s.occupancy.conf, s.action.conf) < threshold) low.add(`${f.pos}.state`);
   }
 
   const checksum = potChecksum(reads, facts, opts.checksumTol);

@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { runOcrPipeline } from './pipeline.js';
 import { reconstructSpot } from './spotReconstruction.js';
-import type { RawReads, RawSeatRead, SeatPresence, AnteScheme } from './types.js';
+import type { RawReads, RawSeatRead, Occupancy, SeatAction, AnteScheme } from './types.js';
 
 interface SeatSpec {
   id: string;
   hero?: boolean;
   button?: boolean;
-  presence?: SeatPresence;
-  allin?: boolean;
+  occupancy?: Occupancy;
+  action?: SeatAction;
   stack: number;
   bet: number;
   conf?: number;
@@ -20,8 +20,8 @@ function seat(s: SeatSpec): RawSeatRead {
     id: s.id,
     isHero: s.hero ?? false,
     isButton: s.button ?? false,
-    presence: { value: s.presence ?? 'dealt', conf: c },
-    allin: { value: s.allin ?? false, conf: c },
+    occupancy: { value: s.occupancy ?? 'occupied', conf: c },
+    action: { value: s.action ?? 'none', conf: c },
     stack: { value: s.stack, conf: c },
     bet: { value: s.bet, conf: c },
   };
@@ -88,8 +88,8 @@ describe('pipeline — 正常系（root spot 復元）', () => {
           { id: 'BU', hero: true, button: true, stack: 15, bet: 0 },
           { id: 'SB', stack: 14.5, bet: 0.5 },
           { id: 'BB', stack: 14, bet: 1 },
-          { id: 'UTG', presence: 'folded', stack: 15, bet: 0 },
-          { id: 'CO', allin: true, stack: 0, bet: 15 },
+          { id: 'UTG', action: 'fold', stack: 15, bet: 0 },
+          { id: 'CO', action: 'allin', stack: 0, bet: 15 },
         ],
       }),
     );
@@ -115,11 +115,11 @@ describe('pipeline — 正常系（root spot 復元）', () => {
         pot: 1.5,
         seats: [
           { id: 's0', button: true, stack: 20, bet: 0 },
-          { id: 's1', presence: 'empty', stack: 0, bet: 0 },
+          { id: 's1', occupancy: 'empty', stack: 0, bet: 0 },
           { id: 's2', stack: 19.5, bet: 0.5 },
           { id: 's3', stack: 19, bet: 1 },
           { id: 's4', hero: true, stack: 20, bet: 0 },
-          { id: 's5', presence: 'empty', stack: 0, bet: 0 },
+          { id: 's5', occupancy: 'empty', stack: 0, bet: 0 },
         ],
       }),
     );
@@ -154,7 +154,7 @@ describe('pipeline — 対象外検出（§6.5）', () => {
       mkReads({
         pot: 3.5,
         seats: [
-          { id: 'BU', button: true, stack: 14, bet: 1 }, // リンプ
+          { id: 'BU', button: true, action: 'call', stack: 14, bet: 1 }, // リンプ
           { id: 'SB', stack: 14.5, bet: 0.5 },
           { id: 'BB', stack: 14, bet: 1 },
           { id: 'UTG', hero: true, stack: 15, bet: 0 },
@@ -172,7 +172,7 @@ describe('pipeline — 対象外検出（§6.5）', () => {
         pot: 4,
         seats: [
           { id: 'BU', button: true, stack: 15, bet: 0 },
-          { id: 'SB', stack: 13, bet: 2.5 }, // レイズ
+          { id: 'SB', action: 'raise', stack: 13, bet: 2.5 }, // レイズ
           { id: 'BB', stack: 14, bet: 1 },
           { id: 'UTG', hero: true, stack: 15, bet: 0 },
           { id: 'CO', stack: 15, bet: 0 },
@@ -189,8 +189,8 @@ describe('pipeline — 対象外検出（§6.5）', () => {
       mkReads({
         pot: 1.5,
         seats: [
-          { id: 'BU', button: true, presence: 'folded', stack: 15, bet: 0 },
-          { id: 'SB', presence: 'folded', stack: 14.5, bet: 0 },
+          { id: 'BU', button: true, action: 'fold', stack: 15, bet: 0 },
+          { id: 'SB', action: 'fold', stack: 14.5, bet: 0 },
           { id: 'BB', hero: true, stack: 14, bet: 1 },
         ],
       }),
@@ -204,14 +204,37 @@ describe('pipeline — 対象外検出（§6.5）', () => {
       mkReads({
         pot: 16.5,
         seats: [
-          { id: 'BU', button: true, allin: true, stack: 0, bet: 15 },
-          { id: 'SB', presence: 'folded', stack: 14.5, bet: 0 },
+          { id: 'BU', button: true, action: 'allin', stack: 0, bet: 15 },
+          { id: 'SB', action: 'fold', stack: 14.5, bet: 0 },
           { id: 'BB', hero: true, stack: 14, bet: 1 },
         ],
       }),
     );
     expect(r.ok).toBe(true);
     expect(r.state!.heroPos).toBe('BB');
+  });
+
+  it('オールインを「コール」した席（カバー）は push/fold 有効（ラベル駆動の要）', () => {
+    // 4人: CO オールイン10、BB がカバーしてコール（stack 残あり）、hero BU 直面
+    // clockwiseFromButton(4) = [BU, SB, BB, CO]
+    const r = runOcrPipeline(
+      mkReads({
+        pot: 21.5,
+        seats: [
+          { id: 'BU', hero: true, button: true, stack: 20, bet: 0 },
+          { id: 'SB', action: 'fold', stack: 19.5, bet: 0 },
+          { id: 'BB', action: 'call', stack: 10, bet: 10 }, // カバーしてコール（非オールイン）
+          { id: 'CO', action: 'allin', stack: 0, bet: 10 },
+        ],
+      }),
+    );
+    expect(r.ok).toBe(true);
+    const byPos = Object.fromEntries(r.state!.seats.map((s) => [s.pos, s]));
+    // BB は root で full behind 20（10 stack + 10 コール）→ blind 1 は rootBet 側、stack は 19
+    expect(byPos['BB']!.stack).toBe(19);
+    expect(byPos['BB']!.bet).toBe(1);
+    expect(byPos['BB']!.stack + byPos['BB']!.bet).toBe(20);
+    expect(byPos['CO']!.stack).toBe(10);
   });
 });
 

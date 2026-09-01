@@ -19,7 +19,7 @@
  */
 
 import type { BoardState, Position, Seat } from '@oshihiki/core';
-import type { RawReads, RawSeatRead } from './types.js';
+import type { RawReads, RawSeatRead, SeatAction } from './types.js';
 import { derivePositions } from './positionDerivation.js';
 import type { PhysicalSeat } from './types.js';
 
@@ -37,6 +37,8 @@ export interface SeatFacts {
   readonly id: string;
   readonly pos: Position;
   readonly isHero: boolean;
+  /** リプレイの行動ラベル（状態復元の主信号）。 */
+  readonly action: SeatAction;
   readonly folded: boolean;
   readonly allin: boolean;
   readonly screenStack: number;
@@ -45,27 +47,36 @@ export interface SeatFacts {
 }
 
 /**
- * push/fold で扱えない盤面を検出する（§6.5）。
- * - 非オールインの自発的コミット（voluntary = screenBet - blindOb > 0）→ リンプ/レイズ/3bet
- * - hero が BB で pot 未レイズ（誰もオールイン/自発コミットしていない）→ ウォーク（no decision）
+ * push/fold で扱えない盤面を検出する（§6.5）。**行動ラベル駆動**。
+ *
+ * push/fold Nash はフォールドとオールインのみ。有効な終了フレームのラベルは
+ *   fold / allin / call（ただしオールインが場にある場合のみ）/ check（BB のみ）
+ * に限られる。
+ * - raise（非オールインのオープン/ミニレイズ/3bet）→ 対象外
+ * - call だがオールインが場に無い → リンプ（BB コール）や非オールインへのコール → 対象外
+ * - hero が BB でオールイン・レイズ・リンプのいずれも無い → ウォーク（no decision）
+ *
+ * ベット額はラベルと矛盾する場合の補助チェックに使う（ラベルが主）。
  */
 export function detectOutOfScope(facts: readonly SeatFacts[], heroPos: Position): string[] {
   const issues: string[] = [];
+  const anyAllin = facts.some((f) => f.action === 'allin');
 
   for (const f of facts) {
-    if (f.folded) continue; // フォールド済みはブラインドのデッド分のみ、判定対象外
-    const voluntary = f.screenBet - f.blindOb;
-    if (!f.allin && voluntary > EPS) {
-      issues.push(
-        `${f.pos} が非オールインで ${voluntary.toFixed(2)}bb を追加投入しています` +
-          `（リンプ/ミニレイズ/3bet は push/fold では扱えません）`,
-      );
+    if (f.action === 'raise') {
+      issues.push(`${f.pos} がレイズ（非オールイン）しています（ミニレイズ/オープン/3bet は push/fold では扱えません）`);
+    } else if (f.action === 'call' && !anyAllin) {
+      issues.push(`${f.pos} がコール（リンプ/非オールインへのコール）しています（push/fold では扱えません）`);
+    } else if (f.action === 'none' && !f.folded) {
+      // ラベルが無いのにベットが blind を超える＝読み落とし or 非対応アクション
+      const voluntary = f.screenBet - f.blindOb;
+      if (voluntary > EPS) {
+        issues.push(`${f.pos} に未分類のベット ${voluntary.toFixed(2)}bb があります（要手入力確認）`);
+      }
     }
   }
 
-  const contested = facts.some(
-    (f) => !f.isHero && !f.folded && (f.allin || f.screenBet - f.blindOb > EPS),
-  );
+  const contested = facts.some((f) => !f.isHero && (f.action === 'allin' || f.action === 'raise' || f.action === 'call'));
   if (heroPos === 'BB' && !contested) {
     issues.push('hero が BB で pot が未レイズです（ウォーク＝判断が存在しないため対象外）');
   }
@@ -93,7 +104,7 @@ export function reconstructSpot(reads: RawReads): ReconstructResult {
 
   const ring: PhysicalSeat[] = reads.seats.map((s) => ({
     id: s.id,
-    occupied: s.presence.value !== 'empty',
+    occupied: s.occupancy.value !== 'empty',
     isButton: s.isButton,
     isHero: s.isHero,
   }));
@@ -107,14 +118,16 @@ export function reconstructSpot(reads: RawReads): ReconstructResult {
   const rootSeats: Seat[] = [];
   for (const [id, pos] of derived.byId) {
     const raw = bySeatId.get(id)!;
-    const folded = raw.presence.value === 'folded';
-    const allin = raw.allin.value;
+    const action: SeatAction = raw.action.value;
+    const folded = action === 'fold';
+    const allin = action === 'allin';
     const screenStack = raw.stack.value;
     const screenBet = raw.bet.value;
     const blindOb = blindObligation(pos, sb, bb);
 
-    facts.push({ id, pos, isHero: raw.isHero, folded, allin, screenStack, screenBet, blindOb });
+    facts.push({ id, pos, isHero: raw.isHero, action, folded, allin, screenStack, screenBet, blindOb });
 
+    // root への逆算: フォールド済みはブラインドのデッド分のみを putIn とみなす。
     const putIn = folded ? blindOb : screenBet;
     const fullBehind = screenStack + putIn;
     const rootStack = fullBehind - blindOb;
@@ -127,7 +140,7 @@ export function reconstructSpot(reads: RawReads): ReconstructResult {
       confidence: {
         stack: raw.stack.conf,
         bet: raw.bet.conf,
-        state: raw.presence.conf,
+        state: Math.min(raw.occupancy.conf, raw.action.conf),
       },
     });
   }

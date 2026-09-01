@@ -1,0 +1,70 @@
+import { describe, it, expect } from 'vitest';
+import type { Gray } from './types.js';
+import { brightMask, connectedComponents, findCardRects, cornerOf } from './detect.js';
+
+function blank(w: number, h: number, fill = 0): Gray {
+  return { w, h, data: new Uint8Array(w * h).fill(fill) };
+}
+function paint(g: Gray, x0: number, y0: number, w: number, h: number, val: number): void {
+  for (let y = y0; y < y0 + h; y++)
+    for (let x = x0; x < x0 + w; x++) g.data[y * g.w + x] = val;
+}
+
+describe('brightMask', () => {
+  it('しきい値で前景を作る', () => {
+    const g: Gray = { w: 3, h: 1, data: new Uint8Array([100, 200, 255]) };
+    expect([...brightMask(g, 190)]).toEqual([0, 1, 1]);
+  });
+});
+
+describe('connectedComponents', () => {
+  it('分離した2矩形を2成分として返す', () => {
+    const g = blank(30, 20);
+    paint(g, 2, 3, 8, 12, 255);
+    paint(g, 18, 3, 8, 12, 255);
+    const comps = connectedComponents(brightMask(g, 190), g.w, g.h);
+    expect(comps.length).toBe(2);
+    const byX = comps.sort((a, b) => a.x - b.x);
+    expect({ x: byX[0]!.x, y: byX[0]!.y, w: byX[0]!.w, h: byX[0]!.h }).toEqual({ x: 2, y: 3, w: 8, h: 12 });
+  });
+
+  it('内部の穴（pip）があっても1成分・bbox は全体', () => {
+    const g = blank(20, 20);
+    paint(g, 4, 4, 10, 12, 255);
+    paint(g, 7, 8, 3, 3, 0); // 内部の暗い穴
+    const comps = connectedComponents(brightMask(g, 190), g.w, g.h);
+    expect(comps.length).toBe(1);
+    expect(comps[0]!.w).toBe(10);
+    expect(comps[0]!.h).toBe(12);
+    expect(comps[0]!.area).toBe(10 * 12 - 3 * 3);
+  });
+});
+
+describe('findCardRects', () => {
+  it('カード様の白矩形を検出し左→右に整列', () => {
+    const g = blank(80, 40);
+    // aspect 10/16=0.625 の白札を2枚（穴つき）
+    paint(g, 5, 5, 10, 16, 255);
+    paint(g, 8, 10, 2, 2, 0);
+    paint(g, 40, 5, 10, 16, 255);
+    paint(g, 43, 10, 2, 2, 0);
+    // 面積不足のノイズと、細長い（非カード）矩形は除外されるべき
+    paint(g, 25, 30, 2, 2, 255); // ノイズ
+    paint(g, 60, 2, 18, 3, 255); // 横長（aspect 6, 範囲外）
+    const rects = findCardRects(g, { minAreaFrac: 0.02 });
+    expect(rects.length).toBe(2);
+    expect(rects[0]!.x).toBe(5);
+    expect(rects[1]!.x).toBe(40);
+    for (const r of rects) {
+      expect(r.w).toBe(10);
+      expect(r.h).toBe(16);
+    }
+  });
+});
+
+describe('cornerOf', () => {
+  it('矩形の左上を割合で切る', () => {
+    const c = cornerOf({ x: 100, y: 50, w: 40, h: 60 }, 0.5, 0.4);
+    expect(c).toEqual({ x: 100, y: 50, w: 20, h: 24 });
+  });
+});

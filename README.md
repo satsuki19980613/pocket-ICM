@@ -7,9 +7,9 @@
 - バックエンドなし。端末ローカル完結の PWA として配布予定（本リポジトリは Solver コアから着手）。
 - 仕様の正: [`SPEC.md`](SPEC.md) / 進め方の正: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 
-## 現在の状態: 第1マイルストーン（M1）
+## 現在の状態: 第3マイルストーン（M3）
 
-Solver コアの土台。Phase 1 の 1-1〜1-3 と共通部。
+Solver コア。Phase 1 の求解本体まで（3-way まで実装）。
 
 | 項目 | 内容 | 状態 |
 |---|---|---|
@@ -17,8 +17,13 @@ Solver コアの土台。Phase 1 の 1-1〜1-3 と共通部。
 | M1-1 | 照合ハーネス骨組み（項目別基準・差分レポート・合成ケース） | ✅ |
 | M1-2 | ICM equity（Malmuth-Harville, 実払い直接, 720通り厳密） | ✅ |
 | M1-3 | HU 169×169 all-in equity テーブル（厳密全列挙・成果物同梱） | ✅ |
+| M2-1 | レンジ記法パーサ（§4.6） | ✅ |
+| M2-2〜2-4 | HU push/fold Nash（FP）+ exploitability + EV/EQ | ✅ |
+| M2-5 / 1-4 | マルチウェイ着順分布 MC + コスト実測 | ✅ |
+| M3 / 1-5 | サイドポット分配 + ショーダウン→終局スタック→ICM の計算パス | ✅ |
+| M3 / 1-8 | 3〜6人 逐次 push/fold（PU/CA/OC）+ FP + exploitability + 収束不十分フラグ | ✅ 3-way（4〜6人は続くステップ） |
 
-スコープ外（今回やらない）: マルチウェイ着順分布(1-4)以降、OCR、UI。
+スコープ外（今回やらない）: 4〜6人求解、OCR、UI。HRC 実照合値は Phase 0（さつき収集）待ち。
 
 ## 構成（npm workspaces モノレポ / TypeScript）
 
@@ -27,7 +32,9 @@ packages/
   core/     データ契約: 169ハンドクラス, ポジション導出, 解キー正規化,
             盤面状態(§3.1)/解(§3.2) の zod スキーマと検証
   solver/   MH-ICM, 7枚ハンド評価器, HU equity（厳密全列挙）,
-            169×169 テーブル生成・同梱・読み込み
+            169×169 テーブル生成・同梱・読み込み, HU push/fold Nash,
+            マルチウェイ着順分布 MC, サイドポット分配, ショーダウン→ICM,
+            3-way 逐次 push/fold ソルバー（FP + exploitability）
   harness/  HRC 照合ハーネス: JSONケース読込, 項目別合格基準(§4.3),
             境界ハンド明示の差分レポート
 ```

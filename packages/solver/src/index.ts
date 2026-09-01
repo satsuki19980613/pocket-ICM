@@ -4,5 +4,8 @@ export * from './huEquity.js';
 export * from './huTable.js';
 export * from './huTableLoader.js';
 export * from './huSolver.js';
+export * from './multiwaySolver.js';
 export * from './placement.js';
+export * from './sidepot.js';
+export * from './showdownMc.js';
 export * from './mcConfig.js';

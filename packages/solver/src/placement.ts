@@ -19,37 +19,34 @@
 
 import { eval7 } from './evaluator.js';
 
-/** 決定的 RNG（xorshift128+ 相当の軽量版, seed 固定でテスト決定性を保証）。 */
+/**
+ * 決定的 RNG（mulberry32, seed 固定でテスト決定性を保証）。
+ *
+ * mulberry32 は 32bit 単状態の小型 PRNG で、全ビットに良好なアバランチを持つ。
+ * 旧実装（xorshift128+ の 32bit 変種）は高位ビットの分布が弱く、[0,1) 浮動小数や
+ * 大きな法の剰余に使うとレンジ抽選が偏った（showdownMc のクラス抽選で顕在化）。
+ * mulberry32 は nextInt（低位ビット）にも nextFloat（全ビット）にも安全に使える。
+ */
 export class DeterministicRng {
-  private s0: number;
-  private s1: number;
+  private s: number;
   constructor(seed: number) {
-    // seed から 2 状態を派生（0 回避）。
-    let x = (seed >>> 0) || 0x9e3779b9;
-    const next = (): number => {
-      x ^= x << 13;
-      x ^= x >>> 17;
-      x ^= x << 5;
-      x >>>= 0;
-      return x;
-    };
-    this.s0 = next() || 1;
-    this.s1 = next() || 2;
+    this.s = (seed >>> 0) || 0x9e3779b9;
   }
-  /** [0, 2^32) の符号なし 32bit 乱数。 */
+  /** [0, 2^32) の符号なし 32bit 乱数（mulberry32）。 */
   nextU32(): number {
-    let s1 = this.s0;
-    const s0 = this.s1;
-    this.s0 = s0;
-    s1 ^= s1 << 23;
-    s1 ^= s1 >>> 17;
-    s1 ^= s0 ^ (s0 >>> 26);
-    this.s1 = s1 >>> 0;
-    return (this.s1 + s0) >>> 0;
+    this.s = (this.s + 0x6d2b79f5) >>> 0;
+    let t = this.s;
+    t = Math.imul(t ^ (t >>> 15), t | 1) >>> 0;
+    t = (t + Math.imul(t ^ (t >>> 7), t | 61)) >>> 0;
+    return ((t ^ (t >>> 14)) >>> 0) >>> 0;
   }
   /** [0, n) の整数。 */
   nextInt(n: number): number {
     return this.nextU32() % n;
+  }
+  /** [0, 1) の浮動小数（全 32bit を使用）。 */
+  nextFloat(): number {
+    return this.nextU32() / 0x100000000;
   }
 }
 

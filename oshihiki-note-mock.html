@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>押し引きノート — 画面モック v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#100E17;
+  --surface:#1A1723;
+  --surface2:#242030;
+  --surface3:#2E2938;
+  --line:#332E43;
+  --text:#EFECF5;
+  --dim:#948EA8;
+  --dim2:#6B657E;
+  --push:#34D383;
+  --cell-off:#2A2637;
+  --cyan:#56D6EA;
+  --rose:#FF5C8A;
+  --utg:#C9A8FF;
+  --co:#8FE0C0;
+  --bu:#F2A0D0;
+  --sb:#8FB4FF;
+  --bb:#FFC48F;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  background:#08070C;color:var(--text);
+  font-feature-settings:"palt" 1;
+  display:flex;flex-direction:column;align-items:center;min-height:100vh;
+}
+
+.mockbar{
+  width:100%;padding:14px 16px 12px;display:flex;gap:6px;flex-wrap:wrap;
+  justify-content:center;align-items:center;
+  border-bottom:1px solid #17141F;background:#0B0A10;position:sticky;top:0;z-index:50;
+}
+.mockbar span{color:var(--dim2);font-size:11px;margin-right:6px}
+.mockbar button{
+  font:inherit;font-size:11px;font-weight:500;background:#171420;color:var(--dim);
+  border:1px solid #251F33;padding:5px 10px;border-radius:100px;cursor:pointer;
+}
+.mockbar button:hover{color:var(--text);border-color:#3B3350}
+.mockbar button[aria-current="true"]{background:var(--cyan);color:#08131A;border-color:var(--cyan);font-weight:700}
+
+.phone{
+  width:100%;max-width:400px;min-height:calc(100vh - 52px);background:var(--ink);
+  position:relative;display:flex;flex-direction:column;
+  border-left:1px solid #17141F;border-right:1px solid #17141F;
+}
+.top{
+  position:sticky;top:52px;z-index:20;background:rgba(16,14,23,.88);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;
+}
+.top h1{font-size:15px;font-weight:700;flex:1}
+.top .back{background:none;border:0;color:var(--text);font:inherit;font-size:20px;cursor:pointer;width:26px;text-align:left}
+.info{
+  width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);
+  color:var(--dim);font:inherit;font-size:12px;font-weight:700;cursor:pointer;flex:none;
+}
+.info:hover{color:var(--cyan);border-color:var(--cyan)}
+.av{
+  width:32px;height:32px;border-radius:50%;flex:none;
+  background:linear-gradient(140deg,#7B5BD6,#D65B9E);display:grid;place-items:center;
+  font-size:12px;font-weight:700;color:#fff;border:0;cursor:pointer;font-family:inherit;
+}
+.av.s{width:38px;height:38px;font-size:14px}
+.av.k{background:linear-gradient(140deg,#3FA9C9,#5BD69E)}
+.av.n{background:linear-gradient(140deg,#D6913F,#C95B5B)}
+.av.t{background:linear-gradient(140deg,#5B6BD6,#9E5BD6)}
+
+.body{flex:1;overflow-y:auto;padding-bottom:80px}
+.screen{display:none}
+.screen.on{display:block}
+
+/* feed */
+.post{padding:14px;border-bottom:1px solid var(--line);display:flex;gap:11px}
+.post .col{flex:1;min-width:0}
+.meta{display:flex;align-items:baseline;gap:6px;font-size:13px;margin-bottom:4px}
+.meta b{font-weight:700}
+.meta i{font-style:normal;color:var(--dim2);font-size:12px}
+.post p{font-size:14px;line-height:1.62;color:#DCD8E6}
+.rescard{
+  margin-top:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  overflow:hidden;cursor:pointer;display:block;width:100%;text-align:left;font:inherit;color:inherit;
+}
+.rescard:hover{border-color:#453B5E}
+.rescard .rc-top{padding:11px 12px 10px;display:flex;align-items:center;gap:10px}
+.rescard .rc-bot{
+  padding:8px 12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);
+  display:flex;gap:10px;flex-wrap:wrap;font-variant-numeric:tabular-nums;
+}
+.verdict{font-size:11.5px;font-weight:900;padding:4px 10px;border-radius:6px;flex:none;letter-spacing:.04em}
+.verdict.push{background:rgba(52,211,131,.16);color:var(--push)}
+.verdict.fold{background:rgba(148,142,168,.14);color:var(--dim)}
+
+.hand{display:flex;gap:3px;flex:none}
+.card{
+  width:26px;height:36px;border-radius:4px;background:#F4F2F7;color:#16131E;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:13px;font-weight:900;line-height:1;gap:1px;
+}
+.card.red{color:#D42B54}
+.card em{font-style:normal;font-size:11px}
+.card.sm{width:22px;height:30px;font-size:11px}
+.card.sm em{font-size:9px}
+.card.big{width:42px;height:58px;font-size:20px;border-radius:6px}
+.card.big em{font-size:17px}
+
+.acts{display:flex;gap:26px;margin-top:11px;color:var(--dim2);font-size:12.5px}
+.acts button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;display:flex;gap:6px;align-items:center}
+.acts button:hover{color:var(--cyan)}
+
+/* thread */
+.thread-head{padding:16px 14px;border-bottom:1px solid var(--line)}
+.thread-head p{font-size:16px;line-height:1.65;margin-top:10px}
+.reply{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;gap:11px}
+.reply p{font-size:13.5px;line-height:1.6;color:#DCD8E6}
+.replyimg{
+  margin-top:9px;height:104px;border-radius:11px;border:1px solid var(--line);
+  background:linear-gradient(115deg,#2A1A3A,#123028 60%,#1A2440);
+  display:grid;place-items:center;color:#7A7292;font-size:11px;
+}
+.composer{
+  position:sticky;bottom:0;background:rgba(16,14,23,.94);backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:9px;align-items:center;
+}
+.composer .field{
+  flex:1;background:var(--surface2);border:1px solid var(--line);border-radius:100px;
+  padding:9px 14px;font-size:13.5px;color:var(--dim2);
+}
+.icobtn{
+  width:36px;height:36px;flex:none;border-radius:50%;border:1px solid var(--line);
+  background:var(--surface2);color:var(--dim);font-size:15px;cursor:pointer;
+  display:grid;place-items:center;font-family:inherit;
+}
+.icobtn.go{background:var(--cyan);color:#08131A;border-color:var(--cyan);font-weight:700}
+
+.pad{padding:16px 14px}
+.h2{font-size:12.5px;font-weight:700;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.h2 .info{width:19px;height:19px;font-size:10px}
+.note{font-size:12.5px;line-height:1.7;color:var(--dim)}
+
+.drop{margin:16px 14px;border:1.5px dashed #3D3452;border-radius:18px;padding:34px 20px;text-align:center;background:var(--surface)}
+.drop .ic{font-size:30px;margin-bottom:12px;opacity:.8}
+.drop b{display:block;font-size:15px;font-weight:700;margin-bottom:6px}
+.drop span{font-size:12.5px;color:var(--dim);line-height:1.7}
+
+.btn{
+  display:block;width:100%;padding:14px;border-radius:12px;border:0;cursor:pointer;
+  font-family:inherit;font-size:14.5px;font-weight:700;background:var(--push);color:#062418;
+}
+.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.btn.rose{background:rgba(255,92,138,.14);color:var(--rose);border:1px solid rgba(255,92,138,.3)}
+
+.check{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.check li{list-style:none;padding:12px 13px;display:flex;gap:11px;align-items:flex-start;border-bottom:1px solid var(--line);font-size:13.5px}
+.check li:last-child{border-bottom:0}
+.check .mark{flex:none;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900;margin-top:1px}
+.check .ok .mark{background:rgba(52,211,131,.18);color:var(--push)}
+.check .ng .mark{background:rgba(255,92,138,.18);color:var(--rose)}
+.check .ng{background:rgba(255,92,138,.05)}
+.check small{display:block;color:var(--dim);font-size:12px;margin-top:3px;line-height:1.6}
+
+.readout{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.readout .row{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
+.readout .row:last-child{border-bottom:0}
+.readout .lb{color:var(--dim);width:96px;flex:none;font-size:12.5px}
+.readout .vl{flex:1;font-variant-numeric:tabular-nums;font-weight:500}
+.readout .edit{background:none;border:0;color:var(--cyan);font:inherit;font-size:12.5px;cursor:pointer}
+
+.seats{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--line)}
+.seat{display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--surface);font-size:13px}
+.seat.me{background:var(--surface2)}
+.seat .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seat .st{font-variant-numeric:tabular-nums;color:var(--dim);font-size:12.5px}
+
+.pos{
+  flex:none;font-size:10.5px;font-weight:900;padding:3px 0;border-radius:5px;
+  width:38px;text-align:center;background:var(--surface3);color:var(--dim);letter-spacing:.02em;
+}
+.pos.UTG{background:rgba(201,168,255,.15);color:var(--utg)}
+.pos.CO{background:rgba(143,224,192,.15);color:var(--co)}
+.pos.BU{background:rgba(242,160,208,.15);color:var(--bu)}
+.pos.SB{background:rgba(143,180,255,.15);color:var(--sb)}
+.pos.BB{background:rgba(255,196,143,.15);color:var(--bb)}
+
+/* ---- compact hero ---- */
+.vhero{
+  display:flex;align-items:center;gap:13px;padding:16px 14px;
+  border-bottom:1px solid var(--line);
+  background:radial-gradient(130% 130% at 22% -30%,rgba(52,211,131,.16),transparent 66%);
+}
+.vhero .cards{display:flex;gap:4px;flex:none}
+.vhero .txt{flex:1;min-width:0}
+.vhero .word{font-size:28px;font-weight:900;letter-spacing:.05em;line-height:1;color:var(--push)}
+.vhero .sub{font-size:12px;color:var(--dim);margin-top:6px;line-height:1.55;font-variant-numeric:tabular-nums}
+.vhero .evbox{flex:none;text-align:right}
+.vhero .evbox b{display:block;font-size:17px;font-weight:900;color:var(--push);font-variant-numeric:tabular-nums;line-height:1}
+.vhero .evbox span{display:block;font-size:10.5px;color:var(--dim2);margin-top:5px}
+
+/* ---- action tree ---- */
+.tree{display:flex;flex-direction:column;gap:6px}
+.arow{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;
+  border:1px solid var(--line);border-radius:11px;background:var(--surface);
+}
+.arow[data-active="true"]{border-color:var(--cyan);background:rgba(86,214,234,.06)}
+.arow[data-locked="true"]{opacity:.42}
+.arow .segs{display:flex;gap:4px;flex:1;justify-content:flex-end}
+.seg{
+  font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.03em;
+  padding:6px 13px;border-radius:7px;border:1px solid transparent;
+  background:var(--surface2);color:var(--dim2);cursor:pointer;min-width:56px;
+}
+.seg:hover{color:var(--text)}
+.seg[aria-pressed="true"]{background:var(--surface3);color:var(--text);border-color:#4A4262}
+.seg.act[aria-pressed="true"]{background:rgba(52,211,131,.18);color:var(--push);border-color:rgba(52,211,131,.45)}
+.arow .term{flex:1;text-align:right;font-size:11.5px;color:var(--dim2);padding-right:6px}
+
+/* ---- frequency bar ---- */
+.freq{display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:9px;background:var(--cell-off)}
+.freq div{display:grid;place-items:center;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.freq .fp{background:var(--push);color:#062418}
+.freq .ff{color:var(--dim2)}
+
+/* ---- grid ---- */
+.grid{display:grid;grid-template-columns:repeat(13,1fr);gap:1.5px}
+.cell{
+  aspect-ratio:1;border-radius:2.5px;display:grid;place-items:center;
+  font-size:8.5px;font-weight:700;background:var(--cell-off);color:#5E5872;
+  font-variant-numeric:tabular-nums;
+}
+.cell.p{background:var(--push);color:#062418}
+.cell.hl{outline:2px solid var(--cyan);outline-offset:1px;position:relative;z-index:2}
+.legend{display:flex;gap:15px;margin-top:11px;font-size:11.5px;color:var(--dim);flex-wrap:wrap}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:5px}
+.rngtext{
+  margin-top:11px;font-size:11.5px;line-height:1.75;color:var(--dim);
+  font-variant-numeric:tabular-nums;word-break:break-word;
+}
+
+/* ---- poker table ---- */
+.tinfo{display:flex;gap:6px;padding:0 14px 10px;font-size:10.5px;font-variant-numeric:tabular-nums}
+.tinfo b{background:var(--surface2);border:1px solid var(--line);border-radius:5px;padding:3px 8px;font-weight:700;color:var(--dim)}
+
+.tablewrap{position:relative;height:300px;margin:0 12px}
+.felt{
+  position:absolute;left:8%;right:8%;top:20px;height:180px;border-radius:50%;
+  background:radial-gradient(72% 92% at 50% 24%,#1D5041,#0F2E26 66%,#0A1F1A);
+  border:5px solid #241F32;
+  box-shadow:0 0 0 1px #3A3350, inset 0 10px 34px rgba(0,0,0,.5), 0 12px 28px rgba(0,0,0,.45);
+}
+.pot{position:absolute;left:50%;top:36.7%;transform:translate(-50%,-50%);text-align:center;z-index:2}
+.pot span{display:block;font-size:8.5px;color:#5E8878;letter-spacing:.14em;margin-bottom:3px}
+.pot b{font-size:16px;font-weight:900;font-variant-numeric:tabular-nums;color:#DFEEE7}
+
+.seat{position:absolute;transform:translate(-50%,-50%);width:66px;text-align:center;z-index:3}
+.seat .cds{display:flex;gap:2px;justify-content:center;margin-bottom:-5px;position:relative;z-index:1}
+.back{
+  width:16px;height:23px;border-radius:3px;
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.08) 0 2px,transparent 2px 4px),
+             linear-gradient(150deg,#5A45A0,#31265C);
+  border:1px solid #6D5AB8;box-shadow:0 1px 3px rgba(0,0,0,.45);
+}
+.plate{
+  background:rgba(30,26,42,.95);border:1px solid var(--line);border-radius:9px;
+  padding:5px 3px 6px;position:relative;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.pname{font-size:9px;color:var(--dim2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;padding:0 3px}
+.pstack{font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:2px;line-height:1}
+.pstack.out{font-size:8.5px;letter-spacing:.05em;color:var(--rose);padding:1px 0}
+.pstack.called{font-size:8.5px;letter-spacing:.05em;color:var(--push);padding:1px 0}
+.seat .posb{position:absolute;top:-7px;left:-4px;font-size:8px;font-weight:900;padding:2px 5px;border-radius:5px;z-index:4;box-shadow:0 1px 4px rgba(0,0,0,.55)}
+.seat.fold{opacity:.28}
+.seat.fold .cds{visibility:hidden}
+
+.heroseat{position:absolute;left:50%;top:83.3%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:11px;z-index:6}
+.hcards{display:flex;gap:5px}
+.card.hd{width:46px;height:64px;font-size:23px;border-radius:7px;gap:2px}
+.card.hd em{font-size:19px}
+.hplate{
+  background:rgba(24,44,52,.95);border:1px solid var(--cyan);border-radius:11px;
+  padding:9px 14px 8px;text-align:center;position:relative;
+  box-shadow:0 0 0 1px rgba(86,214,234,.25),0 4px 14px rgba(0,0,0,.45);
+}
+.hplate .posb{position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:8.5px;font-weight:900;padding:2px 8px;border-radius:5px}
+.hplate .pstack{font-size:16px;color:var(--cyan);margin-top:2px}
+.hplate .pname{font-size:9px;margin-top:4px}
+
+.bet{
+  position:absolute;transform:translate(-50%,-50%);z-index:2;
+  font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;
+  background:rgba(10,9,15,.85);border:1px solid #3E3752;border-radius:100px;
+  padding:3px 9px 3px 6px;color:#E4E0EC;display:flex;gap:5px;align-items:center;white-space:nowrap;
+}
+.bet::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 1.5px rgba(86,214,234,.3)}
+.bet.big::before{background:var(--rose);box-shadow:0 0 0 1.5px rgba(255,92,138,.3)}
+/* ---- drill ---- */
+.prog{height:4px;background:var(--surface3);border-radius:100px;overflow:hidden;margin-bottom:13px}
+.prog i{display:block;height:100%;background:var(--cyan);transition:width .22s}
+.qcount{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;font-size:11.5px;color:var(--dim2);font-variant-numeric:tabular-nums}
+.qcount b{font-size:13px;font-weight:700;color:var(--text)}
+
+.strip{display:flex;gap:5px}
+.strip .s{flex:1;text-align:center;padding:7px 2px;border-radius:9px;background:var(--surface);border:1px solid var(--line)}
+.strip .s.me{border-color:var(--cyan);background:rgba(86,214,234,.07)}
+.strip .s.out{opacity:.34}
+.strip .s .p{font-size:9.5px;font-weight:900;letter-spacing:.02em}
+.strip .s .v{font-size:10.5px;margin-top:3px;font-variant-numeric:tabular-nums;color:var(--dim)}
+
+.ctx{
+  margin-top:11px;padding:10px 13px;border-radius:11px;background:var(--surface);
+  border:1px solid var(--line);font-size:12.5px;color:#C9C4D6;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.qhand{display:flex;gap:8px;justify-content:center;padding:26px 0 22px}
+.card.xl{width:64px;height:90px;font-size:31px;border-radius:9px;gap:2px}
+.card.xl em{font-size:26px}
+
+.choice{display:flex;gap:10px}
+.choice button{
+  flex:1;padding:19px 0;border-radius:14px;font-size:16.5px;font-weight:900;letter-spacing:.06em;
+  border:1px solid;cursor:pointer;font-family:inherit;
+}
+.ch-fold{background:var(--surface2);color:var(--text);border-color:var(--line)}
+.ch-fold:hover{border-color:#4A4262}
+.ch-push{background:var(--push);color:#062418;border-color:var(--push)}
+.ch-push:hover{filter:brightness(1.06)}
+
+.ansbar{padding:13px 14px;border-radius:14px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.ansbar.ok{background:rgba(52,211,131,.11);border:1px solid rgba(52,211,131,.34)}
+.ansbar.ng{background:rgba(255,92,138,.09);border:1px solid rgba(255,92,138,.3)}
+.ansbar .ttl{flex:1}
+.ansbar .ttl b{display:block;font-size:15px;font-weight:900;letter-spacing:.02em}
+.ansbar .ttl span{display:block;font-size:12px;color:var(--dim);margin-top:4px;line-height:1.55}
+.ansbar.ok .ttl b{color:var(--push)}
+.ansbar.ng .ttl b{color:var(--rose)}
+.ansbar .num{text-align:right;flex:none}
+.ansbar .num b{display:block;font-size:16px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.ansbar .num span{display:block;font-size:10px;color:var(--dim2);margin-top:5px}
+.ansbar.ok .num b{color:var(--push)}
+.ansbar.ng .num b{color:var(--rose)}
+
+.opt{display:flex;gap:6px;flex-wrap:wrap}
+.opt button{
+  font:inherit;font-size:12px;font-weight:700;padding:8px 14px;border-radius:100px;
+  background:var(--surface2);color:var(--dim);border:1px solid var(--line);cursor:pointer;
+}
+.opt button[aria-pressed="true"]{background:rgba(86,214,234,.14);color:var(--cyan);border-color:rgba(86,214,234,.45)}
+
+.scorebig{text-align:center;padding:26px 14px 8px}
+.scorebig .n{font-size:46px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+.scorebig .n small{font-size:20px;color:var(--dim2);font-weight:700}
+.scorebig .lb{font-size:12.5px;color:var(--dim);margin-top:9px}
+.misslist{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.misslist .m{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:12.5px}
+.misslist .m:last-child{border-bottom:0}
+.misslist .m .sp{flex:1;color:var(--dim);font-variant-numeric:tabular-nums}
+.misslist .m .ev{color:var(--rose);font-weight:700;font-variant-numeric:tabular-nums}
+
+/* modal */
+.sheet{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(6,5,10,.66);backdrop-filter:blur(3px)}
+.sheet.on{display:flex}
+.sheet .panel{
+  width:100%;max-width:400px;background:var(--ink);border-radius:20px 20px 0 0;
+  border-top:1px solid var(--line);max-height:86vh;overflow-y:auto;
+  animation:up .22s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes up{from{transform:translateY(14px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet .panel{animation:none}}
+.sheet .ph{position:sticky;top:0;background:var(--ink);padding:14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;z-index:2}
+.sheet .ph h3{font-size:14.5px;font-weight:700;flex:1}
+.sheet .ph .x{background:none;border:0;color:var(--dim);font-size:20px;cursor:pointer;font-family:inherit}
+.gl{padding:4px 14px 22px}
+.gl dt{
+  font-size:13px;font-weight:900;color:var(--text);margin-top:16px;
+  display:flex;align-items:baseline;gap:8px;letter-spacing:.02em;
+}
+.gl dt small{font-weight:500;font-size:11.5px;color:var(--dim2);letter-spacing:0}
+.gl dd{font-size:12.5px;line-height:1.75;color:var(--dim);margin-top:5px}
+
+/* records */
+.rec{display:flex;gap:11px;align-items:center;padding:13px 14px;border-bottom:1px solid var(--line)}
+.rec .col{flex:1;min-width:0}
+.rec .l1{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.rec .l2{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.tag{font-size:10.5px;font-weight:700;padding:2.5px 7px;border-radius:5px;flex:none;background:var(--surface3);color:var(--dim)}
+.tag.pub{background:rgba(86,214,234,.14);color:var(--cyan)}
+.recmenu{background:none;border:0;color:var(--dim2);font-size:17px;cursor:pointer;font-family:inherit;padding:4px 2px}
+
+.tog{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);font-size:13.5px}
+.tog small{display:block;color:var(--dim);font-size:12px;margin-top:3px;line-height:1.6}
+.sw{width:42px;height:25px;border-radius:100px;background:var(--surface3);border:0;flex:none;position:relative;cursor:pointer;transition:background .16s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#7E7794;transition:.16s}
+.sw[aria-pressed="true"]{background:rgba(52,211,131,.3)}
+.sw[aria-pressed="true"]::after{left:20px;background:var(--push)}
+
+.auth{padding:44px 24px 24px;text-align:center}
+.logo{width:56px;height:56px;border-radius:16px;margin:0 auto 18px;background:linear-gradient(150deg,#34D383,#56D6EA);display:grid;place-items:center;font-size:25px}
+.auth h2{font-size:23px;font-weight:900}
+.auth .lead{font-size:13px;color:var(--dim);margin-top:9px;line-height:1.75}
+.form{margin-top:28px;text-align:left;display:flex;flex-direction:column;gap:11px}
+.inp{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font-size:14px}
+.inp b{display:block;font-size:11px;color:var(--dim2);font-weight:500;margin-bottom:5px}
+.inp span{color:var(--text);opacity:.45}
+.swap{margin-top:18px;font-size:12.5px;color:var(--dim)}
+.swap button{background:none;border:0;color:var(--cyan);font:inherit;cursor:pointer;font-weight:700}
+
+.avpick{display:flex;flex-direction:column;align-items:center;padding:26px 14px 18px;border-bottom:1px solid var(--line)}
+.avbig{width:88px;height:88px;border-radius:50%;background:linear-gradient(140deg,#7B5BD6,#D65B9E);display:grid;place-items:center;font-size:32px;font-weight:900;color:#fff;position:relative}
+.avbig .cam{position:absolute;right:-2px;bottom:-2px;width:30px;height:30px;border-radius:50%;background:var(--surface2);border:2px solid var(--ink);display:grid;place-items:center;font-size:13px}
+.avpick .lbl{margin-top:12px;font-size:12.5px;color:var(--cyan);font-weight:700}
+
+.tabs{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:400px;z-index:30;
+  background:rgba(16,14,23,.93);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+  display:flex;padding:7px 0 max(7px,env(safe-area-inset-bottom));
+}
+.tabs button{flex:1;background:none;border:0;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--dim2);font-size:10.5px;font-weight:500;padding:5px 0}
+.tabs button .ic{font-size:19px;line-height:1}
+.tabs button[aria-current="true"]{color:var(--text);font-weight:700}
+.tabs.hide{display:none}
+.fab{
+  position:fixed;bottom:78px;left:50%;margin-left:118px;z-index:31;width:52px;height:52px;
+  border-radius:50%;border:0;cursor:pointer;background:var(--push);color:#062418;font-size:23px;
+  font-family:inherit;box-shadow:0 6px 20px rgba(52,211,131,.28);
+}
+.fab.hide{display:none}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+
+<nav class="mockbar">
+  <span>画面</span>
+  <button data-go="auth">ログイン</button>
+  <button data-go="home" aria-current="true">ホーム</button>
+  <button data-go="thread">スレッド</button>
+  <button data-go="icm">ICM 添付</button>
+  <button data-go="confirm">条件確認</button>
+  <button data-go="error">エラー</button>
+  <button data-go="result">計算結果</button>
+  <button data-go="drill">Drill</button>
+  <button data-go="records">保存した記録</button>
+  <button data-go="profile">プロフィール</button>
+</nav>
+
+<div class="phone">
+  <header class="top">
+    <button class="back" id="backBtn" hidden aria-label="戻る">‹</button>
+    <h1 id="topTitle">ホーム</h1>
+    <button class="info" id="glossaryBtn" hidden title="用語集">i</button>
+    <button class="av" id="topAv" title="保存した記録">さ</button>
+  </header>
+
+  <div class="body">
+
+  <!-- AUTH -->
+  <section class="screen" id="s-auth">
+    <div class="auth">
+      <div class="logo">♠</div>
+      <h2>押し引きノート</h2>
+      <p class="lead">クラブマッチのオールイン、<br>あとから答え合わせする場所。</p>
+      <div class="form">
+        <div class="inp"><b>ユーザー名</b><span>satsuki</span></div>
+        <div class="inp"><b>パスワード</b><span>••••••••••</span></div>
+      </div>
+      <div style="margin-top:20px"><button class="btn" data-go="home">ログイン</button></div>
+      <p class="swap">はじめて？ <button data-go="profile">アカウントを作る</button></p>
+    </div>
+    <div class="pad" style="padding-top:6px">
+      <p class="note">記録はユーザーごとに保存されます。公開するかどうかは、1件ずつ自分で決められます。</p>
+    </div>
+  </section>
+
+  <!-- HOME -->
+  <section class="screen on" id="s-home">
+    <article class="post">
+      <div class="av s k">な</div>
+      <div class="col">
+        <div class="meta"><b>なかはた</b><i>@nakahata</i><i>・12分</i></div>
+        <p>BUのPUが42.7%まで開くの、SBとBBが100%で受けてくる前提だと信じられないんだけど合ってる？</p>
+        <button class="rescard" data-go="result">
+          <div class="rc-top">
+            <div class="hand"><div class="card">K<em>♠</em></div><div class="card red">7<em>♦</em></div></div>
+            <span class="verdict push">PUSH</span>
+            <span style="font-size:11.5px;color:var(--dim);margin-left:auto">5 left・BU</span>
+          </div>
+          <div class="rc-bot"><span>13.4bb</span><span>PU 42.7%</span><span>EV +0.21pt</span></div>
+        </button>
+        <div class="acts"><button>💬 8</button><button>♡ 14</button><button>↗</button></div>
+      </div>
+    </article>
+
+    <article class="post">
+      <div class="av s">さ</div>
+      <div class="col">
+        <div class="meta"><b>さつき</b><i>@satsuki</i><i>・1時間</i></div>
+        <p>UTGのK6s、押しでいいらしい。後ろのCAが0.5%しかないからね。フォールドしてた自分を殴りたい。</p>
+        <button class="rescard" data-go="result">
+          <div class="rc-top">
+            <div class="hand"><div class="card">K<em>♠</em></div><div class="card">6<em>♠</em></div></div>
+            <span class="verdict push">PUSH</span>
+            <span style="font-size:11.5px;color:var(--dim);margin-left:auto">5 left・UTG</span>
+          </div>
+          <div class="rc-bot"><span>18.2bb</span><span>PU 39.4%</span><span>EV +0.18pt</span></div>
+        </button>
+        <div class="acts"><button data-go="thread">💬 23</button><button>♡ 41</button><button>↗</button></div>
+      </div>
+    </article>
+
+    <article class="post">
+      <div class="av s n">海</div>
+      <div class="col">
+        <div class="meta"><b>海空</b><i>@umisora</i><i>・3時間</i></div>
+        <p>COのPUが2.7%で99+しかないの、UTGが39%も押してくる後ろだからか。ポジションで全然違うね。</p>
+        <button class="rescard" data-go="result">
+          <div class="rc-top">
+            <div class="hand"><div class="card red">Q<em>♥</em></div><div class="card red">9<em>♦</em></div></div>
+            <span class="verdict fold">FOLD</span>
+            <span style="font-size:11.5px;color:var(--dim);margin-left:auto">5 left・CO</span>
+          </div>
+          <div class="rc-bot"><span>11.5bb</span><span>PU 2.7%</span><span>EV −0.09pt</span></div>
+        </button>
+        <div class="acts"><button>💬 15</button><button>♡ 9</button><button>↗</button></div>
+      </div>
+    </article>
+
+    <article class="post">
+      <div class="av s t">た</div>
+      <div class="col">
+        <div class="meta"><b>たまご</b><i>@tamago</i><i>・5時間</i></div>
+        <p>今日のクラブマッチ、押し引きだけで2ptくらい落としてた。地味に効くね。</p>
+        <div class="acts"><button>💬 4</button><button>♡ 18</button><button>↗</button></div>
+      </div>
+    </article>
+  </section>
+
+  <!-- THREAD -->
+  <section class="screen" id="s-thread">
+    <div class="thread-head">
+      <div style="display:flex;gap:11px;align-items:center">
+        <div class="av s">さ</div>
+        <div><div style="font-size:14px;font-weight:700">さつき</div><div style="font-size:12px;color:var(--dim2)">@satsuki</div></div>
+      </div>
+      <p>UTGのK6s、押しでいいらしい。後ろのCAが0.5%しかないからね。フォールドしてた自分を殴りたい。</p>
+      <button class="rescard" data-go="result" style="margin-top:13px">
+        <div class="rc-top">
+          <div class="hand"><div class="card">K<em>♠</em></div><div class="card">6<em>♠</em></div></div>
+          <span class="verdict push">PUSH</span>
+          <span style="font-size:11.5px;color:var(--dim);margin-left:auto">5 left・UTG</span>
+        </div>
+        <div class="rc-bot"><span>18.2bb</span><span>PU 39.4%</span><span>EV +0.18pt</span></div>
+      </button>
+      <div class="acts" style="margin-top:13px"><button>💬 23</button><button>♡ 41</button><button>↗</button></div>
+    </div>
+
+    <div class="reply">
+      <div class="av s k">な</div>
+      <div class="col">
+        <div class="meta"><b>なかはた</b><i>@nakahata</i><i>・52分</i></div>
+        <p>CAが0.5%ってAAだけってこと？そんなに受けないもんなの。</p>
+      </div>
+    </div>
+    <div class="reply">
+      <div class="av s">さ</div>
+      <div class="col">
+        <div class="meta"><b>さつき</b><i>@satsuki</i><i>・44分</i></div>
+        <p>そう。全員スタック深いから、ここで飛ぶリスクが割に合わない。ICMが効いてる場面。</p>
+      </div>
+    </div>
+    <div class="reply">
+      <div class="av s n">海</div>
+      <div class="col">
+        <div class="meta"><b>海空</b><i>@umisora</i><i>・30分</i></div>
+        <p>似たスポットで自分も降りてた。これです。</p>
+        <div class="replyimg">スクリーンショット</div>
+      </div>
+    </div>
+    <div class="reply">
+      <div class="av s t">た</div>
+      <div class="col">
+        <div class="meta"><b>たまご</b><i>@tamago</i><i>・18分</i></div>
+        <p>OCまで見ると全部AAなの笑う。誰も何も受けてない。</p>
+      </div>
+    </div>
+
+    <div class="composer">
+      <button class="icobtn" title="画像を添付">🖼</button>
+      <div class="field">返信を書く</div>
+      <button class="icobtn go" title="送信">↑</button>
+    </div>
+  </section>
+
+  <!-- ICM UPLOAD -->
+  <section class="screen" id="s-icm">
+    <div class="drop">
+      <div class="ic">📷</div>
+      <b>スクリーンショットを選ぶ</b>
+      <span>自分の手番が回ってきた場面を<br>そのまま撮ったものを添付してね</span>
+      <div style="margin-top:18px"><button class="btn" data-go="confirm">写真を選ぶ</button></div>
+    </div>
+    <div class="pad" style="padding-top:2px">
+      <h2 class="h2">読み取れる条件</h2>
+      <ul class="check">
+        <li class="ok"><span class="mark">✓</span><div>プリフロップの画面<small>フロップ以降は押し引きの計算対象外になります</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>自分の手番が回ってきた状態<small>アクション前・アクション後の画面は状況が確定しません</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>全画面のまま<small>切り抜くとスタックやポジションが読めなくなります</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>BB表示<small>チップ総額表示でも動きますが、BB表示のほうが確実です</small></div></li>
+      </ul>
+      <p class="note" style="margin-top:14px">誰かがミニレイズしている場面は、push/foldの計算では扱えません。オールインが入っているか、まだ誰も入っていない場面を選んでください。</p>
+    </div>
+  </section>
+
+  <!-- CONFIRM -->
+  <section class="screen" id="s-confirm">
+    <div class="pad">
+      <h2 class="h2">読み取った内容</h2>
+      <div class="readout">
+        <div class="row"><span class="lb">Blinds</span><span class="vl">100 / 200 &nbsp;ante 50</span><button class="edit">修正</button></div>
+        <div class="row"><span class="lb">Hand</span><span class="vl" style="display:flex;gap:4px"><span class="card sm">K<em>♠</em></span><span class="card sm">6<em>♠</em></span></span><button class="edit">修正</button></div>
+        <div class="row"><span class="lb">Action</span><span class="vl">Unopened</span><button class="edit">修正</button></div>
+        <div class="row"><span class="lb">Players left</span><span class="vl">5</span><button class="edit">修正</button></div>
+      </div>
+    </div>
+    <div class="pad" style="padding-top:0">
+      <h2 class="h2">Stacks</h2>
+      <div class="seats">
+        <div class="seat me"><span class="pos UTG">UTG</span><span class="nm">さつき</span><span class="st">18.2bb</span></div>
+        <div class="seat"><span class="pos CO">CO</span><span class="nm">海空</span><span class="st">96.8bb</span></div>
+        <div class="seat"><span class="pos BU">BU</span><span class="nm">なかはた</span><span class="st">43.6bb</span></div>
+        <div class="seat"><span class="pos SB">SB</span><span class="nm">たまご</span><span class="st">62.7bb</span></div>
+        <div class="seat"><span class="pos BB">BB</span><span class="nm">せなぴょん</span><span class="st">100.8bb</span></div>
+      </div>
+      <p class="note" style="margin-top:12px">違っていたら「修正」から直せます。直した内容はそのまま計算に使われます。</p>
+      <div style="margin-top:16px"><button class="btn" data-go="result">この内容で計算する</button></div>
+    </div>
+  </section>
+
+  <!-- ERROR -->
+  <section class="screen" id="s-error">
+    <div class="pad">
+      <div style="background:rgba(255,92,138,.09);border:1px solid rgba(255,92,138,.28);border-radius:14px;padding:15px 14px;margin-bottom:18px">
+        <div style="font-size:14.5px;font-weight:700;color:var(--rose);margin-bottom:6px">このスクリーンショットでは計算できません</div>
+        <div style="font-size:12.5px;color:#D4A8B8;line-height:1.7">条件が2つ揃っていません。下の項目を直して撮り直してください。</div>
+      </div>
+      <h2 class="h2">読み取れる条件</h2>
+      <ul class="check">
+        <li class="ng"><span class="mark">!</span><div>プリフロップの画面<small>フロップの画面でした。ボードにカードが3枚出ています</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>自分の手番が回ってきた状態</div></li>
+        <li class="ok"><span class="mark">✓</span><div>全画面のまま</div></li>
+        <li class="ng"><span class="mark">!</span><div>全員のスタックが読めること<small>右上の1席がスタンプで隠れています</small></div></li>
+      </ul>
+      <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+        <button class="btn" data-go="icm">別の写真を選ぶ</button>
+        <button class="btn ghost" data-go="confirm">読めた分を自分で埋める</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section class="screen" id="s-result">
+    <div class="vhero">
+      <div class="cards"><div class="card big">K<em>♠</em></div><div class="card big">6<em>♠</em></div></div>
+      <div class="txt">
+        <div class="word">PUSH</div>
+        <div class="sub">UTG・18.2bb・5 left<br>PU range 39.4% に含まれます</div>
+      </div>
+      <div class="evbox"><b>+0.18</b><span>EV (pt)</span></div>
+    </div>
+
+    <div class="pad" style="padding-bottom:10px">
+      <h2 class="h2">Action tree</h2>
+      <div class="tree" id="tree"></div>
+      <p class="note" id="treeNote" style="margin-top:9px"></p>
+    </div>
+
+    <div class="pad" style="padding-top:4px">
+      <h2 class="h2"><span id="rangeLabel">UTG — PU range</span><button class="info" data-glossary title="用語集">i</button></h2>
+      <div class="freq" id="freq"></div>
+      <div class="grid" id="grid"></div>
+      <div class="legend">
+        <span><i style="background:var(--push)"></i>この枝で取るハンド</span>
+        <span><i style="background:var(--cell-off)"></i>取らないハンド</span>
+        <span style="color:var(--cyan)"><i style="background:transparent;border:2px solid var(--cyan)"></i>自分の手</span>
+      </div>
+      <p class="rngtext" id="rngText"></p>
+    </div>
+
+    <div class="pad" style="padding-top:6px">
+      <h2 class="h2"><span>ICM equity</span><button class="info" data-glossary title="用語集">i</button></h2>
+      <div class="readout">
+        <div class="row"><span class="lb">EQPre</span><span class="vl">21.44%</span><span style="font-size:12px;color:var(--dim2)">3.43pt</span></div>
+        <div class="row"><span class="lb">EQPost</span><span class="vl">22.56%</span><span style="font-size:12px;color:var(--dim2)">3.61pt</span></div>
+        <div class="row"><span class="lb">EQDiff</span><span class="vl" style="color:var(--push);font-weight:900">+1.12%</span><span style="font-size:12px;color:var(--push)">+0.18pt</span></div>
+      </div>
+      <p class="note" style="margin-top:10px">EQは賞金プール比。クラブマッチは合計16ptなので、1.00% = 0.16pt です。</p>
+    </div>
+
+    <div class="pad" style="padding-top:6px">
+      <h2 class="h2">この記録</h2>
+      <div style="border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden">
+        <div class="tog"><div>ホームで公開する<small>クラブのみんなが見られるようになり、スレッドで話せます</small></div><button class="sw" aria-pressed="false" onclick="this.setAttribute('aria-pressed',this.getAttribute('aria-pressed')==='true'?'false':'true')"></button></div>
+        <div style="padding:13px 14px">
+          <div style="background:var(--surface2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;font-size:13px;color:var(--dim2)">コメントを書いて公開する</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px">
+        <button class="btn ghost" data-go="records">保存した記録を見る</button>
+        <button class="btn rose">この記録を削除する</button>
+      </div>
+      <p class="note" style="margin-top:12px">計算した記録は自動で保存されています。</p>
+    </div>
+  </section>
+
+  <!-- DRILL -->
+  <section class="screen" id="s-drill">
+
+    <!-- start -->
+    <div id="d-start">
+      <div class="pad">
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 16px">
+          <div style="font-size:17px;font-weight:900;letter-spacing:.01em">ランダム出題</div>
+          <p class="note" style="margin-top:8px">実際に起きる場面からランダムに出題します。答えるたびに正答率が更新されます。終わりたくなったら「終わる」でまとめが出ます。</p>
+        </div>
+      </div>
+
+      <div class="pad" style="padding-top:0">
+        <h2 class="h2">Players left</h2>
+        <div class="opt" id="optLeft">
+          <button data-v="all" aria-pressed="true">すべて</button>
+          <button data-v="5">5</button>
+          <button data-v="3">3</button>
+          <button data-v="2">HU</button>
+        </div>
+      </div>
+
+      <div class="pad" style="padding-top:0">
+        <h2 class="h2">Action</h2>
+        <div class="opt" id="optAct">
+          <button data-v="all" aria-pressed="true">すべて</button>
+          <button data-v="PU">PU</button>
+          <button data-v="CA">CA</button>
+          <button data-v="OC">OC</button>
+        </div>
+      </div>
+
+      <div class="pad" style="padding-top:4px">
+        <button class="btn" id="startBtn">はじめる</button>
+      </div>
+
+      <div class="pad" style="padding-top:0">
+        <h2 class="h2">前回の記録</h2>
+        <div class="readout">
+          <div class="row"><span class="lb">Hands</span><span class="vl">34</span></div>
+          <div class="row"><span class="lb">Correct</span><span class="vl">28 / 34 · 82%</span></div>
+          <div class="row"><span class="lb">EV loss</span><span class="vl" style="color:var(--rose)">−1.62pt</span></div>
+          <div class="row"><span class="lb">Weak spot</span><span class="vl">OC・3 left</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- question -->
+    <div id="d-q" hidden>
+      <div class="pad" style="padding-bottom:0">
+        <div class="prog"><i id="qProg" style="width:0%"></i></div>
+        <div class="qcount"><b id="qNo">Hand 1</b><span id="qScore">Correct 0 / 0</span></div>
+      </div>
+      <div class="tinfo" id="qInfo"></div>
+      <div class="tablewrap" id="qTable"></div>
+      <div class="pad" style="padding-top:6px">
+        <div class="ctx" id="qCtx" style="margin-top:0"></div>
+        <div class="choice" style="margin-top:12px">
+          <button class="ch-fold" data-ans="F">FOLD</button>
+          <button class="ch-push" id="chAct" data-ans="A">ALL IN</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- answer -->
+    <div id="d-a" hidden>
+      <div class="pad" style="padding-bottom:0">
+        <div class="ansbar" id="aBar">
+          <div class="hand" id="aHand"></div>
+          <div class="ttl"><b id="aTtl"></b><span id="aSub"></span></div>
+          <div class="num"><b id="aEv"></b><span>EV (pt)</span></div>
+        </div>
+      </div>
+      <div class="pad" style="padding-top:0">
+        <h2 class="h2"><span id="aLabel"></span><button class="info" data-glossary title="用語集">i</button></h2>
+        <div class="freq" id="aFreq"></div>
+        <div class="grid" id="aGrid"></div>
+        <div class="legend">
+          <span><i style="background:var(--push)"></i>この枝で取るハンド</span>
+          <span style="color:var(--cyan)"><i style="background:transparent;border:2px solid var(--cyan)"></i>出題された手</span>
+        </div>
+        <p class="rngtext" id="aRng"></p>
+      </div>
+      <div class="pad" style="padding-top:6px;display:flex;gap:9px">
+        <button class="btn ghost" id="finishBtn" style="flex:1;width:auto">終わる</button>
+        <button class="btn" id="nextBtn" style="flex:2;width:auto">次の問題</button>
+      </div>
+    </div>
+
+    <!-- summary -->
+    <div id="d-s" hidden>
+      <div class="scorebig">
+        <div class="n" id="sScore">82<small>%</small></div>
+        <div class="lb" id="sLb">28 / 34 正解</div>
+      </div>
+      <div class="pad">
+        <div class="readout">
+          <div class="row"><span class="lb">Hands</span><span class="vl" id="sHands">34</span></div>
+          <div class="row"><span class="lb">EV loss</span><span class="vl" id="sEv" style="color:var(--rose)">−1.62pt</span><span style="font-size:12px;color:var(--dim2)">落とした分</span></div>
+        </div>
+      </div>
+      <div class="pad" style="padding-top:0" id="sMissWrap">
+        <h2 class="h2">外した場面</h2>
+        <div class="misslist" id="sMiss"></div>
+      </div>
+      <div class="pad" style="padding-top:4px;display:flex;flex-direction:column;gap:9px">
+        <button class="btn" id="againBtn">もう一度はじめる</button>
+        <button class="btn ghost" id="backToStart">条件を変える</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RECORDS -->
+  <section class="screen" id="s-records">
+    <div class="pad" style="padding-bottom:8px">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 13px">
+          <div style="font-size:20px;font-weight:900;font-variant-numeric:tabular-nums">142</div>
+          <div style="font-size:11.5px;color:var(--dim);margin-top:2px">記録した場面</div>
+        </div>
+        <div style="flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 13px">
+          <div style="font-size:20px;font-weight:900;color:var(--rose);font-variant-numeric:tabular-nums">−4.7pt</div>
+          <div style="font-size:11.5px;color:var(--dim);margin-top:2px">EV loss 合計</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rec">
+      <div class="hand"><div class="card sm">K<em>♠</em></div><div class="card sm">6<em>♠</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict push">PUSH</span><span class="tag">非公開</span></div><div class="l2">5 left・UTG・18.2bb ・ +0.18pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">A<em>♠</em></div><div class="card sm">J<em>♣</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict fold">FOLD</span><span class="tag pub">公開中</span></div><div class="l2">6 left・UTG・9.8bb ・ −0.34pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card red sm">Q<em>♥</em></div><div class="card red sm">9<em>♦</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict fold">FOLD</span><span class="tag">非公開</span></div><div class="l2">5 left・CO・11.5bb ・ −0.09pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">T<em>♠</em></div><div class="card red sm">T<em>♥</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict push">PUSH</span><span class="tag pub">公開中</span></div><div class="l2">3 left・SB・14.1bb ・ +0.62pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">8<em>♣</em></div><div class="card red sm">4<em>♦</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict fold">FOLD</span><span class="tag">非公開</span></div><div class="l2">4 left・BU・22.4bb ・ −0.08pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="screen" id="s-profile">
+    <div class="avpick">
+      <div class="avbig">さ<span class="cam">📷</span></div>
+      <div class="lbl">アイコンを変える</div>
+    </div>
+    <div class="pad">
+      <div class="readout">
+        <div class="row"><span class="lb">表示名</span><span class="vl">さつき</span><button class="edit">変更</button></div>
+        <div class="row"><span class="lb">ユーザー名</span><span class="vl">@satsuki</span><button class="edit">変更</button></div>
+        <div class="row"><span class="lb">パスワード</span><span class="vl">••••••••••</span><button class="edit">変更</button></div>
+      </div>
+    </div>
+    <div class="pad" style="padding-top:0">
+      <h2 class="h2">公開のしかた</h2>
+      <div style="border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden">
+        <div class="tog"><div>計算したら最初から公開する<small>切っておくと、1件ずつ自分で公開を選べます</small></div><button class="sw" aria-pressed="false" onclick="this.setAttribute('aria-pressed',this.getAttribute('aria-pressed')==='true'?'false':'true')"></button></div>
+        <div class="tog" style="border-bottom:0"><div>EV loss の合計を見せる<small>プロフィールに表示されます</small></div><button class="sw" aria-pressed="true" onclick="this.setAttribute('aria-pressed',this.getAttribute('aria-pressed')==='true'?'false':'true')"></button></div>
+      </div>
+      <div style="margin-top:16px"><button class="btn ghost" data-go="auth">ログアウト</button></div>
+    </div>
+  </section>
+
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-go="home" aria-current="true"><span class="ic">⌂</span>ホーム</button>
+    <button data-go="icm"><span class="ic">♠</span>ICM</button>
+    <button data-go="drill"><span class="ic">◎</span>Drill</button>
+    <button data-go="records"><span class="ic">▤</span>記録</button>
+  </nav>
+  <button class="fab" id="fab" data-go="icm" title="計算する">＋</button>
+</div>
+
+<!-- GLOSSARY -->
+<div class="sheet" id="sheet">
+  <div class="panel">
+    <div class="ph"><h3>用語</h3><button class="x" id="shX" aria-label="閉じる">✕</button></div>
+    <dl class="gl">
+      <dt>PU <small>Push</small></dt>
+      <dd>まだ誰もチップを入れていない状態から、最初にオールインする側。ツリーの一番左の列。</dd>
+      <dt>CA <small>Call</small></dt>
+      <dd>PUに対してコールする側。まだ誰もコールしていない状態での受け。</dd>
+      <dt>OC <small>Overcall</small></dt>
+      <dd>PUとCAがすでに入っている場面で、さらに乗る側。2人に囲まれる分、CAよりずっと狭くなります。</dd>
+      <dt>Range</dt>
+      <dd>そのアクションを取るハンドの集合。押し引きの均衡では0か100かで、混ぜる手はありません。</dd>
+      <dt>EV</dt>
+      <dd>自分のこのハンドで、PUした場合とFOLDした場合の期待pt差。プラスなら押しが得。ツールが一番見てほしい数字です。</dd>
+      <dt>EQ <small>ICM equity</small></dt>
+      <dd>今のスタックをICMで換算した期待獲得pt。賞金プール比の%で出ます。</dd>
+      <dt>EQPre / EQPost / EQDiff</dt>
+      <dd>このハンドが始まる前と、全員が均衡通りに打ち終わった後の期待pt、およびその差。EVと違ってレンジ全体の平均なので、「この場面が自分にとって有利かどうか」を表します。</dd>
+      <dt>ICM <small>Independent Chip Model</small></dt>
+      <dd>チップ量を期待獲得ptに変換するモデル。チップは増やすほど価値が目減りするので、飛ぶリスクが実際より重く効きます。</dd>
+      <dt>Effective stack</dt>
+      <dd>実際にやり取りされる最大チップ量。短いほうのスタックで決まります。</dd>
+      <dt>Unopened</dt>
+      <dd>まだ誰もチップを入れていない状態。この場面だけがPUの判断対象です。</dd>
+    </dl>
+  </div>
+</div>
+
+<script>
+/* ---------- routing ---------- */
+const titles={auth:"",home:"ホーム",thread:"スレッド",icm:"ICMを計算する",confirm:"内容を確かめる",error:"内容を確かめる",result:"計算結果",drill:"Drill",records:"保存した記録",profile:"プロフィール"};
+const noTabs=["auth"], noFab=["auth","icm","confirm","error","result","thread","drill"], backOn=["thread","confirm","error","result","profile"];
+
+function go(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on",s.id==="s-"+id));
+  document.querySelectorAll(".mockbar button").forEach(b=>b.setAttribute("aria-current",String(b.dataset.go===id)));
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-current",String(b.dataset.go===id)));
+  document.getElementById("topTitle").textContent=titles[id]||"";
+  document.getElementById("tabs").classList.toggle("hide",noTabs.includes(id));
+  document.getElementById("fab").classList.toggle("hide",noFab.includes(id));
+  document.getElementById("backBtn").hidden=!backOn.includes(id);
+  document.getElementById("glossaryBtn").hidden=(id!=="result");
+  document.getElementById("topAv").hidden=(id==="auth");
+  document.querySelector(".body").scrollTop=0;window.scrollTo(0,0);
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-go]");
+  if(t){e.preventDefault();go(t.dataset.go);}
+});
+document.getElementById("topAv").onclick=()=>go("records");
+document.getElementById("backBtn").onclick=()=>go("home");
+
+/* ---------- glossary ---------- */
+const sheet=document.getElementById("sheet");
+const openGl=()=>sheet.classList.add("on");
+document.getElementById("glossaryBtn").onclick=openGl;
+document.querySelectorAll("[data-glossary]").forEach(b=>b.onclick=openGl);
+document.getElementById("shX").onclick=()=>sheet.classList.remove("on");
+sheet.addEventListener("click",e=>{if(e.target===sheet)sheet.classList.remove("on")});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")sheet.classList.remove("on")});
+
+/* ---------- range notation parser ---------- */
+const R=["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
+const ri=r=>R.indexOf(r);
+function handName(i,j){
+  if(i===j) return R[i]+R[i];
+  return j>i ? R[i]+R[j]+"s" : R[j]+R[i]+"o";
+}
+function parseRange(str){
+  const set=new Set();
+  if(!str) return set;
+  if(/any\s*two/i.test(str)){
+    for(let i=0;i<13;i++) for(let j=0;j<13;j++) set.add(handName(i,j));
+    return set;
+  }
+  str.split(/\s+/).forEach(tok=>{
+    if(!tok) return;
+    const plus=tok.endsWith("+");
+    const t=plus?tok.slice(0,-1):tok;
+    let m;
+    if((m=/^([AKQJT98765432])x$/.exec(t))){
+      const a=m[1];
+      for(let k=0;k<13;k++) if(ri(R[k])>ri(a)){ set.add(a+R[k]+"s"); set.add(a+R[k]+"o"); }
+      return;
+    }
+    if(t.length===2 && t[0]===t[1]){
+      const a=t[0];
+      if(plus){ for(let k=0;k<=ri(a);k++) set.add(R[k]+R[k]); } else set.add(a+a);
+      return;
+    }
+    if((m=/^([AKQJT98765432])([AKQJT98765432])([so])$/.exec(t))){
+      const hi=m[1], lo=m[2], s=m[3];
+      if(plus){ for(let k=ri(lo);k>ri(hi);k--) set.add(hi+R[k]+s); }
+      else set.add(hi+lo+s);
+    }
+  });
+  return set;
+}
+
+/* ---------- solution tree (HRC output, 5 handed) ---------- */
+const POS=["UTG","CO","BU","SB","BB"];
+const T={
+  "":                       {pct:39.4, r:"44+ Ax K2s+ K6o+ Q6s+ Q8o+ J7s+ J9o+ T8s+ T9o 98s"},
+  "UTG:F":                  {pct:2.7,  r:"99+"},
+  "UTG:F,CO:F":             {pct:42.7, r:"44+ Ax K2s+ K5o+ Q4s+ Q8o+ J7s+ J8o+ T7s+ T9o 97s+ 87s"},
+  "UTG:F,CO:F,BU:F":        {pct:100,  r:"Any two"},
+
+  "UTG:P":                  {pct:0.5,  r:"AA"},
+  "UTG:P,CO:F":             {pct:0.5,  r:"AA"},
+  "UTG:P,CO:F,BU:F":        {pct:100,  r:"Any two"},
+  "UTG:P,CO:F,BU:F,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:P,CO:F,BU:C":        {pct:0.5,  r:"AA"},
+  "UTG:P,CO:F,BU:C,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:P,CO:F,BU:F,SB:C":   {pct:100,  r:"Any two"},
+  "UTG:P,CO:C":             {pct:0.5,  r:"AA"},
+  "UTG:P,CO:C,BU:F":        {pct:0.5,  r:"AA"},
+  "UTG:P,CO:C,BU:F,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:P,CO:C,BU:C":        {pct:0.5,  r:"AA"},
+  "UTG:P,CO:C,BU:C,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:P,CO:C,BU:F,SB:C":   {pct:100,  r:"Any two"},
+
+  "UTG:F,CO:P":             {pct:0.5,  r:"AA"},
+  "UTG:F,CO:P,BU:F":        {pct:100,  r:"Any two"},
+  "UTG:F,CO:P,BU:F,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:F,CO:P,BU:C":        {pct:0.5,  r:"AA"},
+  "UTG:F,CO:P,BU:C,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:F,CO:P,BU:F,SB:C":   {pct:100,  r:"Any two"},
+
+  "UTG:F,CO:F,BU:P":        {pct:100,  r:"Any two"},
+  "UTG:F,CO:F,BU:P,SB:F":   {pct:100,  r:"Any two"},
+  "UTG:F,CO:F,BU:P,SB:C":   {pct:100,  r:"Any two"},
+
+  "UTG:F,CO:F,BU:F,SB:P":   {pct:100,  r:"Any two"}
+};
+
+const MY_IDX=0, MY_HAND="K6s";
+let state=["P","F","F","F","F"], active=0;
+
+function actionsFor(i){
+  const before=state.slice(0,i);
+  const pushed=before.includes("P");
+  const called=before.includes("C");
+  if(!pushed) return [["F","FOLD"],["P","PU"]];
+  if(!called)  return [["F","FOLD"],["C","CA"]];
+  return [["F","FOLD"],["O","OC"]];
+}
+function keyFor(i){
+  return POS.slice(0,i).map((p,k)=>p+":"+state[k]).join(",");
+}
+function isTerminal(i){
+  // everyone folded and it's BB's turn -> BB wins the blinds, no decision
+  return i===POS.length-1 && !state.slice(0,i).includes("P");
+}
+
+function renderTree(){
+  const el=document.getElementById("tree");
+  el.innerHTML="";
+  POS.forEach((p,i)=>{
+    const row=document.createElement("div");
+    row.className="arow";
+    row.dataset.active=String(active===i);
+    const term=isTerminal(i);
+    row.dataset.locked=String(term);
+
+    const badge=document.createElement("span");
+    badge.className="pos "+p; badge.textContent=p;
+    row.appendChild(badge);
+
+    if(term){
+      const t=document.createElement("span");
+      t.className="term"; t.textContent="no decision";
+      row.appendChild(t);
+    }else{
+      const segs=document.createElement("div");
+      segs.className="segs";
+      actionsFor(i).forEach(([code,label])=>{
+        const b=document.createElement("button");
+        b.className="seg"+(code!=="F"?" act":"");
+        b.textContent=label;
+        b.setAttribute("aria-pressed",String(state[i]===code));
+        b.onclick=()=>{
+          state[i]=code;
+          for(let k=i+1;k<POS.length;k++) state[k]="F";
+          active=i; render();
+        };
+        segs.appendChild(b);
+      });
+      row.appendChild(segs);
+    }
+    el.appendChild(row);
+  });
+
+  const note=document.getElementById("treeNote");
+  note.textContent = active===MY_IDX
+    ? "自分の判断はこの行。下の行を切り替えると、後ろの人が何を受けてくるかが見られます。"
+    : "後ろの人がどう受けてくるかを見ています。自分の行に戻すと判定に戻ります。";
+}
+
+function renderRange(){
+  const node=T[keyFor(active)];
+  const label=document.getElementById("rangeLabel");
+  const freq=document.getElementById("freq");
+  const grid=document.getElementById("grid");
+  const txt=document.getElementById("rngText");
+
+  if(isTerminal(active)||!node){
+    label.textContent=POS[active]+" — no decision";
+    freq.innerHTML='<div class="ff" style="width:100%">全員フォールドでBBが取ります</div>';
+    grid.innerHTML=""; txt.textContent=""; return;
+  }
+
+  const acts=actionsFor(active);
+  const actLabel=acts[1][1];
+  label.textContent=POS[active]+" — "+actLabel+" range";
+
+  const p=node.pct, f=100-p;
+  freq.innerHTML=
+    (p>0?`<div class="fp" style="width:${p}%">${p}%</div>`:"")+
+    (f>0?`<div class="ff" style="width:${f}%">${f.toFixed(1)}%</div>`:"");
+
+  const set=parseRange(node.r);
+  grid.innerHTML="";
+  for(let i=0;i<13;i++){
+    for(let j=0;j<13;j++){
+      const n=handName(i,j);
+      const d=document.createElement("div");
+      d.className="cell"+(set.has(n)?" p":"")+((active===MY_IDX&&n===MY_HAND)?" hl":"");
+      d.textContent=n;
+      grid.appendChild(d);
+    }
+  }
+  txt.textContent=node.r==="Any two"?"Any two — 全ハンド":node.r;
+}
+
+function render(){ renderTree(); renderRange(); }
+render();
+
+/* ---------- drill ---------- */
+const SPOTS=[
+ {act:"PU",ctx:"まだ誰も入っていない",pct:39.4,r:"44+ Ax K2s+ K6o+ Q6s+ Q8o+ J7s+ J9o+ T8s+ T9o 98s",
+  seats:[{p:"UTG",st:18.2},{p:"CO",st:96.8},{p:"BU",st:43.6},{p:"SB",st:62.7,bet:.5},{p:"BB",st:100.8,bet:1}]},
+ {act:"PU",ctx:"UTG フォールド",pct:2.7,r:"99+",
+  seats:[{p:"CO",st:11.5},{p:"BU",st:43.6},{p:"SB",st:62.7,bet:.5},{p:"BB",st:100.8,bet:1},{p:"UTG",st:18.2,s:"fold"}]},
+ {act:"PU",ctx:"UTG・CO フォールド",pct:42.7,r:"44+ Ax K2s+ K5o+ Q4s+ Q8o+ J7s+ J8o+ T7s+ T9o 97s+ 87s",
+  seats:[{p:"BU",st:13.4},{p:"SB",st:62.7,bet:.5},{p:"BB",st:100.8,bet:1},{p:"UTG",st:18.2,s:"fold"},{p:"CO",st:96.8,s:"fold"}]},
+ {act:"CA",ctx:"UTG が 18.2bb でオールイン",pct:0.5,r:"AA",
+  seats:[{p:"CO",st:11.5},{p:"BU",st:43.6},{p:"SB",st:62.7,bet:.5},{p:"BB",st:100.8,bet:1},{p:"UTG",st:0,bet:18.2,s:"allin"}]},
+ {act:"OC",ctx:"UTG オールイン、CO コール",pct:0.5,r:"AA",
+  seats:[{p:"BU",st:43.6},{p:"SB",st:62.7,bet:.5},{p:"BB",st:100.8,bet:1},{p:"UTG",st:0,bet:18.2,s:"allin"},{p:"CO",st:0,bet:11.5,s:"call"}]},
+ {act:"PU",ctx:"まだ誰も入っていない",pct:31.8,r:"22+ Ax K5s+ KTo+ Q8s+ QTo+ J8s+ JTo T8s+ 97s+ 87s",
+  seats:[{p:"BU",st:12.1},{p:"SB",st:9.4,bet:.5},{p:"BB",st:22.0,bet:1}]},
+ {act:"CA",ctx:"BU が 12.1bb でオールイン",pct:8.7,r:"77+ A9s+ ATo+",
+  seats:[{p:"SB",st:9.4,bet:.5},{p:"BB",st:22.0,bet:1},{p:"BU",st:0,bet:12.1,s:"allin"}]},
+ {act:"OC",ctx:"BU オールイン、SB コール",pct:0.9,r:"KK+",
+  seats:[{p:"BB",st:22.0,bet:1},{p:"BU",st:0,bet:12.1,s:"allin"},{p:"SB",st:0,bet:9.4,s:"call"}]},
+ {act:"CA",ctx:"BU オールイン、SB フォールド",pct:13.4,r:"44+ A6s+ A8o+ KJs+",
+  seats:[{p:"BB",st:22.0,bet:1},{p:"BU",st:0,bet:12.1,s:"allin"},{p:"SB",st:9.4,s:"fold"}]},
+ {act:"PU",ctx:"ヘッズアップ",pct:75.6,r:"22+ Ax K2s+ K5o+ Q2s+ Q7o+ J4s+ J8o+ T6s+ T8o 95s+ 85s+ 75s+ 64s+ 54s",
+  seats:[{p:"SB",st:10.5,bet:.5},{p:"BB",st:14.2,bet:1}]},
+ {act:"CA",ctx:"SB が 10.5bb でオールイン",pct:37.1,r:"33+ Ax K2s+ K5o+ Q6s+ Q9o+ J8s+ JTo T9s",
+  seats:[{p:"BB",st:14.2,bet:1},{p:"SB",st:0,bet:10.5,s:"allin"}]}
+];
+SPOTS.forEach(s=>{ s.pos=s.seats[0].p; s.left=s.seats.length; });
+
+const NAMES=["海空","なかはた","たまご","せなぴょん","sachii0227"];
+const LAYOUT={
+ 5:[{x:50.0,y:83.3,bx:50.0,by:54.3},
+    {x:89.9,y:36.7,bx:73.1,by:36.7},
+    {x:72.9,y:12.1,bx:60.3,by:25.6},
+    {x:27.1,y:12.1,bx:39.7,by:25.6},
+    {x:10.1,y:36.7,bx:26.9,by:36.7}],
+ 3:[{x:50.0,y:83.3,bx:50.0,by:54.3},
+    {x:75.0,y:12.1,bx:61.5,by:25.6},
+    {x:25.0,y:12.1,bx:38.5,by:25.6}],
+ 2:[{x:50.0,y:83.3,bx:50.0,by:54.3},
+    {x:50.0,y:11.3,bx:50.0,by:25.3}]
+};
+
+/* placeholder hand ranking — 本番はソルバーが返すEVを使う */
+function hscore(n){
+  if(n.length===2) return 55+(13-ri(n[0]))*4.2;
+  const hi=ri(n[0]), lo=ri(n[1]), s=n[2]==="s";
+  const gap=lo-hi;
+  return (13-hi)*5+(13-lo)*2.2+(s?6:0)+(gap<=2?3:0);
+}
+const ALL_HANDS=(()=>{const a=[];for(let i=0;i<13;i++)for(let j=0;j<13;j++)a.push(handName(i,j));return a})();
+const RANKED=[...ALL_HANDS].sort((a,b)=>hscore(b)-hscore(a));
+
+let dFilter={left:"all",act:"all"};
+let dTotal=0, dScore=0, dLoss=0, dMiss=[], dCur=null, dHand=null;
+
+function pool(){
+  return SPOTS.filter(s=>
+    (dFilter.left==="all"||String(s.left)===dFilter.left) &&
+    (dFilter.act==="all"||s.act===dFilter.act));
+}
+function evFor(spot,hand){
+  const set=parseRange(spot.r);
+  const inR=set.has(hand);
+  const n=set.size||1;
+  const rank=RANKED.indexOf(hand)+1;
+  const d=Math.abs(rank-n);
+  const mag=Math.min(0.62,0.02+d*0.0055);
+  return {inR, ev:(inR?1:-1)*mag};
+}
+function deal(){
+  const p=pool();
+  dCur=p[Math.floor(Math.random()*p.length)];
+  dHand=ALL_HANDS[Math.floor(Math.random()*ALL_HANDS.length)];
+}
+function cardsFor(hand,cls){
+  const S=["♠","♥","♦","♣"];
+  let a,b;
+  if(hand.length===2){a=0;b=1;}
+  else if(hand[2]==="s"){a=0;b=0;}
+  else {a=0;b=2;}
+  const mk=(r,si)=>`<div class="card ${cls}${si===1||si===2?" red":""}">${r}<em>${S[si]}</em></div>`;
+  return mk(hand[0],a)+mk(hand[1],b);
+}
+function showPane(id){
+  ["d-start","d-q","d-a","d-s"].forEach(x=>document.getElementById(x).hidden=(x!==id));
+}
+function renderQ(){
+  showPane("d-q");
+  const acc=dTotal?dScore/dTotal:0;
+  document.getElementById("qProg").style.width=(acc*100)+"%";
+  document.getElementById("qNo").textContent="Hand "+(dTotal+1);
+  document.getElementById("qScore").textContent=
+    dTotal?`Correct ${dScore} / ${dTotal} · ${Math.round(acc*100)}%`:"Correct 0 / 0";
+  document.getElementById("qCtx").textContent=dCur.ctx;
+
+  const pot=dCur.seats.reduce((a,x)=>a+(x.bet||0),0)+dCur.left*0.1;
+  document.getElementById("qInfo").innerHTML=
+    `<b>${dCur.left} left</b><b>Blinds 0.5 / 1</b><b>Ante 0.1</b>`;
+
+  const L=LAYOUT[dCur.left];
+  let html=`<div class="felt"></div><div class="pot"><span>POT</span><b>${pot.toFixed(1)}bb</b></div>`;
+
+  dCur.seats.forEach((st,i)=>{
+    if(i===0) return;
+    const c=L[i], state=st.s||"live";
+    const num = state==="allin" ? `<div class="pstack out">ALL IN</div>`
+              : state==="call"  ? `<div class="pstack called">CALL</div>`
+              : `<div class="pstack">${st.st.toFixed(1)}</div>`;
+    html+=`<div class="seat${state==="fold"?" fold":""}" style="left:${c.x}%;top:${c.y}%">
+        <div class="cds"><div class="back"></div><div class="back"></div></div>
+        <div class="plate"><div class="pname">${NAMES[i%NAMES.length]}</div>${num}</div>
+        <span class="posb pos ${st.p}">${st.p}</span>
+      </div>`;
+  });
+
+  dCur.seats.forEach((st,i)=>{
+    if(!st.bet) return;
+    const c=L[i];
+    html+=`<div class="bet${st.bet>3?" big":""}" style="left:${c.bx}%;top:${c.by}%">${st.bet}</div>`;
+  });
+
+  const me=dCur.seats[0];
+  html+=`<div class="heroseat">
+      <div class="hcards">${cardsFor(dHand,"hd")}</div>
+      <div class="hplate">
+        <span class="posb pos ${me.p}">${me.p}</span>
+        <div class="pstack">${me.st.toFixed(1)}</div>
+        <div class="pname">あなた</div>
+      </div>
+    </div>`;
+
+  document.getElementById("qTable").innerHTML=html;
+}
+function answer(choice){
+  const {inR,ev}=evFor(dCur,dHand);
+  const correct=(choice==="A")===inR;
+  dTotal++;
+  if(correct) dScore++; else { dLoss+=Math.abs(ev); dMiss.push({s:dCur,h:dHand,ev:Math.abs(ev)}); }
+
+  showPane("d-a");
+  const bar=document.getElementById("aBar");
+  bar.className="ansbar "+(correct?"ok":"ng");
+  document.getElementById("aHand").innerHTML=cardsFor(dHand,"sm");
+  document.getElementById("aTtl").textContent=correct?"正解":"不正解";
+  document.getElementById("aSub").textContent=
+    `${dCur.pos} ${dCur.act} の正解は ${inR?"ALL IN":"FOLD"}`;
+  document.getElementById("aEv").textContent=(correct?"":"−")+Math.abs(ev).toFixed(2);
+
+  document.getElementById("aLabel").textContent=`${dCur.pos} — ${dCur.act} range`;
+  const p=dCur.pct, f=100-p;
+  document.getElementById("aFreq").innerHTML=
+    (p>0?`<div class="fp" style="width:${p}%">${p}%</div>`:"")+
+    (f>0?`<div class="ff" style="width:${f}%">${f.toFixed(1)}%</div>`:"");
+  const set=parseRange(dCur.r), g=document.getElementById("aGrid");
+  g.innerHTML="";
+  for(let i=0;i<13;i++) for(let j=0;j<13;j++){
+    const n=handName(i,j), d=document.createElement("div");
+    d.className="cell"+(set.has(n)?" p":"")+(n===dHand?" hl":"");
+    d.textContent=n; g.appendChild(d);
+  }
+  document.getElementById("aRng").textContent=dCur.r==="Any two"?"Any two — 全ハンド":dCur.r;
+}
+function summary(){
+  showPane("d-s");
+  const acc=dTotal?Math.round(dScore/dTotal*100):0;
+  document.getElementById("sScore").innerHTML=acc+"<small>%</small>";
+  document.getElementById("sLb").textContent=`${dScore} / ${dTotal} 正解`;
+  document.getElementById("sHands").textContent=dTotal;
+  document.getElementById("sEv").textContent="−"+dLoss.toFixed(2)+"pt";
+  const wrap=document.getElementById("sMissWrap"), list=document.getElementById("sMiss");
+  if(!dMiss.length){ wrap.hidden=true; return; }
+  wrap.hidden=false;
+  list.innerHTML=[...dMiss].sort((a,b)=>b.ev-a.ev).slice(0,8).map(m=>
+    `<div class="m"><div class="hand">${cardsFor(m.h,"sm")}</div>
+     <span class="sp">${m.s.left} left・${m.s.pos}・${m.s.act}</span>
+     <span class="ev">−${m.ev.toFixed(2)}</span></div>`).join("");
+}
+function nextQ(){ deal(); renderQ(); }
+function startSession(){
+  dTotal=0;dScore=0;dLoss=0;dMiss=[];
+  deal(); renderQ();
+}
+
+document.querySelectorAll("#optLeft button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#optLeft button").forEach(x=>x.setAttribute("aria-pressed","false"));
+  b.setAttribute("aria-pressed","true"); dFilter.left=b.dataset.v;
+});
+document.querySelectorAll("#optAct button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#optAct button").forEach(x=>x.setAttribute("aria-pressed","false"));
+  b.setAttribute("aria-pressed","true"); dFilter.act=b.dataset.v;
+});
+document.getElementById("startBtn").onclick=startSession;
+document.getElementById("againBtn").onclick=startSession;
+document.getElementById("backToStart").onclick=()=>showPane("d-start");
+document.getElementById("nextBtn").onclick=nextQ;
+document.getElementById("finishBtn").onclick=summary;
+document.querySelectorAll("#d-q [data-ans]").forEach(b=>b.onclick=()=>answer(b.dataset.ans));
+</script>
+</body>
+</html>

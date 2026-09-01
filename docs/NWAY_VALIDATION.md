@@ -110,3 +110,71 @@ worker はコンパイル済み `dist`（素の Node）で走る。`@oshihiki/co
 既定で `src`（tsx/vitest 用）を指すため、worker はカスタム条件 `--conditions=oshihiki-dist` で
 `core/dist/index.js` に解決する。したがって並列を使う前に `npx tsc -b`（core+solver の dist 生成）が必要。
 テストは単一スレッド既定で、worker 環境に依存しない。
+
+---
+
+# 5. M5 実験 — hero カードリムーバル補正（アクション確率）: 負の結果
+
+版: 2026-09-01 / 対象: `packages/solver/src/cardRemoval.ts`, `nwaySolver.ts`（`cardRemoval` opt-in）
+
+§3.4 の精度改善候補 **#1「アクション確率への hero カードリムーバル反映」** を実装・評価した。
+結論から言うと **HRC 5-way 照合はむしろ悪化**し、**既定は card-blind のまま**とした。
+
+## 5.1 仮説と実装
+
+card-blind の `rangeFraction`（コンボ加重レンジ比）では、後方プレイヤーがアグレッシブに出る
+確率が hero の持ち札に依存しない。だが hero が特定 2 枚 {x,y} を持てば、その 2 枚は後方レンジから
+物理的に除かれる。押し引きレンジは高カードに偏るため、この効果が **早い位置・多人数の
+fold-through 見積り** に効き、先手 push レンジが狭く出る主因ではないか、という仮説（§3.4-1）。
+
+実装は hero **クラス条件つき**の一次補正（`cardRemoval.ts`）。後方プレイヤー j のアグレッシブ確率を
+
+```
+p_j(c) = ( W_j − avgU_j(c) + freq_j[c] ) / C(50,2)
+```
+
+とし（W_j=加重コンボ数, U_j[k]=カード k を含むコンボの freq 総和, avgU=hero クラス c の使用札平均）、
+hero のアグレッシブ EV を後方ツリーの DFS でクラス別に評価する。**この解析式は全 1326 コンボの
+ブルートフォース平均と 12 桁一致**（`test/cardRemoval.test.ts`）— 式そのものは厳密。
+
+## 5.2 測定（`OSHIHIKI_CARD_REMOVAL=1 node --import tsx scripts/validateHrc5way.ts`）
+
+実 HRC 5-way（10/20/30/23/12bb, ante all 0.25）, maxIters 800, samples 80k, workers=16。
+
+| ノード | card-blind（既定） | cardRemoval:true | HRC |
+|---|---|---|---|
+| UTG PU | 14.8 | 15.0 | 19.8 |
+| CO PU | 15.1 | 15.0 | 24.0 |
+| BU PU | 82.0 | 77.1 | 87.3 |
+| 平均 \|freq% 差\| | **1.68** | **1.98（悪化）** | — |
+| exploitability | 0.0170（`converged=false`） | 0.0157（`converged=true`） | — |
+| EQPre/EQPost 一致 | ◎ | ◎（不変） | — |
+
+- 狙った **UTG/CO の先手 push はほぼ動かず**（±0.2pt）、**BU push は 82→77 と HRC から離れた**。
+- `converged=true` は **見かけ倒し**: 自作の exploitability 指標（MC pcEq のバイアス床を含む）で
+  「より小さい」点に収束しただけで、**参照解（HRC）からは遠のいた**。R-1 が警告する
+  「動いている風に見えるが微妙にズレている」状態そのもの。EQ は純 ICM 支配なので不変。
+
+## 5.3 なぜ悪化したか
+
+本補正は **「hero のみ除去」の一次近似**で、**既にオールインしているプレイヤー（集合 S）の札を
+除去しない**。HRC は完全なレンジ vs レンジのカードリムーバル。**片側だけの部分補正**は、
+card-blind の「平均場」よりかえって真の解から離れることがある（部分補正のオーバーシュート）。
+実際、hero がゴミ札（例 32o）を持つと残デッキが相手の高カードレンジに偏り、相手のコール確率が
+**上がる**方向に正しく効くため BU の限界 push 札が落ち、BU push は 82→77 と狭くなった。これは
+物理的には正しいが、HRC の 87.3（完全カードリムーバル下の均衡）とは逆方向であり、一次近似の
+不完全性を示す。
+
+## 5.4 判断と申し送り
+
+- **既定は card-blind（M4 検証済みベースライン, 1.68pt）を維持。** `cardRemoval` は opt-in
+  （`solveMultiway({cardRemoval:true})` / `OSHIHIKI_CARD_REMOVAL=1`）として実装・テストを残す。
+  再現とその上に積む足場のため。
+- 先手 push レンジの狭さ（HRC 比 −5〜9pt, 位置スプレッドの圧縮 UTG≈CO）は **一次カードリムーバルでは
+  閉じない**ことが判明した。次に試すべきは:
+  1. **完全なレンジ vs レンジのカードリムーバル**（committed プレイヤーの札も除去）。本 §5 の
+     `cardRemoval.ts` は hero 側の除去プリミティブとして再利用できる。
+  2. **FP → CFR 系**（多人数の均衡選択がHRCと割れている可能性の切り分け）。
+  3. exploitability 床自体の低減（pcEq の層化・コントロールバリエイト, §3.4-2）。
+- EQ（EQPre/EQPost）は実データで一致し続けており、**アプリの EV/EQ 表示は既定 card-blind で妥当**。
+  先手 push の端 1〜数ハンドの差は §4.3 の境界許容と `converged` 通知で正直に扱う。

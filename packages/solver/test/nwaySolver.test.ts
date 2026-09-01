@@ -72,7 +72,9 @@ describe('solveMultiway — ゲーム木の構造（ノード数・キー・ア�
 });
 
 describe('solveMultiway — 相互検証: N=3 は独立実装 solveThreeWay と一致', () => {
-  const CFG = { maxIters: 200, refreshEvery: 100, samples: 16000, seed: 12345 } as const;
+  // 相互検証は card-blind 経路（solveThreeWay と同じ近似）で行う。カードリムーバル補正は
+  // nwaySolver 側のみに入るため、cardRemoval:false で共通の card-blind 配線を突き合わせる。
+  const CFG = { maxIters: 200, refreshEvery: 100, samples: 16000, seed: 12345, cardRemoval: false } as const;
 
   it(
     '6ノードのキー集合が一致し、push/call レンジ幅がプレイ範囲で近い',
@@ -150,6 +152,38 @@ describe('solveMultiway — 決定性', () => {
       for (const [key, arr] of a.strategies) {
         expect(Array.from(b.strategies.get(key)!)).toEqual(Array.from(arr));
       }
+    },
+    TIMEOUT,
+  );
+});
+
+describe('solveMultiway — cardRemoval:true 経路（M5, opt-in）', () => {
+  it(
+    '決定的で、ICM 保存を満たし、card-blind と（一般に）異なる戦略を返す',
+    async () => {
+      const state = equalStacks(4, 10);
+      const CFG = { maxIters: 60, refreshEvery: 30, samples: 8000, seed: 3 } as const;
+      const cr1 = await solveMultiway(state, { ...CFG, cardRemoval: true });
+      const cr2 = await solveMultiway(state, { ...CFG, cardRemoval: true });
+      // 決定性
+      for (const [key, arr] of cr1.strategies) {
+        expect(Array.from(cr2.strategies.get(key)!)).toEqual(Array.from(arr));
+      }
+      // ICM 保存（EQPre 総和 = EQPost 総和 = pool）
+      const order = positionsForPlayersLeft(4);
+      const pre = order.map((p) => cr1.equity[p]!.pre);
+      const post = order.map((p) => cr1.equity[p]!.post);
+      expect(sum(pre)).toBeCloseTo(poolOf(4), 5);
+      expect(sum(post)).toBeCloseTo(poolOf(4), 5);
+      // card-blind と少なくとも 1 ノードで戦略が異なる（補正が実際に効いている）。
+      const blind = await solveMultiway(state, { ...CFG, cardRemoval: false });
+      let differs = false;
+      for (const [key, arr] of cr1.strategies) {
+        const b = blind.strategies.get(key)!;
+        for (let c = 0; c < arr.length; c++) if (Math.abs(arr[c]! - b[c]!) > 1e-6) { differs = true; break; }
+        if (differs) break;
+      }
+      expect(differs).toBe(true);
     },
     TIMEOUT,
   );

@@ -54,6 +54,7 @@ import { HAND_CLASS_ORDER } from './huEquity.js';
 import type { ShowdownNode } from './showdownMc.js';
 import { MC_SEED, NODE_MC_SAMPLES } from './mcConfig.js';
 import { computeShowdownMc, type ShowdownMcResult } from './showdownJob.js';
+import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
 
 const N_CLASSES = HAND_CLASS_ORDER.length; // 169
 const TOTAL_COMBOS = 1326;
@@ -127,6 +128,18 @@ export interface MultiwayNSolveOptions {
    * `undefined` かつ環境変数 `OSHIHIKI_WORKERS` 未設定なら単一スレッド。
    */
   workers?: number;
+  /**
+   * hero カードリムーバルを反映したアクション確率（fold-through）補正を使うか。
+   * **既定 false**（card-blind, M4 の検証済みベースライン）。
+   *
+   * M5 実験（docs/NWAY_VALIDATION §5）で true を評価したが、HRC 5-way 照合の
+   * 平均 |freq% 差| が 1.68→1.98pt と**悪化**した。原因は本補正が「hero のみ除去」の
+   * 一次近似で、既にオールイン済みのプレイヤーのカードを除去しないため（HRC は完全な
+   * レンジ vs レンジのカードリムーバル）。片側だけの部分補正は card-blind の平均場より
+   * かえって参照解から離れることがある。よって既定は card-blind のまま。true は
+   * 将来の「完全カードリムーバル」実装への足場・再現用に opt-in で残す。
+   */
+  cardRemoval?: boolean;
 }
 
 export interface MultiwayNSolveResult {
@@ -360,35 +373,75 @@ interface EVBundle {
 }
 
 /** 現在戦略から全ノードの EV / 到達確率 / 終局分布を計算する。 */
-function computeEVs(eng: Engine, strat: Map<number, F64>): EVBundle {
+function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean): EVBundle {
   const aggrProb = new Map<number, number>();
   for (const nd of eng.nodes) aggrProb.set(nd.id, rangeFraction(strat.get(nd.id)!));
 
   const { down, terminal } = eng.enumerateAll(aggrProb);
+
+  // --- hero カードリムーバル: 各ノードのクラス条件つきアグレッシブ確率（169）を先算 ---
+  // condAggr[nodeId][c] = 後方プレイヤーが「hero がクラス c を持つ」条件下でアグレッシブに
+  // 出る確率。hero のアグレッシブ EV（fold-through）計算にのみ使う（母集団 down は card-blind）。
+  const condAggr = cardRemoval ? new Map<number, F64>() : null;
+  if (condAggr) {
+    for (const nd of eng.nodes) {
+      const freq = strat.get(nd.id)!;
+      const { W, U } = weightAndUses(freq);
+      condAggr.set(nd.id, conditionalAggrProb(freq, W, U));
+    }
+  }
+  // 深さ別スクラッチ（アロケーション抑制）。深さは後方席数 ≤ n。
+  const scratchA: F64[] = [];
+  const scratchB: F64[] = [];
+  if (condAggr) {
+    for (let d = 0; d <= eng.n; d++) {
+      scratchA.push(new Float64Array(N_CLASSES));
+      scratchB.push(new Float64Array(N_CLASSES));
+    }
+  }
 
   const aggrEV = new Map<number, F64>();
   const foldEV = new Map<number, number>();
   for (const nd of eng.nodes) {
     const { i, S } = nd;
     const foldOut = down(i + 1, S); // フォールド後（S 不変, i∉A）
-    const aggrOut = down(i + 1, S | (1 << i)); // アグレッシブ後（i∈A）
 
-    // フォールド EV（クラス非依存）
+    // フォールド EV（クラス非依存, card-blind 母集団）
     let fev = 0;
     for (const [A, q] of foldOut) fev += q * eng.valAll(A)[i]!;
     foldEV.set(nd.id, fev);
 
     // アグレッシブ EV（クラス別）
     const aev = new Float64Array(N_CLASSES);
-    for (const [A, q] of aggrOut) {
-      if (q === 0) continue;
-      if (popcount(A) === 1) {
-        // A = {i}: 不戦勝（S=∅ かつ後方全員フォールド）
-        const v = eng.V_win[i]![i]!;
-        for (let c = 0; c < N_CLASSES; c++) aev[c]! += q * v;
-      } else {
-        const pc = eng.getPcEq(A, i);
-        for (let c = 0; c < N_CLASSES; c++) aev[c]! += q * pc[c]!;
+    if (condAggr) {
+      // hero=i がアグレッシブに出た後（i∈A 確定）の後方ツリーを、hero クラス条件つき
+      // アクション確率で DFS 評価する。各内部ノードで out=p·push+(1−p)·fold（ベクトル）。
+      const heroAggrDfs = (j: number, G: number, out: F64, depth: number): void => {
+        if (j === eng.n) {
+          if (popcount(G) === 1) out.fill(eng.V_win[i]![i]!); // A={i}: 不戦勝
+          else out.set(eng.getPcEq(G, i)); // ショーダウン: クラス別 all-in equity
+          return;
+        }
+        const p = condAggr.get(eng.nodeId(j, G))!;
+        const pushBuf = scratchA[depth]!;
+        heroAggrDfs(j + 1, G | (1 << j), pushBuf, depth + 1);
+        const foldBuf = scratchB[depth]!;
+        heroAggrDfs(j + 1, G, foldBuf, depth + 1);
+        for (let c = 0; c < N_CLASSES; c++) out[c] = p[c]! * pushBuf[c]! + (1 - p[c]!) * foldBuf[c]!;
+      };
+      heroAggrDfs(i + 1, S | (1 << i), aev, 0);
+    } else {
+      const aggrOut = down(i + 1, S | (1 << i)); // アグレッシブ後（i∈A）
+      for (const [A, q] of aggrOut) {
+        if (q === 0) continue;
+        if (popcount(A) === 1) {
+          // A = {i}: 不戦勝（S=∅ かつ後方全員フォールド）
+          const v = eng.V_win[i]![i]!;
+          for (let c = 0; c < N_CLASSES; c++) aev[c]! += q * v;
+        } else {
+          const pc = eng.getPcEq(A, i);
+          for (let c = 0; c < N_CLASSES; c++) aev[c]! += q * pc[c]!;
+        }
       }
     }
     aggrEV.set(nd.id, aev);
@@ -519,6 +572,7 @@ export async function solveMultiway(
   const refreshEvery = opts.refreshEvery ?? 100;
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
+  const cardRemoval = opts.cardRemoval ?? false;
   const eng = buildEngine(state, samples, seed, workers);
   const poolPt = eng.payouts.reduce((a, b) => a + b, 0);
   // ノードレベル MC の推定量バイアス + アクション確率のカードリムーバル近似で
@@ -536,7 +590,7 @@ export async function solveMultiway(
     for (let t = 1; t <= maxIters; t++) {
       iterations = t;
       if (t > 1 && t % refreshEvery === 0) await eng.refresh(strat, Math.floor(t / refreshEvery));
-      const ev = computeEVs(eng, strat);
+      const ev = computeEVs(eng, strat, cardRemoval);
       const w = 1 / (t + 1);
       for (const nd of eng.nodes) {
         const aev = ev.aggrEV.get(nd.id)!;
@@ -548,7 +602,7 @@ export async function solveMultiway(
         }
       }
       if (t % refreshEvery === 0 || t === maxIters) {
-        exploitabilityPt = exploitability(eng, strat, computeEVs(eng, strat));
+        exploitabilityPt = exploitability(eng, strat, computeEVs(eng, strat, cardRemoval));
         if (exploitabilityPt <= targetExpl) {
           converged = true;
           break;
@@ -558,7 +612,7 @@ export async function solveMultiway(
 
     // 最終見積りで EV / exploitability / EQPost を確定
     await eng.refresh(strat, 0x7fffffff);
-    const finalEv = computeEVs(eng, strat);
+    const finalEv = computeEVs(eng, strat, cardRemoval);
     exploitabilityPt = exploitability(eng, strat, finalEv);
     converged = exploitabilityPt <= targetExpl;
 
@@ -595,6 +649,7 @@ export async function evaluateMultiwayStrategy(
   const samples = opts.samples ?? defaultSamples(n);
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
+  const cardRemoval = opts.cardRemoval ?? false;
   const eng = buildEngine(state, samples, seed, workers);
   try {
     const strat = new Map<number, F64>();
@@ -604,7 +659,7 @@ export async function evaluateMultiwayStrategy(
       strat.set(nd.id, arr);
     }
     await eng.refresh(strat, 0x7fffffff);
-    const ev = computeEVs(eng, strat);
+    const ev = computeEVs(eng, strat, cardRemoval);
     const exploitabilityPt = exploitability(eng, strat, ev);
     const eqPre = icmEquities(eng.T, eng.payouts);
     const post = eqPost(eng, ev);

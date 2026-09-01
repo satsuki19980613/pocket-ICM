@@ -88,11 +88,14 @@ async function main(): Promise<void> {
   const state = buildState(ref);
 
   const workers = maxWorkerCap();
-  log(`# 実 HRC 5-way 照合  (workers=${workers})`);
+  // OSHIHIKI_CARD_REMOVAL=1 で hero カードリムーバル補正（M5 実験, docs §5）を有効化。
+  // 既定は card-blind（M4 検証済みベースライン）。
+  const cardRemoval = process.env.OSHIHIKI_CARD_REMOVAL === '1';
+  log(`# 実 HRC 5-way 照合  (workers=${workers}, cardRemoval=${cardRemoval})`);
   log(`node ${process.version}\n`);
 
   const t0 = Number(process.hrtime.bigint() / 1000000n);
-  const res = await solveMultiway(state, { maxIters: 800, refreshEvery: 100, samples: 80_000, workers });
+  const res = await solveMultiway(state, { maxIters: 800, refreshEvery: 100, samples: 80_000, workers, cardRemoval });
   const ms = Number(process.hrtime.bigint() / 1000000n) - t0;
   log(
     `求解: ${(ms / 1000).toFixed(1)}s  iters=${res.iterations}  ` +

@@ -72,15 +72,23 @@ function downscale(r: Raster, s: number): Raster {
   return { width: w, height: h, rgba };
 }
 
-const [, , input, output, scaleStr] = process.argv;
+const [, , input, output, scaleStr, ...specs] = process.argv;
 if (!input || !output) {
-  console.error('usage: annotate.ts <input.png> <output.png> [scale]');
+  console.error('usage: annotate.ts <input.png> <output.png> [scale] [name:x,y,w,h ...]');
   process.exit(1);
 }
 const scale = Number(scaleStr ?? '2');
+// argv で name:x,y,w,h を渡したら、その矩形群を（第一推定に代えて）描く。
+const argvRegions: Named[] = specs.map((s, i) => {
+  const [name, rest] = s.split(':');
+  const [x, y, w, h] = rest!.split(',').map(Number);
+  const palette: [number, number, number][] = [RED, GRN, BLU, YEL];
+  return { name: name!, rect: { x: x!, y: y!, w: w!, h: h! }, color: palette[i % 4]! };
+});
+const active = argvRegions.length > 0 ? argvRegions : regions;
 const img = decodePng(readFileSync(input));
 console.log(`decoded ${img.width}x${img.height}`);
-for (const rg of regions) drawRect(img, rg.rect, rg.color);
+for (const rg of active) drawRect(img, rg.rect, rg.color);
 const out = downscale(img, scale);
 writeFileSync(output, encodePng(out));
-console.log(`wrote ${output} (${out.width}x${out.height}) with ${regions.length} regions`);
+console.log(`wrote ${output} (${out.width}x${out.height}) with ${active.length} regions`);

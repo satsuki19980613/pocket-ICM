@@ -46,8 +46,6 @@ import {
   positionsForPlayersLeft,
 } from '@oshihiki/core';
 import type { ActionChar } from '@oshihiki/core';
-import { createRequire } from 'node:module';
-import { cpus } from 'node:os';
 import { icmEquities, payoutsForPlayers } from './icm.js';
 import { finalStacksFromShowdown } from './sidepot.js';
 import { HAND_CLASS_ORDER } from './huEquity.js';
@@ -55,6 +53,7 @@ import type { ShowdownNode } from './showdownMc.js';
 import { MC_SEED, NODE_MC_SAMPLES } from './mcConfig.js';
 import { computeShowdownMc, type ShowdownMcResult } from './showdownJob.js';
 import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
+import type { WorkerPool } from './nwayWorkerPool.js';
 
 const N_CLASSES = HAND_CLASS_ORDER.length; // 169
 const TOTAL_COMBOS = 1326;
@@ -253,18 +252,19 @@ function buildEngine(state: BoardState, samples: number, seed: number, workers: 
 
   // worker プールは遅延生成（単一スレッド時は生成しない）。生成に失敗した環境
   // （tsx 不在・worker ファイル欠落など）では単一スレッドへ退避する。
+  // node:worker_threads 依存の実体は nwayWorkerPool.js に分離し、**動的 import** で
+  // 読む（workers<=1 のブラウザ経路では一切参照されず、静的グラフに Node 組み込みが入らない）。
   let pool: WorkerPool | null = null;
   let poolDisabled = workers <= 1;
-  const ensurePool = (): WorkerPool | null => {
+  const ensurePool = async (): Promise<WorkerPool | null> => {
     if (poolDisabled) return null;
     if (!pool) {
       try {
-        pool = new WorkerPool(workers);
+        const mod = await import(/* @vite-ignore */ './nwayWorkerPool.js');
+        pool = new mod.WorkerPool(workers);
       } catch (e) {
         poolDisabled = true;
-        process.stderr.write(
-          `[nwaySolver] worker 並列を無効化し単一スレッドで続行: ${e instanceof Error ? e.message : String(e)}\n`,
-        );
+        warn(`[nwaySolver] worker 並列を無効化し単一スレッドで続行: ${e instanceof Error ? e.message : String(e)}`);
         return null;
       }
     }
@@ -286,7 +286,7 @@ function buildEngine(state: BoardState, samples: number, seed: number, workers: 
       smA.set(A, res.seatMarginal);
     };
 
-    const wp = ensurePool();
+    const wp = await ensurePool();
     if (!wp) {
       for (const j of jobs) {
         const res = computeShowdownMc(j.node, j.ranges, samples, j.jobSeed);
@@ -671,121 +671,32 @@ export async function evaluateMultiwayStrategy(
   }
 }
 
+/** 環境非依存の stderr 警告（Node は process.stderr, ブラウザは console.warn）。 */
+function warn(msg: string): void {
+  const proc = (globalThis as { process?: { stderr?: { write?: (s: string) => void } } }).process;
+  if (proc?.stderr?.write) proc.stderr.write(msg + '\n');
+  else console.warn(msg);
+}
+
 /** workers オプションの解決（env フォールバック, 上限は 60% コア）。 */
 function resolveWorkers(opt: number | undefined): number {
   const cap = maxWorkerCap();
   let req = opt;
   if (req === undefined) {
-    const env = process.env.OSHIHIKI_WORKERS;
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+      ?.OSHIHIKI_WORKERS;
     req = env ? Number(env) : 0;
   }
   if (!Number.isFinite(req) || req <= 1) return 0;
   return Math.min(Math.floor(req), cap);
 }
 
-/** マシンの 60% コア数（最低 1）。SPEC 運用: ソルバーは CPU 60% まで使用可。 */
-export function maxWorkerCap(): number {
-  return Math.max(1, Math.floor(cpus().length * 0.6));
-}
-
-/* ------------------------------------------------------------------ *
- * worker プール（ショーダウン MC の並列化, SPEC 運用: CPU 60% まで）
- * ------------------------------------------------------------------ */
-
-interface ShowdownJobInput {
-  node: ShowdownNode;
-  ranges: F64[];
-  samples: number;
-  seed: number;
-}
-
 /**
- * worker_threads プール。worker が利用不可・失敗する環境では、呼び出し側が
- * workers<=1 を選ぶことで単一スレッドに退避する（テストは単一スレッド既定）。
+ * マシンの 60% コア数（最低 1）。SPEC 運用: ソルバーは CPU 60% まで使用可。
+ * コア数は `navigator.hardwareConcurrency`（Node 21+ / ブラウザ共通）から取る。
  */
-class WorkerPool {
-  private workers: import('node:worker_threads').Worker[] = [];
-  private idle: import('node:worker_threads').Worker[] = [];
-  private queue: { input: ShowdownJobInput; resolve: (r: ShowdownMcResult) => void; reject: (e: unknown) => void }[] = [];
-  private pending = new Map<
-    import('node:worker_threads').Worker,
-    { resolve: (r: ShowdownMcResult) => void; reject: (e: unknown) => void }
-  >();
-
-  constructor(size: number) {
-    const req = createRequire(import.meta.url);
-    const { Worker } = req('node:worker_threads') as typeof import('node:worker_threads');
-    const url = req('node:url') as typeof import('node:url');
-    const path = req('node:path') as typeof import('node:path');
-    const fs = req('node:fs') as typeof import('node:fs');
-    // worker は必ずコンパイル済み dist/nwayWorker.js を起動する。
-    // 呼び出し元がソース（tsx: .../src/nwaySolver.ts）か dist（.../dist/nwaySolver.js）かで
-    // このモジュールの位置が変わるため、両候補を試して存在する方を使う。
-    const here = path.dirname(url.fileURLToPath(import.meta.url));
-    const candidates = [
-      path.join(here, 'nwayWorker.js'), // dist 実行時: 同ディレクトリ
-      path.join(here, '..', 'dist', 'nwayWorker.js'), // src 実行時（tsx）: 隣の dist
-    ];
-    const workerPath = candidates.find((p) => fs.existsSync(p));
-    if (!workerPath) {
-      throw new Error(
-        `nwayWorker.js が見つかりません（candidates: ${candidates.join(', ')}）。` +
-          '`npx tsc -b packages/solver` で dist を生成してください。',
-      );
-    }
-    // worker はコンパイル済み dist（.js）を素の Node で走らせる。@oshihiki/core の
-    // package exports は既定で src/index.ts を指す（tsx/vitest 用）ため、worker では
-    // カスタム条件 `oshihiki-dist` を立てて core を dist/index.js に解決させる
-    // （tsx ローダは worker スレッドへ伝播しないため）。core dist が無ければ並列不可。
-    const coreDist = path.join(here, '..', '..', 'core', 'dist', 'index.js');
-    if (!fs.existsSync(coreDist)) {
-      throw new Error(
-        `@oshihiki/core の dist が未生成（${coreDist}）。` +
-          '`npx tsc -b` で core をビルドしてください。',
-      );
-    }
-    const execArgv = ['--conditions', 'oshihiki-dist'];
-    for (let i = 0; i < size; i++) {
-      const w = new Worker(workerPath, { execArgv });
-      w.on('message', (msg: { ok: true; result: ShowdownMcResult } | { ok: false; error: string }) => {
-        const p = this.pending.get(w);
-        this.pending.delete(w);
-        this.idle.push(w);
-        this.drain();
-        if (!p) return;
-        if (msg.ok) p.resolve(msg.result);
-        else p.reject(new Error(msg.error));
-      });
-      w.on('error', (err) => {
-        const p = this.pending.get(w);
-        this.pending.delete(w);
-        if (p) p.reject(err);
-      });
-      this.workers.push(w);
-      this.idle.push(w);
-    }
-  }
-
-  run(input: ShowdownJobInput): Promise<ShowdownMcResult> {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ input, resolve, reject });
-      this.drain();
-    });
-  }
-
-  private drain(): void {
-    while (this.idle.length > 0 && this.queue.length > 0) {
-      const w = this.idle.pop()!;
-      const job = this.queue.shift()!;
-      this.pending.set(w, { resolve: job.resolve, reject: job.reject });
-      // Float64Array は構造化クローンで転送（コピー）。
-      w.postMessage(job.input);
-    }
-  }
-
-  async dispose(): Promise<void> {
-    await Promise.all(this.workers.map((w) => w.terminate()));
-    this.workers = [];
-    this.idle = [];
-  }
+export function maxWorkerCap(): number {
+  const hc = (globalThis as { navigator?: { hardwareConcurrency?: number } }).navigator?.hardwareConcurrency;
+  const cores = typeof hc === 'number' && hc > 0 ? hc : 4;
+  return Math.max(1, Math.floor(cores * 0.6));
 }

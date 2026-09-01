@@ -35,10 +35,30 @@ import {
 } from '@oshihiki/core';
 import { icmEquities } from './icm.js';
 import { HAND_CLASS_ORDER, handClassToCombos } from './huEquity.js';
-import { loadHuTable, type LoadedHuTable } from './huTableLoader.js';
+import type { LoadedHuTable } from './huTableCore.js';
+
+export type { LoadedHuTable } from './huTableCore.js';
 
 const N = HAND_CLASS_ORDER.length; // 169
 const TOTAL_COMBOS = 1326;
+
+/**
+ * HU テーブルの既定ローダ（依存性注入）。Node では index.ts が
+ * `setDefaultHuTableLoader(() => loadHuTable())` を登録する。ブラウザでは登録せず、
+ * 呼び出し側が `opts.table` を必ず渡す（node:fs を静的に取り込まないため）。
+ */
+let defaultHuTableLoader: (() => LoadedHuTable) | null = null;
+export function setDefaultHuTableLoader(fn: () => LoadedHuTable): void {
+  defaultHuTableLoader = fn;
+}
+function resolveHuTable(table?: LoadedHuTable): LoadedHuTable {
+  if (table) return table;
+  if (defaultHuTableLoader) return defaultHuTableLoader();
+  throw new Error(
+    'HU equity テーブルが未提供です。opts.table を渡すか、既定ローダを登録してください' +
+      '（Node: @oshihiki/solver の index を import すると自動登録）。',
+  );
+}
 /** 自分が2枚持つとき、相手に配れる残りコンボ数 = C(50,2)。 */
 const AVAIL = 1225;
 
@@ -258,7 +278,7 @@ export function solveHu(state: BoardState, opts: HuSolveOptions = {}): HuSolveRe
   if (state.playersLeft !== 2) {
     throw new Error(`solveHu requires playersLeft=2, got ${state.playersLeft}`);
   }
-  const table = opts.table ?? loadHuTable();
+  const table = resolveHuTable(opts.table);
   const term = buildTerminals(state);
   const showdownSB = buildShowdownSB(term, table);
   const showdownBB = buildShowdownBB(term, table);
@@ -456,7 +476,7 @@ export function evaluateHuStrategy(
   if (pushProb.length !== N || callProb.length !== N) {
     throw new Error(`strategy vectors must have length ${N}`);
   }
-  const table = opts.table ?? loadHuTable();
+  const table = resolveHuTable(opts.table);
   const term = buildTerminals(state);
   const showdownSB = buildShowdownSB(term, table);
   const showdownBB = buildShowdownBB(term, table);

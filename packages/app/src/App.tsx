@@ -1,135 +1,93 @@
 import { useState } from 'react';
-import { SAMPLE_SPOTS } from './sampleSpots';
-import { solveInWorker, type SolveOutcome } from './solverClient';
+import type { BoardState } from '@oshihiki/core';
+import { InputForm } from './components/InputForm';
+import { Confirm } from './components/Confirm';
+import { Result } from './components/Result';
+import { ErrorView } from './components/ErrorView';
+import { buildBoardState, defaultForm, type BoardForm } from './formModel';
+import { solveInWorker } from './solverClient';
+import type { SolveResultDto } from './solverProtocol';
 
-/**
- * Phase 3-1a の動作確認 UI。サンプル盤面を選んで「ブラウザ内で求解」を押すと、
- * Web Worker でソルバーが走り、hero のオープン PU ノード・EV・EQ・収束品質・所要時間を表示する。
- * これは in-browser 求解（最難関の技術リスク）を実証するための最小画面。
- * 手入力フォーム（3-1b）・本格結果画面（3-1c/3-2）は後続。
- */
+type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error';
+
+/** 人数に応じた求解パラメータ（対話速度優先。5〜6人はブラウザ並列化まで暫定）。 */
+function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
+  switch (n) {
+    case 2:
+      return {};
+    case 3:
+      return { maxIters: 300, samples: 40_000 };
+    case 4:
+      return { maxIters: 200, samples: 30_000 };
+    case 5:
+      return { maxIters: 150, samples: 22_000 };
+    default:
+      return { maxIters: 100, samples: 16_000 };
+  }
+}
+
 export function App(): JSX.Element {
-  const [spotIdx, setSpotIdx] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<SolveOutcome | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>('form');
+  const [form, setForm] = useState<BoardForm>(() => defaultForm(5));
+  const [state, setState] = useState<BoardState | null>(null);
+  const [result, setResult] = useState<SolveResultDto | null>(null);
+  const [ms, setMs] = useState(0);
+  const [issues, setIssues] = useState<string[]>([]);
 
-  const spot = SAMPLE_SPOTS[spotIdx]!;
-
-  async function run(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    setOutcome(null);
-    try {
-      const res = await solveInWorker(spot.state, spot.opts);
-      setOutcome(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+  function toConfirm(f: BoardForm): void {
+    const built = buildBoardState(f);
+    if (!built.ok || !built.state) {
+      setIssues(built.issues);
+      setScreen('error');
+      return;
     }
+    setState(built.state);
+    setScreen('confirm');
   }
 
-  const heroPos = spot.state.heroPos;
-  const openNode = outcome?.result.nodes.find(
-    (n) => n.actor === heroPos && n.actionType === 'PU' && !n.key.includes(':P') && !n.key.includes(':C'),
-  );
+  async function solve(): Promise<void> {
+    if (!state) return;
+    setScreen('solving');
+    try {
+      const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
+      setResult(dto);
+      setMs(elapsed);
+      setScreen('result');
+    } catch (e) {
+      setIssues([e instanceof Error ? e.message : String(e)]);
+      setScreen('error');
+    }
+  }
 
   return (
     <div className="app">
       <header className="hdr">
         <h1>押し引きノート</h1>
-        <span className="tag">Phase 3-1a · in-browser solve</span>
+        <span className="tag">Phase 3-1 · 手入力ICM</span>
       </header>
 
-      <section className="panel">
-        <label className="lbl">サンプル盤面</label>
-        <select
-          className="sel"
-          value={spotIdx}
-          onChange={(e) => {
-            setSpotIdx(Number(e.target.value));
-            setOutcome(null);
-            setError(null);
-          }}
-          disabled={busy}
-        >
-          {SAMPLE_SPOTS.map((s, i) => (
-            <option key={s.label} value={i}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <button className="btn" onClick={run} disabled={busy}>
-          {busy ? '求解中…（Web Worker）' : 'ブラウザ内で求解'}
-        </button>
-        <p className="hero">
-          hero: <b>{heroPos}</b> / {spot.state.heroHand} / {spot.state.playersLeft} left
-        </p>
-      </section>
+      {screen === 'form' && (
+        <InputForm form={form} onFormChange={setForm} onSubmit={toConfirm} />
+      )}
 
-      {error && <section className="panel err">エラー: {error}</section>}
+      {screen === 'confirm' && state && (
+        <Confirm state={state} onEdit={() => setScreen('form')} onSolve={solve} />
+      )}
 
-      {outcome && (
-        <section className="panel result">
-          <div className="row">
-            <span>所要時間</span>
-            <b>{(outcome.ms / 1000).toFixed(2)} s</b>
-          </div>
-          <div className="row">
-            <span>iterations</span>
-            <b>{outcome.result.iterations}</b>
-          </div>
-          <div className="row">
-            <span>exploitability</span>
-            <b>{outcome.result.exploitabilityPt.toFixed(4)} pt</b>
-          </div>
-          <div className="row">
-            <span>converged</span>
-            <b className={outcome.result.converged ? 'ok' : 'warn'}>
-              {String(outcome.result.converged)}
-            </b>
-          </div>
+      {screen === 'solving' && (
+        <div className="panel solving">
+          <div className="spinner" />
+          <p>求解中…（端末内 Web Worker）</p>
+          <p className="sub">人数が多いほど時間がかかります（並列化は後続）。</p>
+        </div>
+      )}
 
-          {openNode ? (
-            <div className="node">
-              <div className="node-h">
-                {openNode.actor} 先手 PU（未開）
-              </div>
-              <div className="row">
-                <span>push %</span>
-                <b>{openNode.pct.toFixed(1)}%</b>
-              </div>
-              <div className="range">{openNode.range || '(空)'}</div>
-            </div>
-          ) : (
-            <div className="node">hero のオープン PU ノードが見つかりません</div>
-          )}
+      {screen === 'result' && state && result && (
+        <Result state={state} result={result} ms={ms} onBack={() => setScreen('form')} />
+      )}
 
-          <div className="eq">
-            <div className="eq-h">ICM equity（実払い pt）</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>pos</th>
-                  <th>EQPre</th>
-                  <th>EQPost</th>
-                  <th>EQDiff</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(outcome.result.equity).map(([pos, e]) => (
-                  <tr key={pos}>
-                    <td>{pos}</td>
-                    <td>{e.pre.toFixed(3)}</td>
-                    <td>{e.post.toFixed(3)}</td>
-                    <td>{(e.post - e.pre).toFixed(3)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      {screen === 'error' && (
+        <ErrorView issues={issues} onBack={() => setScreen('form')} />
       )}
 
       <footer className="ft">

@@ -21,17 +21,30 @@ function getHuTable(): Promise<LoadedHuTable> {
   return tablePromise;
 }
 
+interface CommonNode {
+  key: string;
+  actor: string;
+  actionType: string;
+  pct: number;
+  range: string;
+  hands: string[];
+  freq: Record<string, number>;
+  ev: Record<string, number>;
+  equity: Record<string, { pre: number; post: number }>;
+}
 interface CommonResult {
-  nodes: { key: string; actor: string; actionType: string; pct: number; range: string; equity: Record<string, { pre: number; post: number }> }[];
+  nodes: CommonNode[];
   iterations: number;
   exploitabilityPt: number;
   converged: boolean;
 }
 
-function toDto(r: CommonResult, playersLeft: number): SolveResultDto {
+function toDto(r: CommonResult, playersLeft: number, heroPos: string, heroHand: string): SolveResultDto {
   const equity = r.nodes.length > 0 ? r.nodes[0]!.equity : {};
   return {
     playersLeft,
+    heroPos,
+    heroHand,
     iterations: r.iterations,
     exploitabilityPt: r.exploitabilityPt,
     converged: r.converged,
@@ -42,6 +55,9 @@ function toDto(r: CommonResult, playersLeft: number): SolveResultDto {
       actionType: n.actionType,
       pct: n.pct,
       range: n.range,
+      hands: n.hands,
+      heroFreq: n.freq[heroHand] ?? 0,
+      heroEv: n.ev[heroHand] ?? 0,
     })),
   };
 }
@@ -54,10 +70,10 @@ self.onmessage = async (e: MessageEvent<SolveRequest>): Promise<void> => {
     if (state.playersLeft === 2) {
       const table = await getHuTable();
       const r = solveHu(state, { table, ...(opts?.maxIters ? { maxIters: opts.maxIters } : {}) });
-      dto = toDto(r as unknown as CommonResult, 2);
+      dto = toDto(r as unknown as CommonResult, 2, state.heroPos, state.heroHand);
     } else {
       const r = await solveMultiway(state, { workers: 0, ...opts });
-      dto = toDto(r as unknown as CommonResult, state.playersLeft);
+      dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);
     }
     const res: SolveResponse = { id, ok: true, result: dto, ms: performance.now() - t0 };
     self.postMessage(res);

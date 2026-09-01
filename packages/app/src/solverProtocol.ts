@@ -17,21 +17,33 @@ export interface SolveRequest {
   opts?: SolveOpts;
 }
 
-/** 結果画面に渡す最小 DTO（構造化クローンで転送可能なプレーンオブジェクト）。 */
+export interface SolveNodeDto {
+  key: string;
+  actor: string;
+  actionType: string;
+  /** コンボ加重の push/call/oc 頻度 %（純化前の集合の広さ）。 */
+  pct: number;
+  /** 純化後（freq≥50%）のレンジ表記。 */
+  range: string;
+  /** 純化後にレンジ入りするハンドクラス集合。 */
+  hands: string[];
+  /** hero ハンドのこのノードでの頻度（0..1）。 */
+  heroFreq: number;
+  /** hero ハンドの EV（アグレッシブ − フォールド, 実払い pt）。 */
+  heroEv: number;
+}
+
+/** 結果画面に渡す DTO（構造化クローンで転送可能なプレーンオブジェクト）。 */
 export interface SolveResultDto {
   playersLeft: number;
+  heroPos: string;
+  heroHand: string;
   iterations: number;
   exploitabilityPt: number;
   converged: boolean;
   /** 席（ポジション）→ EQPre/EQPost（実払い pt）。 */
   equity: Record<string, { pre: number; post: number }>;
-  nodes: {
-    key: string;
-    actor: string;
-    actionType: string;
-    pct: number;
-    range: string;
-  }[];
+  nodes: SolveNodeDto[];
 }
 
 export type SolveResponse =

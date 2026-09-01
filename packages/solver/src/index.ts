@@ -5,6 +5,8 @@ export * from './huTable.js';
 export * from './huTableLoader.js';
 export * from './huSolver.js';
 export * from './multiwaySolver.js';
+export * from './nwaySolver.js';
+export * from './showdownJob.js';
 export * from './placement.js';
 export * from './sidepot.js';
 export * from './showdownMc.js';

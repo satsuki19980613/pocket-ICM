@@ -7,9 +7,9 @@
 - バックエンドなし。端末ローカル完結の PWA として配布予定（本リポジトリは Solver コアから着手）。
 - 仕様の正: [`SPEC.md`](SPEC.md) / 進め方の正: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 
-## 現在の状態: 第3マイルストーン（M3）
+## 現在の状態: 第4マイルストーン（M4）
 
-Solver コア。Phase 1 の求解本体まで（3-way まで実装）。
+Solver コア。Phase 1 の求解本体（**2〜6人すべて**）まで完了。
 
 | 項目 | 内容 | 状態 |
 |---|---|---|
@@ -21,9 +21,15 @@ Solver コア。Phase 1 の求解本体まで（3-way まで実装）。
 | M2-2〜2-4 | HU push/fold Nash（FP）+ exploitability + EV/EQ | ✅ |
 | M2-5 / 1-4 | マルチウェイ着順分布 MC + コスト実測 | ✅ |
 | M3 / 1-5 | サイドポット分配 + ショーダウン→終局スタック→ICM の計算パス | ✅ |
-| M3 / 1-8 | 3〜6人 逐次 push/fold（PU/CA/OC）+ FP + exploitability + 収束不十分フラグ | ✅ 3-way（4〜6人は続くステップ） |
+| M3 / 1-8 | 3-way 逐次 push/fold（PU/CA/OC）+ FP + exploitability + 収束不十分フラグ | ✅ |
+| **M4 / 1-8** | **4〜6人へ一般化した汎用ゲーム木ソルバー（2^N−2 ノード）+ CPU60% worker 並列** | ✅ |
+| **M4 / §4.2** | **実 HRC 5-way 照合（EQ 一致・戦略レンジは既知の床あり）** | ✅ 検証済 |
 
-スコープ外（今回やらない）: 4〜6人求解、OCR、UI。HRC 実照合値は Phase 0（さつき収集）待ち。
+M4 の要点は [`docs/NWAY_VALIDATION.md`](docs/NWAY_VALIDATION.md)。実 HRC 5-way で **EQ は
+±0.04pt-% 以内で一致**。先手 push レンジは MC 推定量の exploitability 床（プール比 ≈0.14%）
+により早い位置でやや狭く出る（`converged=false` で通知）。精度改善は後続。
+
+スコープ外（今回やらない）: OCR、UI。求解精度の床下げ（アクション確率のカードリムーバル等）は後続。
 
 ## 構成（npm workspaces モノレポ / TypeScript）
 
@@ -34,7 +40,9 @@ packages/
   solver/   MH-ICM, 7枚ハンド評価器, HU equity（厳密全列挙）,
             169×169 テーブル生成・同梱・読み込み, HU push/fold Nash,
             マルチウェイ着順分布 MC, サイドポット分配, ショーダウン→ICM,
-            3-way 逐次 push/fold ソルバー（FP + exploitability）
+            3-way 逐次 push/fold（手書き, 相互検証用）,
+            汎用 N-way（3〜6人）ソルバー（2^N−2 ノード, FP + exploitability,
+            worker 並列 CPU60%）
   harness/  HRC 照合ハーネス: JSONケース読込, 項目別合格基準(§4.3),
             境界ハンド明示の差分レポート
 ```

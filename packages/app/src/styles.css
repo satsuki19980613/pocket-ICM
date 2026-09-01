@@ -1,0 +1,109 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171e2e;
+  --line: #263149;
+  --fg: #e6ecf5;
+  --muted: #93a1bd;
+  --accent: #35d0ba;
+  --warn: #f0a54a;
+  --ok: #35d0ba;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 16px 14px 40px;
+  min-height: 100dvh;
+}
+
+.hdr {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.hdr h1 { font-size: 20px; margin: 0; }
+.tag {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.lbl { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+.sel, .btn {
+  width: 100%;
+  font-size: 15px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  padding: 11px 12px;
+}
+.sel { background: #0e1524; color: var(--fg); margin-bottom: 10px; }
+.btn {
+  background: var(--accent);
+  color: #062019;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.6; cursor: default; }
+
+.hero { font-size: 13px; color: var(--muted); margin: 10px 2px 0; }
+
+.err { color: var(--warn); font-size: 14px; }
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 2px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 14px;
+}
+.row span { color: var(--muted); }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+
+.node {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0e1524;
+}
+.node-h { font-weight: 700; margin-bottom: 6px; }
+.range {
+  margin-top: 8px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 13px;
+  color: var(--accent);
+  word-break: break-word;
+}
+
+.eq { margin-top: 14px; }
+.eq-h { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.eq table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.eq th, .eq td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+.eq th:first-child, .eq td:first-child { text-align: left; }
+.eq th { color: var(--muted); font-weight: 600; }
+
+.ft { font-size: 11px; color: var(--muted); text-align: center; margin-top: 20px; line-height: 1.6; }

@@ -7,9 +7,9 @@
 - バックエンドなし。端末ローカル完結の PWA として配布予定（本リポジトリは Solver コアから着手）。
 - 仕様の正: [`SPEC.md`](SPEC.md) / 進め方の正: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 
-## 現在の状態: 第5マイルストーン（M5）
+## 現在の状態: Phase 3-1a（App 着手 / in-browser 求解）
 
-Solver コア。Phase 1 の求解本体（**2〜6人すべて**）＋精度改善の第一実験まで完了。
+Solver コア（Phase 1, 2〜6人）＋精度改善の第一実験（M5）＋**App 土台と端末内求解の実証**（3-1a）まで完了。
 
 | 項目 | 内容 | 状態 |
 |---|---|---|
@@ -25,6 +25,7 @@ Solver コア。Phase 1 の求解本体（**2〜6人すべて**）＋精度改�
 | **M4 / 1-8** | **4〜6人へ一般化した汎用ゲーム木ソルバー（2^N−2 ノード）+ CPU60% worker 並列** | ✅ |
 | **M4 / §4.2** | **実 HRC 5-way 照合（EQ 一致・戦略レンジは既知の床あり）** | ✅ 検証済 |
 | **M5 / §5** | **hero カードリムーバル補正（アクション確率）の実装・評価 → 負の結果（既定は card-blind 維持）** | ✅ 実験完了 |
+| **3-1a** | **App 土台（React+Vite+PWA）＋ソルバーのブラウザ対応＋Web Worker で in-browser 求解** | ✅（HU 0.24s / 4-way 11.5s 単一スレッド） |
 
 M4 の要点は [`docs/NWAY_VALIDATION.md`](docs/NWAY_VALIDATION.md)。実 HRC 5-way で **EQ は
 ±0.04pt-% 以内で一致**。先手 push レンジは MC 推定量の exploitability 床（プール比 ≈0.14%）
@@ -55,6 +56,8 @@ packages/
             hero カードリムーバル補正 cardRemoval.ts（opt-in, M5 実験 / §5）
   harness/  HRC 照合ハーネス: JSONケース読込, 項目別合格基準(§4.3),
             境界ハンド明示の差分レポート
+  app/      PWA（React+Vite）。手入力→条件確認→結果の ICM 計算フロー（実装中, Phase 3）。
+            ソルバーは Web Worker で端末内実行（docs/APP_PHASE3.md）
 ```
 
 技術スタック: TypeScript / Vitest / zod / GitHub Actions（すべて無償）。
@@ -66,6 +69,8 @@ npm install
 npm test          # 全パッケージのテスト（Vitest）
 npm run typecheck # 型チェック（tsc -b + scripts）
 npm run gen:hu-equity   # HU 169×169 equity テーブルを再生成（並列・数分）
+npm run dev   --workspace @oshihiki/app   # App（PWA）を Vite dev で起動（:5173）
+npm run build --workspace @oshihiki/app   # App を本番ビルド（PWA 生成）
 ```
 
 ## 検証（二本立て / IMPLEMENTATION_PLAN §4）

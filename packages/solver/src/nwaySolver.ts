@@ -53,7 +53,15 @@ import type { ShowdownNode } from './showdownMc.js';
 import { MC_SEED, NODE_MC_SAMPLES } from './mcConfig.js';
 import { computeShowdownMc, type ShowdownMcResult } from './showdownJob.js';
 import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
-import type { WorkerPool } from './nwayWorkerPool.js';
+
+/**
+ * WorkerPool の最小構造型。実体は nwayWorkerPool.ts（Node 専用, node:worker_threads 依存）で、
+ * ブラウザバンドルに混入させないため型リンクは張らず、動的 import で読む（下記 ensurePool）。
+ */
+interface WorkerPoolLike {
+  run(input: { node: ShowdownNode; ranges: F64[]; samples: number; seed: number }): Promise<ShowdownMcResult>;
+  dispose(): Promise<void>;
+}
 
 const N_CLASSES = HAND_CLASS_ORDER.length; // 169
 const TOTAL_COMBOS = 1326;
@@ -254,13 +262,17 @@ function buildEngine(state: BoardState, samples: number, seed: number, workers: 
   // （tsx 不在・worker ファイル欠落など）では単一スレッドへ退避する。
   // node:worker_threads 依存の実体は nwayWorkerPool.js に分離し、**動的 import** で
   // 読む（workers<=1 のブラウザ経路では一切参照されず、静的グラフに Node 組み込みが入らない）。
-  let pool: WorkerPool | null = null;
+  let pool: WorkerPoolLike | null = null;
   let poolDisabled = workers <= 1;
-  const ensurePool = async (): Promise<WorkerPool | null> => {
+  const ensurePool = async (): Promise<WorkerPoolLike | null> => {
     if (poolDisabled) return null;
     if (!pool) {
       try {
-        const mod = await import(/* @vite-ignore */ './nwayWorkerPool.js');
+        // 変数経由の動的 import でバンドラの静的解析を回避（ブラウザ束には含めない）。
+        const modPath = './nwayWorkerPool.js';
+        const mod = (await import(/* @vite-ignore */ modPath)) as {
+          WorkerPool: new (size: number) => WorkerPoolLike;
+        };
         pool = new mod.WorkerPool(workers);
       } catch (e) {
         poolDisabled = true;

@@ -1,6 +1,6 @@
 {
   "name": "synthetic-hu-10bb",
-  "description": "【合成・暫定】HU 10bb 均等スタック。SB(=BTN) の push レンジ。EV/EQ は placeholder。実 HRC 値で差し替える。",
+  "description": "【合成・暫定】HU 10bb 均等スタック。SB(=BTN) の push レンジ。EV/EQ/レンジは placeholder（実 HRC 値で差し替える）。key は SPEC §3.2 準拠（アクターのセルを '-'）。",
   "poolPt": 16,
   "exactEquity": true,
   "input": {
@@ -18,7 +18,7 @@
   },
   "expected": [
     {
-      "key": "SB:P,BB:-",
+      "key": "SB:-,BB:-",
       "actor": "SB",
       "actionType": "PU",
       "range": ["AA", "KK", "QQ", "JJ", "TT", "99", "88", "77", "66", "55", "44", "33", "22", "AKs", "AQs", "AJs", "ATs", "A9s", "A8s", "A7s", "A6s", "A5s", "A4s", "A3s", "A2s", "AKo", "AQo", "AJo", "ATo", "A9o", "KQs", "KJs", "KTs", "K9s", "KQo", "KJo", "QJs", "QTs", "JTs"],

@@ -1,6 +1,6 @@
 {
   "name": "synthetic-3way-bubble",
-  "description": "【合成・暫定】3-way バブル手前。BU の push レンジ。EV/EQ は placeholder。実 HRC 値で差し替える。",
+  "description": "【合成・暫定】3-way バブル手前。BU の push レンジ。EV/EQ は placeholder（実 HRC 値で差し替える）。key は SPEC §3.2 準拠（アクターのセルを '-'）。",
   "poolPt": 16,
   "input": {
     "street": "preflop",
@@ -18,7 +18,7 @@
   },
   "expected": [
     {
-      "key": "BU:P,SB:-,BB:-",
+      "key": "BU:-,SB:-,BB:-",
       "actor": "BU",
       "actionType": "PU",
       "range": ["AA", "KK", "QQ", "JJ", "TT", "99", "88", "AKs", "AQs", "AJs", "AKo", "AQo", "KQs", "KQo"],

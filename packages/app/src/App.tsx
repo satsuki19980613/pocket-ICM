@@ -5,6 +5,7 @@ import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
 import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
+import { DrillView } from './components/DrillView';
 import { buildBoardState, defaultForm, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
@@ -12,7 +13,7 @@ import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
-type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error' | 'history';
+type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill';
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
@@ -153,16 +154,21 @@ export function App(): JSX.Element {
       <header className="hdr">
         <h1>Black Ops ICM</h1>
         <span className="tag">Phase 3-2 · ICM 押し引き</span>
-        <button
-          type="button"
-          className="navrec"
-          onClick={() => {
-            void refreshRecords();
-            setScreen('history');
-          }}
-        >
-          記録{records.length > 0 ? ` (${records.length})` : ''}
-        </button>
+        <div className="navgrp">
+          <button type="button" className="navrec" onClick={() => setScreen('drill')}>
+            訓練
+          </button>
+          <button
+            type="button"
+            className="navrec"
+            onClick={() => {
+              void refreshRecords();
+              setScreen('history');
+            }}
+          >
+            記録{records.length > 0 ? ` (${records.length})` : ''}
+          </button>
+        </div>
       </header>
 
       {screen === 'form' && (
@@ -225,6 +231,8 @@ export function App(): JSX.Element {
           onBack={() => setScreen('form')}
         />
       )}
+
+      {screen === 'drill' && <DrillView onExit={() => setScreen('form')} />}
 
       {screen === 'error' && (
         <ErrorView issues={issues} onBack={() => setScreen('form')} />

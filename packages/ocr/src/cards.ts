@@ -8,8 +8,11 @@
  */
 
 import { RANKS, SUITS, rankIndex, parseHandClass } from '@oshihiki/core';
-import type { Gray, Read } from './types.js';
+import type { Gray, Read, Rect } from './types.js';
 import { bestMatch, matchConfidence, type Template } from './match.js';
+import { resize } from './raster.js';
+import { cornerOf } from './detect.js';
+import { recognizeSuit, type Rgba } from './color.js';
 
 /** カードコード（例 "Ah", "Td", "2c"）を rank/suit に分解。不正なら null。 */
 export function parseCardCode(code: string): { rank: string; suit: string } | null {
@@ -56,6 +59,73 @@ export function allCardCodes(): string[] {
 export function recognizeCard(region: Gray, templates: readonly Template[]): Read<string> {
   const m = bestMatch(region, templates);
   return { value: m.label, conf: matchConfidence(m) };
+}
+
+// --- 色対応のカード認識（確定アーキテクチャ: ランク=NCC, スート=4 色）---
+// accuracy 検証（独立キャプチャ 144216, 絵札含む）で rank/suit/フルカードとも 16/16。
+
+/** ランク角（左上）のカード幅・高さ比。NCC 用。 */
+const RANK_CORNER: [number, number] = [0.5, 0.42];
+/** スート色を取る領域（顔絵を避け、左上のランク文字を狭く）。 */
+const SUIT_CORNER: [number, number] = [0.42, 0.3];
+/** 正規化した角のサイズ（テンプレと揃える）。 */
+const CANON_W = 30;
+const CANON_H = 38;
+
+function grayCrop(img: Rgba, rect: Rect): Gray {
+  const x0 = Math.max(0, rect.x);
+  const y0 = Math.max(0, rect.y);
+  const x1 = Math.min(img.w, rect.x + rect.w);
+  const y1 = Math.min(img.h, rect.y + rect.h);
+  const w = Math.max(0, x1 - x0);
+  const h = Math.max(0, y1 - y0);
+  const data = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const s = ((y0 + y) * img.w + (x0 + x)) * 4;
+      data[y * w + x] = (img.data[s]! * 77 + img.data[s + 1]! * 150 + img.data[s + 2]! * 29) >> 8;
+    }
+  return { w, h, data };
+}
+
+/** 描画ラベル "10" は core の 'T' に対応させる。 */
+function normalizeRank(label: string): string {
+  return label === '10' ? 'T' : label;
+}
+
+/**
+ * カード矩形（検出済み or プレイ画面の固定座標）→ カードコード（例 "Jh"）＋信頼度。
+ * ランクはグレースケール NCC（rankTemplates の label はランク: "2".."9","10","J","Q","K","A"）、
+ * スートは 4 色分類。card は画像内のカード全体の矩形。
+ */
+export function recognizeCardColor(
+  img: Rgba,
+  card: Rect,
+  rankTemplates: readonly Template[],
+): Read<string> {
+  const [rw, rh] = RANK_CORNER;
+  const rankGray = resize(grayCrop(img, cornerOf(card, rw, rh)), CANON_W, CANON_H);
+  const m = bestMatch(rankGray, rankTemplates);
+  const [sw, sh] = SUIT_CORNER;
+  const suit = recognizeSuit(img, cornerOf(card, sw, sh));
+  const rank = normalizeRank(m.label);
+  return { value: `${rank}${suit.value}`, conf: Math.min(matchConfidence(m), suit.conf) };
+}
+
+/**
+ * hero の 2 枚（矩形指定）→ ハンドクラス表記＋信頼度。色対応版。
+ */
+export function recognizeHeroHandColor(
+  img: Rgba,
+  card1: Rect,
+  card2: Rect,
+  rankTemplates: readonly Template[],
+): Read<string> {
+  const c1 = recognizeCardColor(img, card1, rankTemplates);
+  const c2 = recognizeCardColor(img, card2, rankTemplates);
+  const label = heroHandFromCards(c1.value, c2.value);
+  if (label === null) return { value: '', conf: 0 };
+  return { value: label, conf: Math.min(c1.conf, c2.conf) };
 }
 
 /**

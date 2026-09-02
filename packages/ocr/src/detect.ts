@@ -18,6 +18,53 @@ export function brightMask(g: Gray, threshold: number): Uint8Array {
   return m;
 }
 
+/** 二値マスクの膨張（Chebyshev 半径 r）。前景=1。 */
+export function dilate(mask: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  if (r <= 0) return mask.slice();
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let on = 0;
+      for (let dy = -r; dy <= r && !on; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          if (mask[ny * w + nx] === 1) { on = 1; break; }
+        }
+      }
+      out[y * w + x] = on;
+    }
+  return out;
+}
+
+/** 二値マスクの収縮（Chebyshev 半径 r）。 */
+export function erode(mask: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  if (r <= 0) return mask.slice();
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let all = 1;
+      for (let dy = -r; dy <= r && all; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue; // 範囲外は無視（端を保つ）
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          if (mask[ny * w + nx] !== 1) { all = 0; break; }
+        }
+      }
+      out[y * w + x] = all;
+    }
+  return out;
+}
+
+/** クロージング（膨張→収縮）: 細い断裂を橋渡ししつつ全体サイズを保つ。 */
+export function close(mask: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  return erode(dilate(mask, w, h, r), w, h, r);
+}
+
 export interface Component {
   readonly x: number;
   readonly y: number;
@@ -94,6 +141,8 @@ export interface FindCardOptions {
   /** 充填率 area/(w*h) の下限（顔絵・pip で欠けるので低め）。既定 0.35。 */
   minFill?: number;
   connectivity?: 4 | 8;
+  /** クロージング半径（絵札の白枠の断裂を橋渡し）。既定 0（無効）。 */
+  closeRadius?: number;
 }
 
 /**
@@ -106,7 +155,8 @@ export function findCardRects(g: Gray, opts: FindCardOptions = {}): Rect[] {
   const minFill = opts.minFill ?? 0.35;
   const conn = opts.connectivity ?? 4;
 
-  const mask = brightMask(g, threshold);
+  let mask = brightMask(g, threshold);
+  if (opts.closeRadius && opts.closeRadius > 0) mask = close(mask, g.w, g.h, opts.closeRadius);
   const comps = connectedComponents(mask, g.w, g.h, conn);
   const minArea = minAreaFrac * g.w * g.h;
 

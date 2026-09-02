@@ -40,9 +40,9 @@ function drawRect(r: Raster, rect: Rect, th = 3): void {
   }
 }
 
-const [, , input, overlay, zoneStr, thStr] = process.argv;
+const [, , input, overlay, zoneStr, thStr, minFillStr, closeStr] = process.argv;
 if (!input || !overlay || !zoneStr) {
-  console.error('usage: detectCards.ts <input.png> <overlay.png> <zx,zy,zw,zh> [threshold]');
+  console.error('usage: detectCards.ts <input.png> <overlay.png> <zx,zy,zw,zh> [threshold] [minFill] [closeRadius]');
   process.exit(1);
 }
 const [zx, zy, zw, zh] = zoneStr.split(',').map(Number);
@@ -50,7 +50,9 @@ const img = decodePng(readFileSync(input));
 const { sub, x0, y0 } = cropRaster(img, zx!, zy!, zw!, zh!);
 const gray = toGray(sub);
 const threshold = thStr ? Number(thStr) : 200;
-const rects = findCardRects(gray, { threshold, minAreaFrac: 0.008, aspectRange: [0.4, 0.78], minFill: 0.3 });
+const minFill = minFillStr ? Number(minFillStr) : 0.3;
+const closeRadius = closeStr ? Number(closeStr) : 0;
+const rects = findCardRects(gray, { threshold, minAreaFrac: 0.008, aspectRange: [0.4, 0.78], minFill, closeRadius });
 for (const r of rects) drawRect(sub, r);
 writeFileSync(overlay, encodePng(sub));
 console.log(`zone ${sub.width}x${sub.height} @(${x0},${y0}) threshold=${threshold} → ${rects.length} cards`);

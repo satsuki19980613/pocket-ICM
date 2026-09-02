@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Gray } from './types.js';
-import { brightMask, connectedComponents, findCardRects, cornerOf } from './detect.js';
+import { brightMask, connectedComponents, findCardRects, cornerOf, dilate, close } from './detect.js';
 
 function blank(w: number, h: number, fill = 0): Gray {
   return { w, h, data: new Uint8Array(w * h).fill(fill) };
@@ -59,6 +59,36 @@ describe('findCardRects', () => {
       expect(r.w).toBe(10);
       expect(r.h).toBe(16);
     }
+  });
+});
+
+describe('dilate / close', () => {
+  it('dilate は前景を広げる', () => {
+    const m = new Uint8Array([0, 0, 0, 0, 1, 0, 0, 0, 0]);
+    const d = dilate(m, 3, 3, 1);
+    expect([...d]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+  it('close は分断された前景を橋渡しする（bbox は保つ）', () => {
+    // 5x1 の前景で中央 1px を欠く → close(1) で連結
+    const w = 5, h = 1;
+    const m = new Uint8Array([1, 1, 0, 1, 1]);
+    const c = close(m, w, h, 1);
+    const comps = connectedComponents(c, w, h);
+    expect(comps.length).toBe(1);
+    expect(comps[0]!.w).toBe(5);
+  });
+  it('findCardRects: closeRadius で分断した白枠を1枚として拾う', () => {
+    const g = blank(40, 40);
+    // カード様の白枠（中央に大きな穴＝顔絵）で、穴が右枠に接触して白を分断
+    paint(g, 5, 5, 14, 22, 255);
+    paint(g, 9, 9, 10, 12, 0); // 右枠(x=19)に接触する穴
+    const noClose = findCardRects(g, { minAreaFrac: 0.02, minFill: 0.1 });
+    const withClose = findCardRects(g, { minAreaFrac: 0.02, minFill: 0.1, closeRadius: 2 });
+    // クロージングで全体 bbox の1枚として安定して拾える
+    expect(withClose.length).toBe(1);
+    expect(withClose[0]!.w).toBe(14);
+    expect(withClose[0]!.h).toBe(22);
+    void noClose;
   });
 });
 

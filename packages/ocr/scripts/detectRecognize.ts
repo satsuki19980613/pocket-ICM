@@ -7,7 +7,7 @@
  *   recog : tsx detectRecognize.ts recog <templates.json> <input.png> <zx,zy,zw,zh> <threshold> <truth,truth,...>
  * label/truth は検出順（行ごと左→右）。数を合わせること。
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
 import { findCardRects, cornerOf } from '../src/detect.js';
 import { resize } from '../src/raster.js';
@@ -40,22 +40,24 @@ const [zx, zy, zw, zh] = zoneStr!.split(',').map(Number);
 const labels = (labelsStr ?? '').split(',').filter(Boolean);
 const img = decodePng(readFileSync(input));
 const gray = subGray(img, zx!, zy!, zw!, zh!);
-const rects = findCardRects(gray, { threshold: Number(thStr), minAreaFrac: 0.008, aspectRange: [0.4, 0.78], minFill: 0.3 });
+const rects = findCardRects(gray, { threshold: Number(thStr), minAreaFrac: 0.008, aspectRange: [0.4, 0.78], minFill: 0.2, closeRadius: 1 });
 console.log(`detected ${rects.length} cards; labels given ${labels.length}`);
 
 const corners = rects.map((r) => resize(cropGray(gray, cornerOf(r)), CW, CH));
 
 if (mode === 'build') {
   if (labels.length !== rects.length) { console.error('label 数が検出数と不一致'); process.exit(1); }
-  const templates: Record<string, { w: number; h: number; data: number[] }> = {};
+  // 既存 JSON があればマージ（複数スクショから全ランクを集める）。
+  const templates: Record<string, { w: number; h: number; data: number[] }> =
+    existsSync(tplPath!) ? (JSON.parse(readFileSync(tplPath!, 'utf8')).templates ?? {}) : {};
   corners.forEach((c, i) => { templates[labels[i]!] = { w: c.w, h: c.h, data: [...c.data] }; });
   writeFileSync(tplPath!, JSON.stringify({ templates }));
-  console.log(`built ${Object.keys(templates).length} templates → ${tplPath}`);
+  console.log(`built/merged → ${Object.keys(templates).length} templates: ${Object.keys(templates).sort().join(' ')}`);
 } else {
   const tplRaw = JSON.parse(readFileSync(tplPath!, 'utf8')) as { templates: Record<string, { w: number; h: number; data: number[] }> };
   const templates: Template[] = Object.entries(tplRaw.templates).map(([label, g]) => ({ label, img: { w: g.w, h: g.h, data: Uint8Array.from(g.data) } }));
-  const rankOf = (code: string) => code.slice(0, -1);
-  const rankSet = new Set(templates.map((t) => rankOf(t.label)));
+  const rankOf = (code: string) => code.slice(0, -1); // 真ラベルは "4h"/"10d"/"Js" → rank
+  const rankSet = new Set(templates.map((t) => t.label)); // テンプレラベルはランク直接
   const x0z = Math.round(zx! * img.width), y0z = Math.round(zy! * img.height);
   const rgbaImg = { w: img.width, h: img.height, data: img.rgba };
   let rankOk = 0, cardOk = 0, tested = 0;
@@ -63,10 +65,10 @@ if (mode === 'build') {
     const truth = labels[i] ?? '?';
     const c = corners[i]!;
     const m = bestMatch(c, templates);
-    const predRank = rankOf(m.label);
-    // スートは色（4 色デッキ）で決める
-    const corner = cornerOf(r);
-    const suit = recognizeSuit(rgbaImg, { x: x0z + corner.x, y: y0z + corner.y, w: corner.w, h: corner.h });
+    const predRank = m.label; // テンプレラベル＝ランク
+    // スートは色（4 色デッキ）。絵札は顔絵が混じるので左上のランク文字だけを狭く取る。
+    const cc = cornerOf(r, 0.42, 0.30);
+    const suit = recognizeSuit(rgbaImg, { x: x0z + cc.x, y: y0z + cc.y, w: cc.w, h: cc.h });
     const predCard = predRank + suit.value;
     const canTest = rankSet.has(rankOf(truth)); // rank テンプレが在るものだけ公平に判定
     const rOk = predRank === rankOf(truth);

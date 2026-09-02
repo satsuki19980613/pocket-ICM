@@ -10,15 +10,22 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['**/*.bin'],
+      includeAssets: ['**/*.bin', 'icon.svg', 'apple-touch-icon.png', 'favicon-32x32.png'],
       manifest: {
         name: 'Black Ops ICM',
         short_name: 'Black Ops ICM',
         description: 'ポーカーチェイス クラブマッチ push/fold ICM 復習ツール',
-        theme_color: '#0f1420',
-        background_color: '#0f1420',
+        lang: 'ja',
+        // サイバーパンク HUD 基調（--void 相当のフェルト・グラファイト）。
+        theme_color: '#0c1618',
+        background_color: '#0c1618',
         display: 'standalone',
         orientation: 'portrait',
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,bin,json,woff2,svg,png}'],

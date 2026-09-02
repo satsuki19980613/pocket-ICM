@@ -1,0 +1,10 @@
+# Cloudflare Pages 用ヘッダー（出荷）。ハッシュ付きアセットは長期不変、
+# SW と index はキャッシュせず更新を即反映（PWA autoUpdate と整合）。
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache

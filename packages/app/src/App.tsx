@@ -153,7 +153,7 @@ export function App(): JSX.Element {
     <div className="app">
       <header className="hdr">
         <h1>Black Ops ICM</h1>
-        <span className="tag">Phase 3-2 · ICM 押し引き</span>
+        <span className="tag">PUSH / FOLD</span>
         <div className="navgrp">
           <button type="button" className="navrec" onClick={() => setScreen('drill')}>
             訓練

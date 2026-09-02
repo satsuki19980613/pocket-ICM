@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0c1618"/>
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#1b3238" stroke-width="4" opacity="0.7"/>
+  <!-- HUD corner brackets (thermoptic cyan) -->
+  <g stroke="#34e3d0" stroke-width="14" stroke-linecap="round" fill="none">
+    <path d="M66 122 V66 H122"/>
+    <path d="M446 122 V66 H390"/>
+    <path d="M66 390 V446 H122"/>
+    <path d="M446 390 V446 H390"/>
+  </g>
+  <!-- targeting reticle -->
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#34e3d0" stroke-width="12"/>
+  <circle cx="256" cy="256" r="112" fill="none" stroke="#34e3d0" stroke-width="4" opacity="0.4"/>
+  <g stroke="#34e3d0" stroke-width="12" stroke-linecap="round">
+    <line x1="256" y1="84" x2="256" y2="128"/>
+    <line x1="256" y1="384" x2="256" y2="428"/>
+    <line x1="84" y1="256" x2="128" y2="256"/>
+    <line x1="384" y1="256" x2="428" y2="256"/>
+  </g>
+  <!-- hot center (amber = ALL IN / commit) -->
+  <circle cx="256" cy="256" r="30" fill="#f6b04e"/>
+  <circle cx="256" cy="256" r="30" fill="none" stroke="#0c1618" stroke-width="6"/>
+</svg>

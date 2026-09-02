@@ -104,7 +104,9 @@ export function binaryComponents(bin: Gray): Rect[] {
  * （数字は最大高の 0.55 以上）。数値は `parseAmount` でコンマ除去するので桁は保たれる。
  */
 export function digitComponents(mask: Gray): Rect[] {
-  const rects = binaryComponents(mask);
+  // 領域全高に近い成分は数字ではなく枠/手番グロー枠のエッジ（実測 h=領域高 の縦線）。
+  // 先に落とさないと maxH を押し上げ、実桁が 0.55*maxH 未満で全滅する（142903 BR）。
+  const rects = binaryComponents(mask).filter((r) => r.h < 0.9 * mask.h);
   if (rects.length === 0) return rects;
   const maxH = Math.max(...rects.map((r) => r.h));
   return rects.filter((r) => r.h >= 0.55 * maxH);

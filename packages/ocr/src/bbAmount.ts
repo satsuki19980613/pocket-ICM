@@ -72,7 +72,8 @@ function median(xs: readonly number[]): number {
  */
 function glyphComponents(mask: Gray): RawComp[] {
   const base = rawComponents(mask).filter(
-    (c) => c.area >= 15 && c.h >= 5 && c.w <= 0.5 * mask.w && c.w / c.h <= 1.6,
+    // h >= 0.9*領域高 は枠/手番グロー枠のエッジ（数字ではない）。
+    (c) => c.area >= 15 && c.h >= 5 && c.h < 0.9 * mask.h && c.w <= 0.5 * mask.w && c.w / c.h <= 1.6,
   );
   if (base.length === 0) return base;
   const maxH = Math.max(...base.map((c) => c.h));

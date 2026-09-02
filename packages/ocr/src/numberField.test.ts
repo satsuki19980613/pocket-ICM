@@ -44,12 +44,17 @@ const ONE = glyph([
   '.####.',
 ]);
 
-/** Gray 群を横に並べて白文字・暗背景の Rgba に描く（間に 2px 空ける）。任意で右端に赤い装飾ブロック。 */
-function renderRow(glyphs: Gray[], opts: { redBlock?: boolean } = {}): { img: Rgba; gap: number } {
+/**
+ * Gray 群を横に並べて白文字・暗背景の Rgba に描く（間に 2px 空ける）。
+ * redBlock: 右端に赤い装飾ブロック。glowEdge: 右側に**領域全高**の白い縦線
+ * （手番グロー枠のエッジ相当。digitComponents が数字より背が高いと誤らないか）。
+ */
+function renderRow(glyphs: Gray[], opts: { redBlock?: boolean; glowEdge?: boolean } = {}): { img: Rgba; gap: number } {
   const gap = 2, pad = 2;
   const h = Math.max(...glyphs.map((g) => g.h)) + pad * 2;
   const redW = opts.redBlock ? 10 : 0;
-  const w = pad * 2 + glyphs.reduce((a, g) => a + g.w, 0) + gap * (glyphs.length - 1) + redW;
+  const glowW = opts.glowEdge ? 6 : 0;
+  const w = pad * 2 + glyphs.reduce((a, g) => a + g.w, 0) + gap * (glyphs.length - 1) + redW + glowW;
   const data = new Uint8Array(w * h * 4);
   // 暗い背景。
   for (let i = 0; i < w * h; i++) { data[i * 4] = 20; data[i * 4 + 1] = 20; data[i * 4 + 2] = 20; data[i * 4 + 3] = 255; }
@@ -64,8 +69,14 @@ function renderRow(glyphs: Gray[], opts: { redBlock?: boolean } = {}): { img: Rg
     x0 += g.w + gap;
   }
   if (opts.redBlock) {
-    for (let y = pad; y < pad + 8; y++) for (let x = w - redW; x < w; x++) {
+    for (let y = pad; y < pad + 8; y++) for (let x = w - redW - glowW; x < w - glowW; x++) {
       const s = (y * w + x) * 4; data[s] = 220; data[s + 1] = 40; data[s + 2] = 40;
+    }
+  }
+  if (opts.glowEdge) {
+    // 領域全高（y=0..h）の白い縦線 2 本。
+    for (let y = 0; y < h; y++) for (let x = w - glowW; x < w; x++) {
+      const s = (y * w + x) * 4; data[s] = 255; data[s + 1] = 255; data[s + 2] = 255;
     }
   }
   return { img: { w, h, data }, gap };
@@ -131,6 +142,13 @@ describe('recognizeAmount', () => {
     const r = recognizeAmount(img, { x: 0, y: 0, w: 4, h: 4 }, templates);
     expect(Number.isNaN(r.value)).toBe(true);
     expect(r.conf).toBe(0);
+  });
+
+  it('手番グロー枠（領域全高の縦線）があっても数字を読む（142903 BR 回帰）', () => {
+    // グローエッジは領域全高なので maxH を押し上げ、対策無しだと実桁が全滅する。
+    const { img } = renderRow([ONE, ZERO], { glowEdge: true });
+    const r = recognizeAmount(img, { x: 0, y: 0, w: img.w, h: img.h }, templates);
+    expect(r.value).toBe(10);
   });
 });
 

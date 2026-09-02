@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
 import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
 import { ErrorView } from './components/ErrorView';
+import { RecordsView } from './components/RecordsView';
 import { buildBoardState, defaultForm, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
 import { prefillFromScreenshot } from './ocr/screenshotPrefill';
+import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
+import { deleteRecord, listRecords, putRecord } from './records/store';
 
-type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error';
+type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error' | 'history';
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
@@ -40,6 +43,47 @@ export function App(): JSX.Element {
   // OCR プリフィルの低信頼フィールド（"UTG.stack" 等）。確認画面で強調する。
   const [lowConf, setLowConf] = useState<string[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
+  // 記録（履歴）: IndexedDB から読み込み。viewing は履歴からの読み取り専用再表示。
+  const [records, setRecords] = useState<SpotRecord[]>([]);
+  const [viewing, setViewing] = useState<SpotRecord | null>(null);
+
+  async function refreshRecords(): Promise<void> {
+    try {
+      setRecords(await listRecords());
+    } catch {
+      /* IndexedDB 不可の環境では履歴は空のまま（機能縮退）。 */
+    }
+  }
+
+  useEffect(() => {
+    void refreshRecords();
+  }, []);
+
+  /** 結果画面から現在の局面を記録する。 */
+  async function onSave(heroAction: HeroAction): Promise<void> {
+    if (!state || !result) return;
+    const rec = buildRecord({ state, result, ms, heroAction });
+    try {
+      await putRecord(rec);
+      await refreshRecords();
+    } catch {
+      /* 保存失敗は握りつぶす（オフライン PWA・容量超過等）。UI は「記録しました」を出さない。 */
+    }
+  }
+
+  async function onDeleteRecord(id: string): Promise<void> {
+    await deleteRecord(id).catch(() => {});
+    await refreshRecords();
+  }
+
+  /** 履歴の1件を読み取り専用で結果画面に再表示。 */
+  function openRecord(rec: SpotRecord): void {
+    setViewing(rec);
+    setState(rec.state);
+    setResult(rec.result);
+    setMs(rec.ms);
+    setScreen('result');
+  }
 
   function toConfirm(f: BoardForm): void {
     // 手入力からの遷移は OCR 由来の強調を持ち越さない。
@@ -91,6 +135,7 @@ export function App(): JSX.Element {
 
   async function solve(): Promise<void> {
     if (!state) return;
+    setViewing(null); // 新規求解は読み取り専用でない
     setScreen('solving');
     try {
       const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
@@ -108,6 +153,16 @@ export function App(): JSX.Element {
       <header className="hdr">
         <h1>Black Ops ICM</h1>
         <span className="tag">Phase 3-1 · 手入力ICM</span>
+        <button
+          type="button"
+          className="navrec"
+          onClick={() => {
+            void refreshRecords();
+            setScreen('history');
+          }}
+        >
+          記録{records.length > 0 ? ` (${records.length})` : ''}
+        </button>
       </header>
 
       {screen === 'form' && (
@@ -138,7 +193,37 @@ export function App(): JSX.Element {
       )}
 
       {screen === 'result' && state && result && (
-        <Result state={state} result={result} ms={ms} onBack={() => setScreen('form')} />
+        viewing ? (
+          <Result
+            state={state}
+            result={result}
+            ms={ms}
+            readOnly
+            savedAction={viewing.heroAction}
+            savedEvLoss={viewing.evLoss}
+            onBack={() => {
+              setViewing(null);
+              setScreen('history');
+            }}
+          />
+        ) : (
+          <Result
+            state={state}
+            result={result}
+            ms={ms}
+            onSave={onSave}
+            onBack={() => setScreen('form')}
+          />
+        )
+      )}
+
+      {screen === 'history' && (
+        <RecordsView
+          records={records}
+          onOpen={openRecord}
+          onDelete={onDeleteRecord}
+          onBack={() => setScreen('form')}
+        />
       )}
 
       {screen === 'error' && (

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
 import type { SolveNodeDto, SolveResultDto } from '../solverProtocol';
 import { RangeGrid } from './RangeGrid';
+import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/model';
 
 const ACTION_JA: Record<string, string> = { PU: '先手プッシュ (PU)', CA: 'コール (CA)', OC: 'オーバーコール (OC)' };
 
@@ -11,25 +12,42 @@ function evBand(ev: number): 'minor' | 'mid' | 'major' {
   return a < 0.05 ? 'minor' : a <= 0.2 ? 'mid' : 'major';
 }
 
-function isUnopened(n: SolveNodeDto): boolean {
-  return n.actionType === 'PU' && !n.key.includes(':P') && !n.key.includes(':C');
-}
-
-/** 基本の結果画面（3-1c）。判定・EV・レンジ表・EQ・収束品質・全ノード。 */
-export function Result(props: { state: BoardState; result: SolveResultDto; onBack: () => void; ms: number }): JSX.Element {
+/** 基本の結果画面（3-1c）＋記録（3-2）。判定・EV・レンジ表・EQ・収束品質・全ノード。 */
+export function Result(props: {
+  state: BoardState;
+  result: SolveResultDto;
+  onBack: () => void;
+  ms: number;
+  /** 記録の保存ハンドラ（読み取り専用の再表示時は未指定）。 */
+  onSave?: (heroAction: HeroAction) => void;
+  /** 履歴からの再表示（保存 UI を出さず、記録済みの情報を表示）。 */
+  readOnly?: boolean;
+  /** readOnly 時に表示する、記録済みの実行動と EV loss。 */
+  savedAction?: HeroAction;
+  savedEvLoss?: number;
+}): JSX.Element {
   const { result, state } = props;
   const [showAll, setShowAll] = useState(false);
+  const [action, setAction] = useState<HeroAction | null>(null);
+  const [saved, setSaved] = useState(false);
   const heroNodes = result.nodes.filter((n) => n.actor === result.heroPos);
-  const headline = heroNodes.find(isUnopened) ?? heroNodes[0];
+  const headline = headlineNode(result) ?? heroNodes[0];
   const heroSeat = state.seats.find((s) => s.pos === result.heroPos);
 
-  const verdict = (n: SolveNodeDto): 'PUSH' | 'FOLD' => (n.heroFreq >= 0.5 ? 'PUSH' : 'FOLD');
+  const canSave = !props.readOnly && !!props.onSave && !!headline;
+  const evLossPreview = headline && action ? evLossOf(headline.heroEv, action) : null;
+
+  function save(): void {
+    if (!action || !props.onSave) return;
+    props.onSave(action);
+    setSaved(true);
+  }
 
   return (
     <div className="result-wrap">
       {headline ? (
         <div className="panel vhero">
-          <div className={`verdict ${verdict(headline) === 'PUSH' ? 'push' : 'fold'}`}>{verdict(headline)}</div>
+          <div className={`verdict ${verdictOf(headline) === 'PUSH' ? 'push' : 'fold'}`}>{verdictOf(headline)}</div>
           <div className="vmeta">
             <b className="vhand">{result.heroHand}</b>
             <span>
@@ -55,13 +73,60 @@ export function Result(props: { state: BoardState; result: SolveResultDto; onBac
         <div className="panel">hero の決定ノードがありません（BB のウォーク等）。下の一覧を参照。</div>
       )}
 
+      {/* ---- 記録（自分の実行動を選んで保存） ---- */}
+      {canSave && (
+        <div className="panel saverec">
+          <div className="scr-h sm">この局面での自分の選択</div>
+          <div className="seg">
+            {(['PUSH', 'FOLD'] as HeroAction[]).map((a) => (
+              <button
+                key={a}
+                type="button"
+                className={`segbtn ${action === a ? 'on' : ''}`}
+                onClick={() => setAction(a)}
+                disabled={saved}
+              >
+                {a === 'PUSH' ? 'ALL IN' : 'FOLD'}
+              </button>
+            ))}
+          </div>
+          {evLossPreview !== null && (
+            <p className={`evloss-note ${evLossPreview > 0 ? 'loss' : 'ok'}`}>
+              {evLossPreview > 0
+                ? `EV loss −${evLossPreview.toFixed(3)} pt（最適は ${verdictOf(headline!) === 'PUSH' ? 'ALL IN' : 'FOLD'}）`
+                : 'EV loss 0（最適な選択）'}
+            </p>
+          )}
+          <button type="button" className="btn wide" onClick={save} disabled={!action || saved}>
+            {saved ? '記録しました ✓' : '記録する'}
+          </button>
+        </div>
+      )}
+
+      {/* ---- 履歴からの再表示（記録済み情報） ---- */}
+      {props.readOnly && props.savedAction && (
+        <div className="panel saverec">
+          <div className="scr-h sm">記録した選択</div>
+          <div className="row">
+            <span>自分の選択</span>
+            <b>{props.savedAction === 'PUSH' ? 'ALL IN' : 'FOLD'}</b>
+          </div>
+          <div className="row">
+            <span>EV loss（pt）</span>
+            <b className={props.savedEvLoss && props.savedEvLoss > 0 ? 'warn' : 'ok'}>
+              {(props.savedEvLoss ?? 0) > 0 ? `−${(props.savedEvLoss ?? 0).toFixed(3)}` : '0'}
+            </b>
+          </div>
+        </div>
+      )}
+
       {heroNodes.length > 1 && (
         <div className="panel">
           <div className="scr-h sm">hero の他の状況</div>
           {heroNodes.filter((n) => n !== headline).map((n) => (
             <div key={n.key} className="hnode">
               <span className="ht">{ACTION_JA[n.actionType]?.split(' ')[0] ?? n.actionType}</span>
-              <span className={`hv ${verdict(n) === 'PUSH' ? 'push' : 'fold'}`}>{verdict(n)}</span>
+              <span className={`hv ${verdictOf(n) === 'PUSH' ? 'push' : 'fold'}`}>{verdictOf(n)}</span>
               <span className="hpct">{n.pct.toFixed(1)}%</span>
               <span className={`hev ${evBand(n.heroEv)}`}>
                 {n.heroEv >= 0 ? '+' : ''}
@@ -120,7 +185,7 @@ export function Result(props: { state: BoardState; result: SolveResultDto; onBac
       </div>
 
       <button type="button" className="btn ghost wide" onClick={props.onBack}>
-        別のスポットを入力
+        {props.readOnly ? '記録一覧に戻る' : '別のスポットを入力'}
       </button>
     </div>
   );

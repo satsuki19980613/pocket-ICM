@@ -2,7 +2,7 @@
   "name": "oshihiki-note",
   "version": "0.1.0",
   "private": true,
-  "description": "ポーカーチェイス クラブマッチ push/fold ICM 復習ツール（押し引きノート）",
+  "description": "Black Ops ICM — ポーカーチェイス クラブマッチ push/fold ICM 復習ツール",
   "type": "module",
   "workspaces": [
     "packages/*"

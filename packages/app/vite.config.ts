@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['**/*.bin'],
       manifest: {
-        name: '押し引きノート',
-        short_name: '押し引き',
+        name: 'Black Ops ICM',
+        short_name: 'Black Ops ICM',
         description: 'ポーカーチェイス クラブマッチ push/fold ICM 復習ツール',
         theme_color: '#0f1420',
         background_color: '#0f1420',

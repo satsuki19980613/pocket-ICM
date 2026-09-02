@@ -106,7 +106,7 @@ export function App(): JSX.Element {
   return (
     <div className="app">
       <header className="hdr">
-        <h1>押し引きノート</h1>
+        <h1>Black Ops ICM</h1>
         <span className="tag">Phase 3-1 · 手入力ICM</span>
       </header>
 

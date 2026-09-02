@@ -1,4 +1,4 @@
-# Claude Code 実装依頼プロンプト — 押し引きノート 第1マイルストーン
+# Claude Code 実装依頼プロンプト — Black Ops ICM 第1マイルストーン
 
 以下をそのまま Claude Code の最初のメッセージとして貼り付ける。
 添付ドキュメント: `SPEC.md`(draft-2) / `IMPLEMENTATION_PLAN.md`(draft-2) / `oshihiki-note-mock.html`

@@ -10,6 +10,7 @@ export * from './digits.js';
 export * from './numberField.js';
 export * from './numberLayout.js';
 export * from './blinds.js';
+export * from './bbAmount.js';
 export * from './street.js';
 export * from './button.js';
 export * from './actionTag.js';

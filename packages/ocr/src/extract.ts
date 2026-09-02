@@ -22,6 +22,7 @@ import type { FracRect } from './layout.js';
 import { toPx } from './layout.js';
 import type { FrameProfile } from './frameProfile.js';
 import { recognizeAmount } from './numberField.js';
+import { readAmountBb, detectDisplayMode } from './bbAmount.js';
 import { readBlinds } from './blinds.js';
 import { readStreetFromBoard } from './street.js';
 import { detectButtonSeat } from './button.js';
@@ -38,14 +39,16 @@ export interface ExtractTemplates {
   readonly ranks: readonly Template[];
   /** 能動アクション語（レイズ/コール/オールイン/チェック）。 */
   readonly actions: readonly Template[];
+  /** BB 表示判定用の "B" 文字（label 'B'）。省略時はモード自動判定せず chips 既定。 */
+  readonly letters?: readonly Template[];
 }
 
 export interface ExtractOptions {
-  /** 数値表示モード（既定 chips）。'bb'（小数）は未対応。 */
+  /** 数値表示モード。未指定なら letters があれば自動判定、無ければ chips。 */
   readonly displayMode?: DisplayMode;
   /** アンティ方式（既定 'all'）。 */
   readonly anteScheme?: AnteScheme;
-  /** ベット読みの minCh（既定は numberField 既定）。 */
+  /** ベット読みの minCh（既定は numberField 既定, chips 表示のみ）。 */
   readonly betMinCh?: number;
 }
 
@@ -64,12 +67,28 @@ export function extractRawReads(
   opts: ExtractOptions = {},
 ): RawReads {
   const street = readStreetFromBoard(img, px(img, profile.board));
+  // blinds / ante は BB 表示でもヘッダは常に chips。bb(chips)=正規化係数。
   const blinds = readBlinds(img, px(img, profile.blindsNum), templates.digits);
   const bbChips = Number.isFinite(blinds.bb.value) && blinds.bb.value > 0 ? blinds.bb.value : 1;
 
-  // 金額は bb(chips) で割って BB 換算。
+  // 表示モード解決: 明示指定 > letters による自動判定 > chips。
+  const mode: DisplayMode =
+    opts.displayMode ??
+    (templates.letters
+      ? detectDisplayMode(img, profile.seats.map((s) => px(img, s.stack)), templates.digits, templates.letters)
+      : 'chips');
+
+  // テーブル上の金額（stack/bet/pot）を BB 換算で読む。
+  //  - chips: recognizeAmount → bb(chips) で割る。
+  //  - bb: readAmountBb（"20.2 BB"→20.2, 既に BB）→ 正規化しない。
+  const readTable = (rect: Rect, minCh?: number): Read<number> =>
+    mode === 'bb'
+      ? readAmountBb(img, rect, templates.digits, minCh !== undefined ? { minCh } : {})
+      : norm(recognizeAmount(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}), bbChips);
+
+  // ante は常に chips ヘッダ → recognizeAmount＋正規化。
   const anteChips = recognizeAmount(img, px(img, profile.ante), templates.digits);
-  const pot = norm(recognizeAmount(img, px(img, profile.pot), templates.digits), bbChips);
+  const pot = readTable(px(img, profile.pot));
 
   // D ボタン席（席アンカーは profile.seats の順）。
   const anchors = profile.seats.map((s) => s.buttonAnchor);
@@ -87,16 +106,16 @@ export function extractRawReads(
   }
 
   const seats: RawSeatRead[] = profile.seats.map((s, i) => {
-    const stackRaw = recognizeAmount(img, px(img, s.stack), templates.digits, s.stackMinCh !== undefined ? { minCh: s.stackMinCh } : {});
-    const occupied = Number.isFinite(stackRaw.value);
+    // stackMinCh（ホログラム加工プレートのキラキラ除去）は BB でも有効（BL 実測 168 で
+    // 13.5/7.8 等を正読・小数点も生存）。両モードで適用する。
+    const stack = readTable(px(img, s.stack), s.stackMinCh);
+    const occupied = Number.isFinite(stack.value);
     const occupancy: Read<Occupancy> = occupied
-      ? { value: 'occupied', conf: stackRaw.conf > 0 ? 0.9 : 0.5 }
+      ? { value: 'occupied', conf: stack.conf > 0 ? 0.9 : 0.5 }
       : { value: 'empty', conf: 0.8 };
 
-    const betRaw = recognizeAmount(img, px(img, s.bet), templates.digits, opts.betMinCh !== undefined ? { minCh: opts.betMinCh } : {});
-    const bet: Read<number> = Number.isFinite(betRaw.value)
-      ? norm(betRaw, bbChips)
-      : { value: 0, conf: 0.6 };
+    const betRaw = readTable(px(img, s.bet), mode === 'chips' ? opts.betMinCh : undefined);
+    const bet: Read<number> = Number.isFinite(betRaw.value) ? betRaw : { value: 0, conf: 0.6 };
 
     let action: Read<SeatAction>;
     if (!occupied) {
@@ -119,7 +138,7 @@ export function extractRawReads(
       isButton: button.value === i,
       occupancy,
       action,
-      stack: norm(stackRaw, bbChips),
+      stack,
       bet,
     };
   });
@@ -131,6 +150,6 @@ export function extractRawReads(
     pot,
     heroHand,
     seats,
-    displayMode: opts.displayMode ?? 'chips',
+    displayMode: mode,
   };
 }

@@ -11,7 +11,7 @@ const DIR='local-fixtures';
 function load(path:string):Template[]{const raw=JSON.parse(readFileSync(path,'utf8')) as any;
   const t=raw.templates; if(Array.isArray(t)) return t.map((g:any)=>({label:g.label,img:{w:g.w,h:g.h,data:Uint8Array.from(g.data)}}));
   return Object.entries(t).map(([label,g]:any)=>({label,img:{w:g.w,h:g.h,data:Uint8Array.from(g.data)}}));}
-const templates:ExtractTemplates={digits:load(`${DIR}/digits.json`),ranks:load(`${DIR}/ranks_hero.json`),actions:load(`${DIR}/actions.json`)};
+const templates:ExtractTemplates={digits:load(`${DIR}/digits.json`),ranks:load(`${DIR}/ranks_hero.json`),actions:load(`${DIR}/actions.json`),letters:load(`${DIR}/letters_bb.json`)};
 
 const frame=process.argv[2]??'Screenshot_20260901-142820.png';
 const img=decodePng(readFileSync(`${DIR}/${frame}`));

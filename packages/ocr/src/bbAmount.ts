@@ -73,7 +73,9 @@ function median(xs: readonly number[]): number {
 function glyphComponents(mask: Gray): RawComp[] {
   const base = rawComponents(mask).filter(
     // h >= 0.9*領域高 は枠/手番グロー枠のエッジ（数字ではない）。
-    (c) => c.area >= 15 && c.h >= 5 && c.h < 0.9 * mask.h && c.w <= 0.5 * mask.w && c.w / c.h <= 1.6,
+    // h 下限は 4: folded/暗プレートで小数点 "." が薄くなり高さ 4px しか残らない場合がある
+    // （71.3→713 の欠落原因）。area >= 15 で微小ノイズは除くので 4 でも安全。
+    (c) => c.area >= 15 && c.h >= 4 && c.h < 0.9 * mask.h && c.w <= 0.5 * mask.w && c.w / c.h <= 1.6,
   );
   if (base.length === 0) return base;
   const maxH = Math.max(...base.map((c) => c.h));

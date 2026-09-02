@@ -23,6 +23,7 @@ const TWO = glyph(['#####', '....#', '....#', '#####', '#....', '#....', '#....'
 const ZERO = glyph(['#####', '#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '#####']); // 中空
 const BEE = glyph(['#####', '#...#', '#...#', '#####', '#...#', '#...#', '#####', '#####']); // B 形（連結）
 const DOT: Gray = { w: 6, h: 6, data: new Uint8Array(36).fill(255) }; // 小数点（背が低い）
+const DOT4: Gray = { w: 5, h: 4, data: new Uint8Array(20).fill(255) }; // 薄い小数点（folded/暗プレート, h=4, area=20）
 
 const digits: Template[] = [{ label: '2', img: TWO }, { label: '0', img: ZERO }];
 const letters: Template[] = [{ label: 'B', img: BEE }];
@@ -59,6 +60,13 @@ describe('readAmountBb', () => {
     const img = render([TWO, ZERO, BEE, BEE]);
     const r = readAmountBb(img, full(img), digits, { minCh: 100 });
     expect(r.value).toBe(20);
+  });
+
+  it('薄い小数点（h=4）でも小数を残す（71.3→713 の欠落回帰防止）', () => {
+    // folded/暗プレートで小数点が h=4 まで痩せても '.' として拾う（h 下限 4）。
+    const img = render([TWO, ZERO, DOT4, TWO, BEE, BEE]);
+    const r = readAmountBb(img, full(img), digits, { minCh: 100 });
+    expect(r.value).toBeCloseTo(20.2, 5);
   });
 
   it('数字 1 個 ＋ BB 未満（tall < 3）は NaN', () => {

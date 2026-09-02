@@ -177,6 +177,20 @@ export function findCardRects(g: Gray, opts: FindCardOptions = {}): Rect[] {
 }
 
 /**
+ * 検出矩形から実カードだけを面積上位 n 枚選び、左→右に整列して返す。
+ * 絵札（Q/J 等）は内部の白領域から小さなスプリアス矩形（例 25×49）が aspect/fill を
+ * すり抜けて混じることがあり、素朴に先頭 n 個を採ると誤選択して認識が壊れる。
+ * 実カードは常に最大面積なので、面積で上位 n を採ってから x 順に並べ直す。
+ */
+export function largestCardRects(rects: readonly Rect[], n: number): Rect[] {
+  if (rects.length <= n) return [...rects];
+  return [...rects]
+    .sort((a, b) => b.w * b.h - a.w * a.h)
+    .slice(0, n)
+    .sort((a, b) => a.x - b.x);
+}
+
+/**
  * カード矩形の左上「角」（ランク＋スート）を正規化して切り出す。
  * 検出した矩形の左上から幅・高さの割合で取り、absolute 座標のズレを排除する。
  */

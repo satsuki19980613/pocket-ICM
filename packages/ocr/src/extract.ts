@@ -28,7 +28,7 @@ import { readStreetFromBoard } from './street.js';
 import { detectButtonSeat } from './button.js';
 import { isActiveHand } from './cardState.js';
 import { recognizeAction } from './actionTag.js';
-import { findCardRects } from './detect.js';
+import { findCardRects, largestCardRects } from './detect.js';
 import { grayFromRgba } from './numberField.js';
 import { recognizeHeroHandColor } from './cards.js';
 
@@ -100,8 +100,10 @@ export function extractRawReads(
   if (heroSeat) {
     const hrect = px(img, heroSeat.card);
     const g = grayFromRgba(img, hrect);
-    const rects = findCardRects(g, { threshold: 190, minAreaFrac: 0.02, closeRadius: 1 })
+    const found = findCardRects(g, { threshold: 190, minAreaFrac: 0.02, closeRadius: 1 })
       .map((r) => ({ x: hrect.x + r.x, y: hrect.y + r.y, w: r.w, h: r.h }));
+    // 絵札の内部スプリアス矩形を避け、面積上位 2 枚を左→右で採る。
+    const rects = largestCardRects(found, 2);
     if (rects.length >= 2) heroHand = recognizeHeroHandColor(img, rects[0]!, rects[1]!, templates.ranks);
   }
 

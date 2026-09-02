@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Gray } from './types.js';
-import { brightMask, connectedComponents, findCardRects, cornerOf, dilate, close } from './detect.js';
+import { brightMask, connectedComponents, findCardRects, cornerOf, dilate, close, largestCardRects } from './detect.js';
 
 function blank(w: number, h: number, fill = 0): Gray {
   return { w, h, data: new Uint8Array(w * h).fill(fill) };
@@ -89,6 +89,26 @@ describe('dilate / close', () => {
     expect(withClose[0]!.w).toBe(14);
     expect(withClose[0]!.h).toBe(22);
     void noClose;
+  });
+});
+
+describe('largestCardRects', () => {
+  const R = (x: number, y: number, w: number, h: number) => ({ x, y, w, h });
+
+  it('面積上位 2 枚を採り x 順に整列（絵札スプリアス矩形を除外）', () => {
+    // 実カード2枚（大）＋絵札内部のスプリアス（小, 左寄り）。
+    const spur = R(5, 30, 25, 49); // 絵札内部の小矩形（左端寄り）
+    const left = R(20, 0, 120, 170);
+    const right = R(160, 0, 120, 170);
+    const out = largestCardRects([spur, left, right], 2);
+    expect(out).toHaveLength(2);
+    expect(out.map((r) => r.x)).toEqual([20, 160]); // spur は除外, 左→右
+  });
+
+  it('n 以下ならそのまま返す', () => {
+    const rs = [R(0, 0, 10, 10), R(20, 0, 10, 10)];
+    expect(largestCardRects(rs, 2)).toHaveLength(2);
+    expect(largestCardRects([rs[0]!], 2)).toHaveLength(1);
   });
 });
 

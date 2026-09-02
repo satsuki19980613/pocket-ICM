@@ -12,6 +12,7 @@ export * from './numberLayout.js';
 export * from './blinds.js';
 export * from './street.js';
 export * from './button.js';
+export * from './actionTag.js';
 export * from './cards.js';
 export * from './layout.js';
 export * from './detect.js';

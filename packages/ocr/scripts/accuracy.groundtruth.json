@@ -1,0 +1,265 @@
+{
+  "_README": "AI 目視で作った正解ラベル（[[ocr-accuracy-verification]] の規律で作成）。全体精度検証ハーネス accuracy.ts が参照。金額は BB 換算・小数1桁。seat id は画面席 TL/TC/TR/BR/BC/BL。occupied 席のみ stack/bet を採点。expect.ok=true は有効プリフロップ（solver 入力可能）, false は対象外（棄却が正解）。画像は local-fixtures/ に置く（gitignore）。ラベル本体はコミットして仕様として残す。",
+  "frames": {
+    "Screenshot_20260901-142820.png": {
+      "note": "6-max chips, hero SB, UTG fold, root=6-way",
+      "displayMode": "chips", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2576, "pot": 3.045, "heroHand": "A5o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "fold", "stack": 16.17, "bet": 0 },
+        "TC": { "occ": "occupied", "action": "none", "stack": 13.31, "bet": 0 },
+        "TR": { "occ": "occupied", "action": "none", "stack": 34.43, "bet": 0 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 37.79, "bet": 0, "button": true },
+        "BC": { "occ": "occupied", "action": "none", "stack": 20.44, "bet": 0.5, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 11.19, "bet": 1 }
+      },
+      "expect": { "ok": true, "heroPos": "SB", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-142903.png": {
+      "note": "6-max chips, hero HJ",
+      "displayMode": "chips", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2576, "pot": 3.045, "heroHand": "82o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 13.89, "bet": 0, "button": true },
+        "TC": { "occ": "occupied", "action": "none", "stack": 11.03, "bet": 0.5 },
+        "TR": { "occ": "occupied", "action": "none", "stack": 35.70, "bet": 1 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 37.02, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 22.71, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 12.96, "bet": 0 }
+      },
+      "expect": { "ok": true, "heroPos": "HJ", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-142909.png": {
+      "note": "6-max chips, hero UTG (hero=T9o read 100%)",
+      "displayMode": "chips", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2576, "pot": 3.045, "heroHand": "T9o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 11.63, "bet": 0 },
+        "TC": { "occ": "occupied", "action": "none", "stack": 10.78, "bet": 0, "button": true },
+        "TR": { "occ": "occupied", "action": "none", "stack": 39.99, "bet": 0.5 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 35.76, "bet": 1 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 22.46, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 12.70, "bet": 0 }
+      },
+      "expect": { "ok": true, "heroPos": "UTG", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-143020.png": {
+      "note": "6-max chips, hero BU",
+      "displayMode": "chips", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 3.0, "heroHand": "52s",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 10.77, "bet": 1 },
+        "TC": { "occ": "occupied", "action": "none", "stack": 26.66, "bet": 0 },
+        "TR": { "occ": "occupied", "action": "none", "stack": 29.39, "bet": 0 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 24.07, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 10.35, "bet": 0, "hero": true, "button": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 8.26, "bet": 0.5 }
+      },
+      "expect": { "ok": true, "heroPos": "BU", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-142936.png": {
+      "note": "6-max BB建て, hero BU (hero AQs 誤読 QJs)",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2576, "pot": 3.0, "heroHand": "AQs",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 12.9, "bet": 1 },
+        "TC": { "occ": "occupied", "action": "none", "stack": 13.0, "bet": 0 },
+        "TR": { "occ": "occupied", "action": "none", "stack": 39.2, "bet": 0 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 34.5, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 20.2, "bet": 0, "hero": true, "button": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 13.5, "bet": 0.5 }
+      },
+      "expect": { "ok": true, "heroPos": "BU", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-142947.png": {
+      "note": "6-max BB建て, hero CO (hero 32o 誤読 53o)",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2576, "pot": 3.0, "heroHand": "32o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 12.2, "bet": 0.5 },
+        "TC": { "occ": "occupied", "action": "none", "stack": 27.9, "bet": 1 },
+        "TR": { "occ": "occupied", "action": "none", "stack": 39.0, "bet": 0 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 34.2, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 6.9, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 13.2, "bet": 0, "button": true }
+      },
+      "expect": { "ok": true, "heroPos": "CO", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-142955.png": {
+      "note": "6-max BB建て 400/800, hero HJ (hero 32o 誤読 53o)",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 3.0, "heroHand": "32o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 9.8, "bet": 0, "button": true },
+        "TC": { "occ": "occupied", "action": "none", "stack": 27.7, "bet": 0.5 },
+        "TR": { "occ": "occupied", "action": "none", "stack": 30.9, "bet": 1 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 28.0, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 5.4, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 7.8, "bet": 0 }
+      },
+      "expect": { "ok": true, "heroPos": "HJ", "playersLeft": 6 }
+    },
+    "Screenshot_20260901-143002.png": {
+      "note": "6-max BB建て 400/800, hero UTG (hero K4o 誤読 T4o, pot 3→44 誤読)",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 3.0, "heroHand": "K4o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 8.5, "bet": 0 },
+        "TC": { "occ": "occupied", "action": "none", "stack": 27.4, "bet": 0, "button": true },
+        "TR": { "occ": "occupied", "action": "none", "stack": 30.1, "bet": 0.5 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 30.7, "bet": 1 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 5.2, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 7.5, "bet": 0 }
+      },
+      "expect": { "ok": true, "heroPos": "UTG", "playersLeft": 6 }
+    },
+    "Screenshot_20260902-123636.png": {
+      "note": "2p HU BB建て, hero BB, SB(=BTN) allin. 停止中オーバーレイあり",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 7.4, "heroHand": "QJs",
+      "seats": {
+        "TL": { "occ": "empty" },
+        "TC": { "occ": "occupied", "action": "allin", "stack": 0, "bet": 5.9, "button": true },
+        "TR": { "occ": "empty" },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 17, "bet": 1, "hero": true },
+        "BL": { "occ": "empty" }
+      },
+      "expect": { "ok": true, "heroPos": "BB", "playersLeft": 2 }
+    },
+    "Screenshot_20260902-115309.png": {
+      "note": "3p BB建て, hero SB, BU(=BTN) allin",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 11.8, "heroHand": "99",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 22, "bet": 1 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "allin", "stack": 0, "bet": 9.6, "button": true },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 21.1, "bet": 0.5, "hero": true },
+        "BL": { "occ": "empty" }
+      },
+      "expect": { "ok": true, "heroPos": "SB", "playersLeft": 3 }
+    },
+    "Screenshot_20260902-114732.png": {
+      "note": "4p BB建て 280/560, hero CO first-in unopened",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 2.5, "heroHand": "T6s",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 72.2, "bet": 0.5 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "none", "stack": 45.9, "bet": 1 },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 27.5, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 12.7, "bet": 0, "button": true }
+      },
+      "expect": { "ok": true, "heroPos": "CO", "playersLeft": 4 }
+    },
+    "Screenshot_20260902-114437.png": {
+      "note": "5p BB建て 200/400, hero SB, UTG/CO/BU fold to hero",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 2.8, "heroHand": "T4o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "fold", "stack": 71.3, "bet": 0 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "fold", "stack": 92.2, "bet": 0 },
+        "BR": { "occ": "occupied", "action": "fold", "stack": 34.9, "bet": 0, "button": true },
+        "BC": { "occ": "occupied", "action": "none", "stack": 15.1, "bet": 0.5, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 8.7, "bet": 1 }
+      },
+      "expect": { "ok": true, "heroPos": "SB", "playersLeft": 5 }
+    },
+    "Screenshot_20260902-124600.png": {
+      "note": "2p HU BB建て, hero SB(=BTN) first-in 未オープン＝有効なオープン局面。OCR は displayMode 誤判定で false-reject する既知バグ",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2564, "pot": 2.0, "heroHand": "K5s",
+      "seats": {
+        "TL": { "occ": "empty" },
+        "TC": { "occ": "occupied", "action": "none", "stack": 29.5, "bet": 1 },
+        "TR": { "occ": "empty" },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 19.7, "bet": 0.5, "hero": true, "button": true },
+        "BL": { "occ": "empty" }
+      },
+      "expect": { "ok": true, "heroPos": "SB", "playersLeft": 2 }
+    },
+    "Screenshot_20260902-114544.png": {
+      "note": "5p BB建て 200/400, hero CO first-in (UTG fold)。既知: BL stack 29.4→19.4 低conf",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 2.8, "heroHand": "T3s",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 64.3, "bet": 0.5 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "none", "stack": 79.5, "bet": 1 },
+        "BR": { "occ": "occupied", "action": "fold", "stack": 34.4, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 14.6, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 29.4, "bet": 0, "button": true }
+      },
+      "expect": { "ok": true, "heroPos": "CO", "playersLeft": 5 }
+    },
+    "Screenshot_20260902-115329.png": {
+      "note": "2p HU BB建て, hero BB, SB(=BTN)手番中・未レイズ＝判断未確定→対象外棄却が正",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 2.0, "heroHand": "64o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 0.7, "bet": 0.5, "button": true },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "empty" },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 52.2, "bet": 1, "hero": true },
+        "BL": { "occ": "empty" }
+      },
+      "expect": { "ok": false, "reasonHint": "unraised-bb/walk" }
+    },
+    "Screenshot_20260902-115034.png": {
+      "note": "3p BB建て 390/780, hero BB, BU limp(call)・SB fold→対象外棄却が正",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2564, "pot": 3.3, "heroHand": "98o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "call", "stack": 64.4, "bet": 1, "button": true },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "fold", "stack": 32.2, "bet": 0.5 },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 15.6, "bet": 1, "hero": true },
+        "BL": { "occ": "empty" }
+      },
+      "expect": { "ok": false, "reasonHint": "limp" }
+    },
+    "Screenshot_20260902-114717.png": {
+      "note": "4p BB建て 280/560, hero BU, UTG raise→対象外棄却が正",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 5.5, "heroHand": "QJs",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 73, "bet": 1 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "raise", "stack": 52.7, "bet": 3 },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 8.6, "bet": 0, "hero": true, "button": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 21, "bet": 0.5 }
+      },
+      "expect": { "ok": false, "reasonHint": "raise" }
+    },
+    "Screenshot_20260902-114522.png": {
+      "note": "5p BB建て 200/400, hero BU, UTG raise・CO fold→対象外棄却が正",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 5.8, "heroHand": "K7o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 70.1, "bet": 1 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "raise", "stack": 89, "bet": 3 },
+        "BR": { "occ": "occupied", "action": "fold", "stack": 34.7, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 14.9, "bet": 0, "hero": true, "button": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 10.7, "bet": 0.5 }
+      },
+      "expect": { "ok": false, "reasonHint": "raise" }
+    },
+    "Screenshot_20260902-114640.png": {
+      "note": "5p BB建て 200/400, hero BB, CO raise・SB call→対象外棄却が正。既知: TL bet 3→53(Class C), BL(fold) occ→empty 誤読(Class D)",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 8.3, "heroHand": "J4o",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "raise", "stack": 63.5, "bet": 3 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "fold", "stack": 78.5, "bet": 0, "button": true },
+        "BR": { "occ": "occupied", "action": "call", "stack": 29.9, "bet": 3 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 13.1, "bet": 1, "hero": true },
+        "BL": { "occ": "occupied", "action": "fold", "stack": 31.7, "bet": 0 }
+      },
+      "expect": { "ok": false, "reasonHint": "raise+call" }
+    },
+    "Screenshot_20260902-124738.png": {
+      "note": "2p HU BB建て 390/780, hero BB, SB(=BTN) limp(call to 1BB)→対象外棄却が正。既知: displayMode 誤判定(bb→chips)で stack 誤読",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2564, "pot": 2.5, "heroHand": "K3o",
+      "seats": {
+        "TL": { "occ": "empty" },
+        "TC": { "occ": "occupied", "action": "call", "stack": 24.8, "bet": 1, "button": true },
+        "TR": { "occ": "empty" },
+        "BR": { "occ": "empty" },
+        "BC": { "occ": "occupied", "action": "none", "stack": 24, "bet": 1, "hero": true },
+        "BL": { "occ": "empty" }
+      },
+      "expect": { "ok": false, "reasonHint": "limp" }
+    }
+  }
+}

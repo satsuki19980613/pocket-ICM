@@ -12,7 +12,7 @@
  */
 
 import {
-  extractRawReads,
+  extractRawReadsAuto,
   runOcrPipeline,
   CHIPS_6MAX,
   type ExtractTemplates,
@@ -42,7 +42,9 @@ export function ocrPrefillFromRgba(
   templates: ExtractTemplates,
   opts: ExtractOptions = {},
 ): OcrPrefillResult {
-  const reads = extractRawReads(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts });
+  // コンテンツ矩形を自動検出→較正解像度へ拡大してから抽出（多機種対応）。
+  // Android 2730×1260 は全画面判定＝恒等で従来どおり。低解像度スマホは内寄せ/縮小を吸収。
+  const { reads } = extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts });
   const res = runOcrPipeline(reads);
   if (!res.ok || !res.state) {
     return { ok: false, issues: res.issues, lowConfidenceFields: res.lowConfidenceFields };

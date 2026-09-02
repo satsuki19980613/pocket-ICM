@@ -152,7 +152,7 @@ export function App(): JSX.Element {
     <div className="app">
       <header className="hdr">
         <h1>Black Ops ICM</h1>
-        <span className="tag">Phase 3-1 · 手入力ICM</span>
+        <span className="tag">Phase 3-2 · ICM 押し引き</span>
         <button
           type="button"
           className="navrec"

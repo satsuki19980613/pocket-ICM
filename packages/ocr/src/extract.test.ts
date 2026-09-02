@@ -46,3 +46,26 @@ describe('extractRawReads (smoke)', () => {
     expect(reads.seats.some((s) => s.isButton)).toBe(false);
   });
 });
+
+describe('CHIPS_6MAX betBb（BB表示専用ベット領域）', () => {
+  const byId = Object.fromEntries(CHIPS_6MAX.seats.map((s) => [s.screen, s]));
+
+  it('先頭 "0." が左端で切れる TC/TR/BC/BL のみ betBb を持つ（TL/BR は bet にフォールバック）', () => {
+    expect(byId['TC']!.betBb).toBeDefined();
+    expect(byId['TR']!.betBb).toBeDefined();
+    expect(byId['BC']!.betBb).toBeDefined();
+    expect(byId['BL']!.betBb).toBeDefined();
+    expect(byId['TL']!.betBb).toBeUndefined();
+    expect(byId['BR']!.betBb).toBeUndefined();
+  });
+
+  it('betBb は bet の左だけを広げる（右端・上下は不変）', () => {
+    for (const id of ['TC', 'TR', 'BC', 'BL'] as const) {
+      const { bet, betBb } = byId[id]!;
+      expect(betBb!.x).toBeLessThan(bet.x); // 左へ拡張
+      expect(betBb!.x + betBb!.w).toBeCloseTo(bet.x + bet.w, 6); // 右端は不変
+      expect(betBb!.y).toBe(bet.y);
+      expect(betBb!.h).toBe(bet.h);
+    }
+  });
+});

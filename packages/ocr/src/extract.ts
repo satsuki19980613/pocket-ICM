@@ -114,7 +114,9 @@ export function extractRawReads(
       ? { value: 'occupied', conf: stack.conf > 0 ? 0.9 : 0.5 }
       : { value: 'empty', conf: 0.8 };
 
-    const betRaw = readTable(px(img, s.bet), mode === 'chips' ? opts.betMinCh : undefined);
+    // BB 表示は先頭 "0." が左端で切れる席（BC/BL/TC/TR）向けに betBb（左に余白）を使う。
+    const betRect = px(img, mode === 'bb' ? s.betBb ?? s.bet : s.bet);
+    const betRaw = readTable(betRect, mode === 'chips' ? opts.betMinCh : undefined);
     const bet: Read<number> = Number.isFinite(betRaw.value) ? betRaw : { value: 0, conf: 0.6 };
 
     let action: Read<SeatAction>;

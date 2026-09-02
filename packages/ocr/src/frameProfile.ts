@@ -22,8 +22,14 @@ export interface SeatProfile {
   readonly isHero: boolean;
   /** スタック数字領域。 */
   readonly stack: FracRect;
-  /** 席前のベット額領域（チップ絵の右の数字）。 */
+  /** 席前のベット額領域（チップ絵の右の数字）。chips 表示（整数チップ額 "330" 等）用にタイト。 */
   readonly bet: FracRect;
+  /**
+   * BB 表示専用のベット領域（省略時は bet にフォールバック）。BB 表示は "0.5 BB" のように
+   * 先頭が "0." で始まり、chips 用タイト領域だと先頭 "0" が左端で切れて "1" に誤読される
+   * （0.5→1.5）。数字の左に少し余白を足した領域を使う。TL/BR は数字が左端で切れないので不要。
+   */
+  readonly betBb?: FracRect;
   /** カード裏領域（active/folded 判定。hero は表向きなので使わない）。 */
   readonly card: FracRect;
   /** アクションタグ探索帯（アバター上の紫プレート）。 */
@@ -81,6 +87,7 @@ export const CHIPS_6MAX: FrameProfile = {
     {
       screen: 'TC', isHero: false,
       stack: R(0.491, 0.151, 0.061, 0.041), bet: R(0.487, 0.243, 0.08, 0.044),
+      betBb: R(0.479, 0.243, 0.088, 0.044),
       // actionZone: TC タグは頭上の紫プレート（frac x0.449 y0.013 w0.060 h0.055）。
       // 旧 y0.03/h0.065 は下のワイド装飾ネームプレートを併合し 367px 箱になっていた。
       // タグだけを含む短い帯に（y0 起点, 高さ 0.075, ネームプレートは y0.10+ なので除外）。
@@ -90,6 +97,7 @@ export const CHIPS_6MAX: FrameProfile = {
     {
       screen: 'TR', isHero: false,
       stack: R(0.766, 0.249, 0.085, 0.04), bet: R(0.665, 0.335, 0.066, 0.048),
+      betBb: R(0.657, 0.335, 0.074, 0.048),
       card: R(0.775, 0.13, 0.075, 0.085), actionZone: R(0.66, 0.09, 0.17, 0.065),
       buttonAnchor: P(0.692, 0.276),
     },
@@ -104,12 +112,14 @@ export const CHIPS_6MAX: FrameProfile = {
     {
       screen: 'BC', isHero: true,
       stack: R(0.575, 0.715, 0.115, 0.045), bet: R(0.516, 0.592, 0.066, 0.05),
+      betBb: R(0.508, 0.592, 0.074, 0.05),
       card: R(0.425, 0.655, 0.105, 0.150), actionZone: R(0.35, 0.545, 0.22, 0.06),
       buttonAnchor: P(0.603, 0.623),
     },
     {
       screen: 'BL', isHero: false,
       stack: R(0.191, 0.594, 0.065, 0.036), bet: R(0.303, 0.466, 0.066, 0.05),
+      betBb: R(0.295, 0.466, 0.074, 0.05),
       card: R(0.21, 0.52, 0.075, 0.08), actionZone: R(0.09, 0.51, 0.17, 0.06),
       buttonAnchor: P(0.285, 0.549), stackMinCh: 168,
     },

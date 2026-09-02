@@ -1,0 +1,11 @@
+{
+  // Cloudflare Workers（静的アセット配信）設定。
+  // このアプリは端末ローカル完結の静的 PWA なので、Worker スクリプト（main）は持たず
+  // ビルド成果物 packages/app/dist をそのまま配信する（assets-only Worker）。
+  // Workers Builds のデプロイコマンド `npx wrangler deploy` がこの設定を読む。
+  "name": "pocket-icm",
+  "compatibility_date": "2024-11-01",
+  "assets": {
+    "directory": "./packages/app/dist"
+  }
+}

@@ -1,7 +1,7 @@
 /** hero手札ランクテンプレ（多例, プレイ画面）。左右の席で札幾何が違うので両位置・複数フレームから収集。 */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
-import { findCardRects, cornerOf } from '../src/detect.js';
+import { findCardRects, cornerOf, largestCardRects } from '../src/detect.js';
 import { grayFromRgba } from '../src/numberField.js';
 import { resize } from '../src/raster.js';
 import type { Rgba } from '../src/color.js';
@@ -25,8 +25,11 @@ const SPECS:[string,0|1,string][]=[
  ['114922',0,'6'],['114951',0,'6'],['124645',1,'6'],
  ['114832',1,'Q'],['114717',0,'Q'],['123731',1,'Q'],
  ['123636',1,'J'],['114640',0,'J'],['114717',1,'J'],
+ // 追加被覆（Phase 2 accuracy ②）: 右スロット5♠・左10♣・左9・左J が低信頼/誤読だった実物を多例に追加。
+ ['115004',1,'5'],['123717',1,'5'],['115018',1,'5'],
+ ['142909',0,'10'],['143032',0,'9'],['101510',0,'J'],
 ];
-function heroCards(ts:string){const img=decodePng(readFileSync(file(ts)));const rgba=toRgba(img);const rect=px(img,HERO);const g=grayFromRgba(rgba,rect);const rects=findCardRects(g,{threshold:190,minAreaFrac:0.02,closeRadius:1}).map(r=>({x:rect.x+r.x,y:rect.y+r.y,w:r.w,h:r.h}));return{rgba,rects};}
+function heroCards(ts:string){const img=decodePng(readFileSync(file(ts)));const rgba=toRgba(img);const rect=px(img,HERO);const g=grayFromRgba(rgba,rect);const found=findCardRects(g,{threshold:190,minAreaFrac:0.02,closeRadius:1}).map(r=>({x:rect.x+r.x,y:rect.y+r.y,w:r.w,h:r.h}));return{rgba,rects:largestCardRects(found,2)};}
 const templates:{label:string;w:number;h:number;data:number[]}[]=[];
 for(const [ts,idx,rank] of SPECS){const {rgba,rects}=heroCards(ts);if(rects.length<2){console.log(`XX ${ts} ${rank}: cards=${rects.length}`);continue;}const c=rects[idx]!;const rg=resize(grayFromRgba(rgba,cornerOf(c,0.5,0.42)),CW,CH);templates.push({label:rank,w:rg.w,h:rg.h,data:Array.from(rg.data)});}
 writeFileSync(`${DIR}/ranks_hero.json`,JSON.stringify({source:'play hero cards (multi-exemplar)',templates}));

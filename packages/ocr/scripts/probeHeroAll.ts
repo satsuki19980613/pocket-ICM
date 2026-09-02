@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
-import { findCardRects } from '../src/detect.js';
+import { findCardRects, largestCardRects } from '../src/detect.js';
 import { recognizeCardColor } from '../src/cards.js';
 import { grayFromRgba } from '../src/numberField.js';
 import type { Template } from '../src/match.js';
@@ -23,7 +23,7 @@ let ok=0,tot=0,hOk=0,hTot=0;
 for(const [ts,lr,rr,kind] of M){
   const img=decodePng(readFileSync(file(ts)));const rgba=toRgba(img);const rect=px(img,HERO);
   const g=grayFromRgba(rgba,rect);
-  const rects=findCardRects(g,{threshold:190,minAreaFrac:0.02,closeRadius:1}).map(r=>({x:rect.x+r.x,y:rect.y+r.y,w:r.w,h:r.h}));
+  const found=findCardRects(g,{threshold:190,minAreaFrac:0.02,closeRadius:1}).map(r=>({x:rect.x+r.x,y:rect.y+r.y,w:r.w,h:r.h}));const rects=largestCardRects(found,2);
   if(rects.length<2){console.log(`XX ${ts} cards=${rects.length}`);tot+=2;if(kind==='H')hTot+=2;continue;}
   const c0=recognizeCardColor(rgba,rects[0]!,T), c1=recognizeCardColor(rgba,rects[1]!,T);
   const g0=c0.value.slice(0,-1), g1=c1.value.slice(0,-1);

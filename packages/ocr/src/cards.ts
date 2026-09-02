@@ -64,13 +64,19 @@ export function recognizeCard(region: Gray, templates: readonly Template[]): Rea
 // --- 色対応のカード認識（確定アーキテクチャ: ランク=NCC, スート=4 色）---
 // accuracy 検証（独立キャプチャ 144216, 絵札含む）で rank/suit/フルカードとも 16/16。
 
-/** ランク角（左上）のカード幅・高さ比。NCC 用。 */
-const RANK_CORNER: [number, number] = [0.5, 0.42];
+/**
+ * ランク角のカード幅・高さ比。**glyph バンドを必ず内包するよう広め**に取り（左右席で
+ * ランクの位置/スケールが違う＝右札は大きく下寄り）、bandTight でグリフを外接矩形に
+ * タイト化してから正規化する（固定率クロップの位置/スケール感受性を除去）。
+ */
+const RANK_CORNER: [number, number] = [0.6, 0.55];
 /** スート色を取る領域（顔絵を避け、左上のランク文字を狭く）。 */
 const SUIT_CORNER: [number, number] = [0.42, 0.3];
 /** 正規化した角のサイズ（テンプレと揃える）。 */
 const CANON_W = 30;
 const CANON_H = 38;
+/** ランクグリフの二値化しきい値（暗いインク < THR）。 */
+const RANK_INK_THR = 140;
 
 function grayCrop(img: Rgba, rect: Rect): Gray {
   const x0 = Math.max(0, rect.x);
@@ -88,6 +94,66 @@ function grayCrop(img: Rgba, rect: Rect): Gray {
   return { w, h, data };
 }
 
+interface InkComp { x0: number; y0: number; x1: number; y1: number; a: number; }
+/** 暗インクの連結成分（4 近傍）。 */
+function inkComponents(bin: Uint8Array, w: number, h: number): InkComp[] {
+  const label = new Int32Array(w * h).fill(-1);
+  const boxes: InkComp[] = [];
+  const st: number[] = [];
+  for (let i = 0; i < w * h; i++) {
+    if (!bin[i] || label[i] !== -1) continue;
+    const id = boxes.length;
+    boxes.push({ x0: w, y0: h, x1: -1, y1: -1, a: 0 });
+    st.length = 0; st.push(i); label[i] = id;
+    while (st.length) {
+      const p = st.pop()!;
+      const px = p % w, py = (p / w) | 0;
+      const b = boxes[id]!; b.a++;
+      if (px < b.x0) b.x0 = px; if (px > b.x1) b.x1 = px;
+      if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
+      if (px > 0 && bin[p - 1] && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
+      if (px < w - 1 && bin[p + 1] && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
+      if (py > 0 && bin[p - w] && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }
+      if (py < h - 1 && bin[p + w] && label[p + w] === -1) { label[p + w] = id; st.push(p + w); }
+    }
+  }
+  return boxes;
+}
+
+/**
+ * ランク角グレースケール → グリフ外接矩形にタイト化して canonical(30×38)へ。
+ * ランクは角の**上段バンド**に横並びで座す（"10" は 2 成分）。suit pip は下段の別バンド。
+ * 最上の有意成分でバンドを決め、y が重なる成分だけまとめて bbox を取る → suit pip や
+ * 影を除外しつつ多桁ランクを保持。位置/スケール差を吸収し cross-session に強い。
+ * 有意成分が無ければ角全体を resize（合成の checkerboard 等のフォールバック）。
+ */
+export function rankGlyph(img: Rgba, card: Rect): Gray {
+  const [rw, rh] = RANK_CORNER;
+  const g = grayCrop(img, cornerOf(card, rw, rh));
+  const { w, h, data } = g;
+  if (w === 0 || h === 0) return resize(g, CANON_W, CANON_H);
+  const bin = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) bin[i] = data[i]! < RANK_INK_THR ? 1 : 0;
+  const minA = Math.max(8, 0.01 * w * h);
+  const comps = inkComponents(bin, w, h).filter(
+    (c) => c.a >= minA && c.x1 - c.x0 + 1 < 0.9 * w && c.y1 - c.y0 + 1 < 0.95 * h,
+  );
+  if (comps.length === 0) return resize(g, CANON_W, CANON_H);
+  const top = [...comps].sort((a, b) => a.y0 - b.y0)[0]!;
+  const cy = (top.y0 + top.y1) / 2;
+  const band = top.y1 - top.y0 + 1;
+  const grp = comps.filter((c) => {
+    const c2 = (c.y0 + c.y1) / 2;
+    return Math.abs(c2 - cy) <= 0.6 * band || (c.y0 <= top.y1 && c.y1 >= top.y0);
+  });
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (const c of grp) { if (c.x0 < x0) x0 = c.x0; if (c.y0 < y0) y0 = c.y0; if (c.x1 > x1) x1 = c.x1; if (c.y1 > y1) y1 = c.y1; }
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+  const cr: Gray = { w: cw, h: ch, data: new Uint8Array(cw * ch) };
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) cr.data[y * cw + x] = data[(y0 + y) * w + (x0 + x)]!;
+  return resize(cr, CANON_W, CANON_H);
+}
+
 /** 描画ラベル "10" は core の 'T' に対応させる。 */
 function normalizeRank(label: string): string {
   return label === '10' ? 'T' : label;
@@ -96,16 +162,14 @@ function normalizeRank(label: string): string {
 /**
  * カード矩形（検出済み or プレイ画面の固定座標）→ カードコード（例 "Jh"）＋信頼度。
  * ランクはグレースケール NCC（rankTemplates の label はランク: "2".."9","10","J","Q","K","A"）、
- * スートは 4 色分類。card は画像内のカード全体の矩形。
+ * スートは 4 色分類。card は画像内のカード全体の矩形。テンプレも rankGlyph で生成する（単一の真実）。
  */
 export function recognizeCardColor(
   img: Rgba,
   card: Rect,
   rankTemplates: readonly Template[],
 ): Read<string> {
-  const [rw, rh] = RANK_CORNER;
-  const rankGray = resize(grayCrop(img, cornerOf(card, rw, rh)), CANON_W, CANON_H);
-  const m = bestMatch(rankGray, rankTemplates);
+  const m = bestMatch(rankGlyph(img, card), rankTemplates);
   const [sw, sh] = SUIT_CORNER;
   const suit = recognizeSuit(img, cornerOf(card, sw, sh));
   const rank = normalizeRank(m.label);

@@ -1,16 +1,16 @@
 /** hero手札ランクテンプレ（多例, プレイ画面）。左右の席で札幾何が違うので両位置・複数フレームから収集。 */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
-import { findCardRects, cornerOf, largestCardRects } from '../src/detect.js';
+import { findCardRects, largestCardRects } from '../src/detect.js';
 import { grayFromRgba } from '../src/numberField.js';
-import { resize } from '../src/raster.js';
+import { rankGlyph } from '../src/cards.js';
 import type { Rgba } from '../src/color.js';
 import type { Rect } from '../src/types.js';
 const DIR='local-fixtures';
 function file(ts:string){for(const p of [`${DIR}/Screenshot_20260901-${ts}.png`,`${DIR}/Screenshot_20260902-${ts}.png`])if(existsSync(p))return p;throw new Error(ts);}
 const toRgba=(r:Raster):Rgba=>({w:r.width,h:r.height,data:r.rgba});
 const px=(r:Raster,fr:readonly number[]):Rect=>({x:Math.round(fr[0]!*r.width),y:Math.round(fr[1]!*r.height),w:Math.round(fr[2]!*r.width),h:Math.round(fr[3]!*r.height)});
-const HERO=[0.425,0.655,0.105,0.150] as const; const CW=30,CH=38;
+const HERO=[0.425,0.655,0.105,0.150] as const;
 const SPECS:[string,0|1,string][]=[
  ['142820',0,'5'],['114808',0,'5'],['124600',0,'5'],
  ['142820',1,'A'],['123717',0,'A'],['124723',0,'A'],
@@ -31,7 +31,7 @@ const SPECS:[string,0|1,string][]=[
 ];
 function heroCards(ts:string){const img=decodePng(readFileSync(file(ts)));const rgba=toRgba(img);const rect=px(img,HERO);const g=grayFromRgba(rgba,rect);const found=findCardRects(g,{threshold:190,minAreaFrac:0.02,closeRadius:1}).map(r=>({x:rect.x+r.x,y:rect.y+r.y,w:r.w,h:r.h}));return{rgba,rects:largestCardRects(found,2)};}
 const templates:{label:string;w:number;h:number;data:number[]}[]=[];
-for(const [ts,idx,rank] of SPECS){const {rgba,rects}=heroCards(ts);if(rects.length<2){console.log(`XX ${ts} ${rank}: cards=${rects.length}`);continue;}const c=rects[idx]!;const rg=resize(grayFromRgba(rgba,cornerOf(c,0.5,0.42)),CW,CH);templates.push({label:rank,w:rg.w,h:rg.h,data:Array.from(rg.data)});}
+for(const [ts,idx,rank] of SPECS){const {rgba,rects}=heroCards(ts);if(rects.length<2){console.log(`XX ${ts} ${rank}: cards=${rects.length}`);continue;}const rg=rankGlyph(rgba,rects[idx]!);templates.push({label:rank,w:rg.w,h:rg.h,data:Array.from(rg.data)});}
 writeFileSync(`${DIR}/ranks_hero.json`,JSON.stringify({source:'play hero cards (multi-exemplar)',templates}));
 const byR:Record<string,number>={};for(const t of templates)byR[t.label]=(byR[t.label]||0)+1;
 console.log(`wrote ${templates.length} exemplars:`,Object.entries(byR).map(([k,v])=>`${k}:${v}`).join(' '));

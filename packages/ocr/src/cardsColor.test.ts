@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Rect } from './types.js';
 import type { Rgba } from './color.js';
-import { resize } from './raster.js';
 import { cornerOf } from './detect.js';
 import type { Template } from './match.js';
-import { recognizeCardColor, recognizeHeroHandColor } from './cards.js';
+import { recognizeCardColor, recognizeHeroHandColor, rankGlyph } from './cards.js';
 
 /** 白地のカード画像に、左上ランク角へ指定色のパターンを描く合成カード。 */
 function synthCard(
@@ -28,21 +27,16 @@ function synthCard(
   return { w, h, data };
 }
 
-const CANON_W = 30, CANON_H = 38;
+/** 認識と同じ rankGlyph で正規化してテンプレを作る（単一の真実）。 */
 function rankTemplateFrom(img: Rgba, card: Rect, label: string): Template {
-  const c = cornerOf(card, 0.5, 0.42);
-  const g = { w: c.w, h: c.h, data: new Uint8Array(c.w * c.h) };
-  for (let y = 0; y < c.h; y++)
-    for (let x = 0; x < c.w; x++) {
-      const s = ((c.y + y) * img.w + (c.x + x)) * 4;
-      g.data[y * c.w + x] = (img.data[s]! * 77 + img.data[s + 1]! * 150 + img.data[s + 2]! * 29) >> 8;
-    }
-  return { label, img: resize(g, CANON_W, CANON_H) };
+  return { label, img: rankGlyph(img, card) };
 }
 
-// 2 つの異なるパターン（NCC で区別できるよう十分に異なる）
-const patA = (x: number, y: number) => (x + y) % 2 === 0 && x < 8;
-const patB = (x: number, y: number) => y > 6 && x > 4;
+// 2 つの異なるパターン。rankGlyph=bandTight は暗成分の外接矩形にタイト化する（内部の明色は残す）
+// ので、正規化後も質感が残るよう **内部に穴のある単一連結成分** にする（リング vs プラス）。
+const inBox = (x: number, y: number) => x < 20 && y < 26;
+const patA = (x: number, y: number) => inBox(x, y) && (x < 3 || x >= 17 || y < 3 || y >= 23); // リング（枠）
+const patB = (x: number, y: number) => inBox(x, y) && ((x >= 8 && x < 12) || (y >= 11 && y < 15)); // プラス（十字）
 
 describe('recognizeCardColor', () => {
   it('青インクのパターン → ランク＋ダイヤ', () => {

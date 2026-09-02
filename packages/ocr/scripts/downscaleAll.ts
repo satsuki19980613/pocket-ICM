@@ -33,7 +33,7 @@ for (const f of readdirSync(indir)) {
   if (!f.toLowerCase().endsWith('.png')) continue;
   const img = decodePng(readFileSync(join(indir, f)));
   const out = downscale(img, scale);
-  const short = f.replace(/^Screenshot_20260901-/, '').replace(/\.png$/, '');
+  const short = f.replace(/^Screenshot_\d{8}-/, '').replace(/\.png$/, '');
   writeFileSync(join(outdir, `${short}.png`), encodePng(out));
   console.log(`${short}.png ${out.width}x${out.height}`);
 }

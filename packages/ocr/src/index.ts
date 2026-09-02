@@ -10,3 +10,4 @@ export * from './digits.js';
 export * from './cards.js';
 export * from './layout.js';
 export * from './detect.js';
+export * from './color.js';

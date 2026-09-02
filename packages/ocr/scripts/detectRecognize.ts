@@ -12,6 +12,7 @@ import { decodePng, type Raster } from './pngCodec.js';
 import { findCardRects, cornerOf } from '../src/detect.js';
 import { resize } from '../src/raster.js';
 import { bestMatch, matchConfidence, type Template } from '../src/match.js';
+import { recognizeSuit } from '../src/color.js';
 import type { Gray, Rect } from '../src/types.js';
 
 const CW = 30, CH = 38; // 正規化した角のサイズ
@@ -53,14 +54,25 @@ if (mode === 'build') {
 } else {
   const tplRaw = JSON.parse(readFileSync(tplPath!, 'utf8')) as { templates: Record<string, { w: number; h: number; data: number[] }> };
   const templates: Template[] = Object.entries(tplRaw.templates).map(([label, g]) => ({ label, img: { w: g.w, h: g.h, data: Uint8Array.from(g.data) } }));
-  let correct = 0, tested = 0;
-  corners.forEach((c, i) => {
+  const rankOf = (code: string) => code.slice(0, -1);
+  const rankSet = new Set(templates.map((t) => rankOf(t.label)));
+  const x0z = Math.round(zx! * img.width), y0z = Math.round(zy! * img.height);
+  const rgbaImg = { w: img.width, h: img.height, data: img.rgba };
+  let rankOk = 0, cardOk = 0, tested = 0;
+  rects.forEach((r, i) => {
     const truth = labels[i] ?? '?';
+    const c = corners[i]!;
     const m = bestMatch(c, templates);
-    const inSet = templates.some((t) => t.label === truth);
-    const ok = m.label === truth;
-    if (inSet) { tested++; if (ok) correct++; }
-    console.log(`${inSet ? (ok ? 'OK ' : 'XX ') : '.. '} truth=${truth.padEnd(3)} ocr=${m.label.padEnd(3)} score=${m.score.toFixed(3)} margin=${m.margin.toFixed(3)} conf=${matchConfidence(m).toFixed(2)}${inSet ? '' : ' (テンプレ外)'}`);
+    const predRank = rankOf(m.label);
+    // スートは色（4 色デッキ）で決める
+    const corner = cornerOf(r);
+    const suit = recognizeSuit(rgbaImg, { x: x0z + corner.x, y: y0z + corner.y, w: corner.w, h: corner.h });
+    const predCard = predRank + suit.value;
+    const canTest = rankSet.has(rankOf(truth)); // rank テンプレが在るものだけ公平に判定
+    const rOk = predRank === rankOf(truth);
+    const cOk = predCard === truth;
+    if (canTest) { tested++; if (rOk) rankOk++; if (cOk) cardOk++; }
+    console.log(`${canTest ? (cOk ? 'OK ' : 'XX ') : '.. '} truth=${truth.padEnd(3)} rank=${predRank.padEnd(2)} suit=${suit.value} → ${predCard.padEnd(3)} (rankScore=${m.score.toFixed(3)} suitConf=${suit.conf.toFixed(2)})${canTest ? '' : ' (rankテンプレ外)'}`);
   });
-  console.log(`\n目視 vs OCR 一致（テンプレ内のみ）: ${correct}/${tested}`);
+  console.log(`\nrank 一致: ${rankOk}/${tested} | フルカード一致: ${cardOk}/${tested}`);
 }

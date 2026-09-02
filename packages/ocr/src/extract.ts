@@ -72,10 +72,15 @@ export function extractRawReads(
   const bbChips = Number.isFinite(blinds.bb.value) && blinds.bb.value > 0 ? blinds.bb.value : 1;
 
   // 表示モード解決: 明示指定 > letters による自動判定 > chips。
+  // hero スタックが最もクリーン（実画像 hero 101/101 で分離）なので **hero を先頭**に並べて
+  // 主判定に使う。HU(2人)では profile 順の先頭が相手席（TC の装飾ネームプレートで "BB" 接尾辞
+  // 検出が崩れる）になり bb→chips 誤判定していた（124600 が有効局面を false-reject する原因）。
+  // hero が読めない場合のみ残り席へフォールバック（stable sort で順序保持）。
+  const modeSeats = [...profile.seats].sort((a, b) => (b.isHero ? 1 : 0) - (a.isHero ? 1 : 0));
   const mode: DisplayMode =
     opts.displayMode ??
     (templates.letters
-      ? detectDisplayMode(img, profile.seats.map((s) => px(img, s.stack)), templates.digits, templates.letters)
+      ? detectDisplayMode(img, modeSeats.map((s) => px(img, s.stack)), templates.digits, templates.letters)
       : 'chips');
 
   // テーブル上の金額（stack/bet/pot）を BB 換算で読む。

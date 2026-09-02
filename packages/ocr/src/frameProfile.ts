@@ -81,7 +81,10 @@ export const CHIPS_6MAX: FrameProfile = {
     {
       screen: 'TC', isHero: false,
       stack: R(0.491, 0.151, 0.061, 0.041), bet: R(0.487, 0.243, 0.08, 0.044),
-      card: R(0.50, 0.09, 0.075, 0.085), actionZone: R(0.43, 0.03, 0.16, 0.065),
+      // actionZone: TC タグは頭上の紫プレート（frac x0.449 y0.013 w0.060 h0.055）。
+      // 旧 y0.03/h0.065 は下のワイド装飾ネームプレートを併合し 367px 箱になっていた。
+      // タグだけを含む短い帯に（y0 起点, 高さ 0.075, ネームプレートは y0.10+ なので除外）。
+      card: R(0.50, 0.09, 0.075, 0.085), actionZone: R(0.43, 0.0, 0.11, 0.075),
       buttonAnchor: P(0.569, 0.266),
     },
     {
@@ -93,7 +96,9 @@ export const CHIPS_6MAX: FrameProfile = {
     {
       screen: 'BR', isHero: false,
       stack: R(0.811, 0.601, 0.115, 0.04), bet: R(0.699, 0.47, 0.062, 0.05),
-      card: R(0.835, 0.49, 0.085, 0.085), actionZone: R(0.748, 0.435, 0.105, 0.058),
+      // actionZone: BR タグ frac x0.766 y0.460 w0.062 h0.048。旧 y0.435/h0.058 は
+      // タグ下部をクリップし h42 の歪んだ箱になっていた。y を下げ全高を含める。
+      card: R(0.835, 0.49, 0.085, 0.085), actionZone: R(0.75, 0.45, 0.10, 0.062),
       buttonAnchor: P(0.746, 0.549),
     },
     {

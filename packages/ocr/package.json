@@ -10,7 +10,8 @@
       "oshihiki-dist": "./dist/index.js",
       "types": "./src/index.ts",
       "default": "./src/index.ts"
-    }
+    },
+    "./assets/*": "./assets/*"
   },
   "dependencies": {
     "@oshihiki/core": "*",

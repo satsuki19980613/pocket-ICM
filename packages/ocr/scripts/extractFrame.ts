@@ -4,14 +4,14 @@ import { decodePng } from './pngCodec.js';
 import { extractRawReads, type ExtractTemplates } from '../src/extract.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
 import { runOcrPipeline } from '../src/pipeline.js';
-import type { Template } from '../src/match.js';
+import { templatesFromJson } from '../src/templates.js';
 import type { Rgba } from '../src/color.js';
 
 const DIR='local-fixtures';
-function load(path:string):Template[]{const raw=JSON.parse(readFileSync(path,'utf8')) as any;
-  const t=raw.templates; if(Array.isArray(t)) return t.map((g:any)=>({label:g.label,img:{w:g.w,h:g.h,data:Uint8Array.from(g.data)}}));
-  return Object.entries(t).map(([label,g]:any)=>({label,img:{w:g.w,h:g.h,data:Uint8Array.from(g.data)}}));}
-const templates:ExtractTemplates={digits:load(`${DIR}/digits.json`),ranks:load(`${DIR}/ranks_hero.json`),actions:load(`${DIR}/actions.json`),letters:load(`${DIR}/letters_bb.json`)};
+// テンプレは **同梱の確定版**（assets/）を読む＝アプリがバンドルするのと同じ物を e2e で検証する。
+const A='assets';
+const load=(path:string)=>templatesFromJson(JSON.parse(readFileSync(path,'utf8')));
+const templates:ExtractTemplates={digits:load(`${A}/digits.json`),ranks:load(`${A}/ranks_hero.json`),actions:load(`${A}/actions.json`),letters:load(`${A}/letters_bb.json`)};
 
 const frame=process.argv[2]??'Screenshot_20260901-142820.png';
 const img=decodePng(readFileSync(`${DIR}/${frame}`));

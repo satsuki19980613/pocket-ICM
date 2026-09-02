@@ -6,6 +6,7 @@ export * from './confidence.js';
 export * from './pipeline.js';
 export * from './raster.js';
 export * from './match.js';
+export * from './templates.js';
 export * from './digits.js';
 export * from './numberField.js';
 export * from './numberLayout.js';

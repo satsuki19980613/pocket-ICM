@@ -31,6 +31,8 @@ import { recognizeAction } from './actionTag.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { grayFromRgba } from './numberField.js';
 import { recognizeHeroHandColor } from './cards.js';
+import { mapProfile, detectContentRect, isFullFrame, type ContentRect } from './contentRect.js';
+import { normalizeToCanonical } from './resize.js';
 
 export interface ExtractTemplates {
   /** 数字 0-9 ＋ '/'（blinds 分割用）。 */
@@ -50,6 +52,11 @@ export interface ExtractOptions {
   readonly anteScheme?: AnteScheme;
   /** ベット読みの minCh（既定は numberField 既定, chips 表示のみ）。 */
   readonly betMinCh?: number;
+  /**
+   * コンテンツ矩形（プレイエリア）。機種差（iOS セーフエリア等）でゲーム描画が画面内の
+   * 部分矩形に収まる場合、profile 座標をこの矩形へ写像する。未指定なら全画面（Android 較正のまま）。
+   */
+  readonly contentRect?: ContentRect;
 }
 
 const px = (img: Rgba, f: FracRect): Rect => toPx(f, img.w, img.h);
@@ -62,10 +69,12 @@ const norm = (r: Read<number>, bb: number): Read<number> =>
  */
 export function extractRawReads(
   img: Rgba,
-  profile: FrameProfile,
+  profileIn: FrameProfile,
   templates: ExtractTemplates,
   opts: ExtractOptions = {},
 ): RawReads {
+  // コンテンツ矩形が指定されていれば profile をその矩形へ写像（機種差の吸収）。
+  const profile = opts.contentRect ? mapProfile(profileIn, opts.contentRect) : profileIn;
   const street = readStreetFromBoard(img, px(img, profile.board));
   // blinds / ante は BB 表示でもヘッダは常に chips。bb(chips)=正規化係数。
   const blinds = readBlinds(img, px(img, profile.blindsNum), templates.digits);
@@ -161,4 +170,29 @@ export function extractRawReads(
     seats,
     displayMode: mode,
   };
+}
+
+/**
+ * コンテンツ矩形を自動検出してから抽出する（多機種対応の入口）。
+ * Android 2730×1260 は全画面と判定され従来と同一。iOS セーフエリア等で内寄せされた
+ * 機種は検出した矩形へ写像して読む。検出された矩形も返す（デバッグ/確認用）。
+ */
+/**
+ * コンテンツ矩形を自動検出し、較正解像度(2730×1260)へ拡大してから抽出する（多機種対応の入口）。
+ * Android 2730×1260 は全画面と判定され従来と同一（正規化=恒等）。低解像度スマホは検出した矩形へ
+ * 切り出し拡大して読む。※低解像度の細かな数値（小数点・BB/chips 判別）の精度は解像度依存の
+ * 認識器較正（テンプレ再作成）が別途必要。検出した矩形も返す（デバッグ/確認用）。
+ */
+export function extractRawReadsAuto(
+  img: Rgba,
+  profile: FrameProfile,
+  templates: ExtractTemplates,
+  opts: ExtractOptions = {},
+): { reads: RawReads; contentRect: ContentRect } {
+  const canonW = 2730;
+  const canonH = Math.round(canonW / profile.aspect);
+  const contentRect = opts.contentRect ?? detectContentRect(img, profile, templates.digits);
+  const normalized = normalizeToCanonical(img, contentRect, canonW, canonH);
+  const reads = extractRawReads(normalized, profile, templates, { ...opts, contentRect: undefined });
+  return { reads, contentRect };
 }

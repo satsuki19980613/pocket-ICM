@@ -17,6 +17,8 @@ export * from './button.js';
 export * from './actionTag.js';
 export * from './cardState.js';
 export * from './frameProfile.js';
+export * from './contentRect.js';
+export * from './resize.js';
 export * from './extract.js';
 export * from './cards.js';
 export * from './layout.js';

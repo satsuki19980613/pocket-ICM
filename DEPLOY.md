@@ -6,27 +6,31 @@
 
 ---
 
-## Cloudflare Pages（推奨・非公開のままでOK）
+## Cloudflare（推奨・非公開のままでOK） ＝ 現在の配信先
+
+**実際にこの方法で配信済み → https://pocket-icm.wsk641.workers.dev**
+
+Cloudflare の Git 取り込みは「**Workers Builds**」フローに統合されている。静的アセット配信の
+設定 `wrangler.jsonc`（リポジトリ直下・`assets.directory=packages/app/dist`・`main` 無し）は
+コミット済みなので、ダッシュボードでは **Build command を入れて Deploy を押すだけ**。
 
 1. https://dash.cloudflare.com/ にログイン（無料アカウントでOK）
-2. 左メニュー **Workers & Pages** → **Create** → **Pages** タブ → **Connect to Git**
-3. **GitHub を認可**し、リポジトリ **`pocket-ICM`** を選ぶ
-   （「Cloudflare の GitHub アプリ」に pocket-ICM へのアクセスを許可する。これが1回だけの認可です）
-4. ビルド設定を次のとおり入力：
+2. **Workers & Pages** → **Create** → リポジトリ **`pocket-ICM`** を **Import**
+   （初回のみ「Cloudflare の GitHub アプリ」に pocket-ICM へのアクセスを許可）
+3. セットアップ画面で：
 
    | 項目 | 値 |
    |------|-----|
-   | Production branch | `master` |
-   | Framework preset | `None`（または Vite） |
+   | Project name | `pocket-icm` |
    | Build command | `npm run build --workspace @oshihiki/app` |
-   | Build output directory | `packages/app/dist` |
-   | Root directory | （空欄のまま＝リポジトリ直下） |
+   | Deploy command | `npx wrangler deploy`（初期表示のまま） |
+   | Protect with Cloudflare Access | OFF（ONだと閲覧にログインが要る） |
 
-5. **Environment variables** に1つ追加（Node のバージョン固定）：
-   - `NODE_VERSION` = `22`
-6. **Save and Deploy** → 1〜2分でビルド完了。`https://pocket-icm.pages.dev`（のような URL）が発行されます。
+   Node は `.node-version`（=22）で固定済み。
+4. **Deploy** → 1〜2分でビルド＆デプロイ。`https://pocket-icm.<サブドメイン>.workers.dev` が発行される。
 
-以降は **`master` に push するたび自動で再デプロイ**されます。
+以降は **`master` に push するたび自動で再デプロイ**される。
+（ログに出る `workers_dev`／`preview_urls` の WARNING は「公開URLを自動有効化した」という通知で問題なし。）
 
 ### スマホにインストール（ホーム画面に追加）
 - **iPhone（Safari）**: 発行URLを開く → 共有ボタン → **「ホーム画面に追加」**

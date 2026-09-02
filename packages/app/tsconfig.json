@@ -4,6 +4,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
     "customConditions": ["browser"],
     "composite": false,
     "declaration": false,

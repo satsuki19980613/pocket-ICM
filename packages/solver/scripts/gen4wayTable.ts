@@ -10,9 +10,10 @@
  * 刻み4bbの補間超過損を実証済み）。3人 gen3wayTable.ts と同型（次元のみ4に拡張）。
  *
  * 出力: artifacts/pf4way.meta.json, artifacts/pf4way.f32.bin
- * 実行: node --import tsx scripts/gen4wayTable.ts [samples]   （既定 samples=100000）
+ * 実行: node --import tsx scripts/gen4wayTable.ts [samples] [axisCsv]
+ *   既定 samples=100000, axis=2,6,10,14,18,22,25。axisCsv は小格子スモークテスト用。
  */
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -31,7 +32,8 @@ const D = ORDER.length; // 4
 const N_CLASSES = HAND_CLASS_ORDER.length; // 169
 
 // 格子: 各軸 2..25bb, 刻み4bb（末尾は25で打ち切り）。PoCで4bbが十分と実証。
-const AXIS = [2, 6, 10, 14, 18, 22, 25];
+// argv[3] に CSV を渡すと軸を上書き（小格子スモークテスト用）。
+const AXIS = (process.argv[3] ? process.argv[3].split(',').map(Number) : [2, 6, 10, 14, 18, 22, 25]);
 const G = AXIS.length;
 
 function buildState(stacks: number[]): BoardState {
@@ -83,10 +85,64 @@ async function main(): Promise<void> {
   let stride = 0;
   let buf: Float32Array | null = null;
 
+  const BIN = join(OUT_DIR, 'pf4way.f32.bin');
+  const META = join(OUT_DIR, 'pf4way.meta.json');
+  const PROG = join(OUT_DIR, 'pf4way.progress.json'); // レジューム用の中間状態
+
+  const buildMeta = (): object => ({
+    kind: 'pf4way-evdiff',
+    createdAt: new Date().toISOString(),
+    blinds: { sb: SB, bb: BB }, ante: { scheme: 'all', amount: ANTE },
+    order: ORDER, axis: AXIS,
+    nodeKeys, nodeActors, nodeTypes,
+    classOrder: HAND_CLASS_ORDER,
+    stride, floatsPerNode: FLOATS_PER_NODE,
+    layout: '[G^4 points] each: [nodeKeys.length * 169 evDiff][4 eqPost(order)]',
+    samples: S,
+    // interpExplBound は validate4wayTable の実測後に手動で設定（未設定時 pfTable は既定0.06）。
+  });
+  // 既定200点ごとに bin＋progress を保存（クラッシュ/スリープ耐性）。argv[4] で上書き可。
+  const CKPT_EVERY = Number(process.argv[4] ?? 200);
+  const saveCkpt = (doneN: number, final: boolean): void => {
+    writeFileSync(BIN, Buffer.from(buf!.buffer, 0, buf!.byteLength));
+    if (final) {
+      writeFileSync(META, JSON.stringify(buildMeta(), null, 2));
+      if (existsSync(PROG)) rmSync(PROG); // レジューム用の中間状態は完了時に削除
+    } else {
+      writeFileSync(PROG, JSON.stringify({ done: doneN, samples: S, stride, nodeKeys, nodeActors, nodeTypes }));
+    }
+  };
+
+  // レジューム: pf4way.f32.bin＋progress.json があり samples 一致なら続きから。
+  let resumeDone = 0;
+  if (existsSync(BIN) && existsSync(PROG)) {
+    try {
+      const prog = JSON.parse(readFileSync(PROG, 'utf8')) as {
+        done: number; samples: number; stride: number; nodeKeys: string[]; nodeActors: string[]; nodeTypes: string[];
+      };
+      if (prog.samples === S && prog.stride > 0) {
+        stride = prog.stride; nodeKeys = prog.nodeKeys; nodeActors = prog.nodeActors; nodeTypes = prog.nodeTypes;
+        const bin = readFileSync(BIN);
+        const loaded = new Float32Array(bin.buffer, bin.byteOffset, bin.byteLength / 4);
+        buf = new Float32Array(total * stride);
+        buf.set(loaded.subarray(0, Math.min(loaded.length, buf.length)));
+        resumeDone = prog.done;
+        log(`  レジューム: ${resumeDone}/${total} 済（samples=${S}, stride=${stride}）から再開`);
+      } else {
+        log(`  progress.json は samples 不一致（${prog.samples}≠${S}）→ 最初から生成`);
+      }
+    } catch (e) {
+      log(`  progress 読込失敗 → 最初から生成: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   let warm: Map<string, Float64Array> | undefined;
   let done = 0, tMs = 0;
   const t0 = Date.now();
   for (const ix of snake()) {
+    // レジューム済みの点はスキップ（buf に読込済み・warm は境界で cold から）。
+    if (done < resumeDone) { done++; continue; }
+
     const st = buildState(ix.map((i) => AXIS[i]!));
     const opts = warm ? { ...gold, initStrategy: warm, initIterations: 120 } : gold;
     const s0 = Date.now();
@@ -114,28 +170,18 @@ async function main(): Promise<void> {
     for (let s = 0; s < D; s++) buf[eqOff + s] = res.equity[ORDER[s]!]!.post;
 
     done++;
+    const solved = done - resumeDone;
+    if (done % CKPT_EVERY === 0 && done < total) saveCkpt(done, false);
     if (done % 25 === 0 || done === total) {
-      const eta = (tMs / done) * (total - done) / 1000;
-      log(`  ${done}/${total} 完了 (平均${(tMs / done / 1000).toFixed(2)}s/点, 残り約${(eta / 60).toFixed(1)}分)`);
+      const eta = (tMs / solved) * (total - done) / 1000;
+      log(`  ${done}/${total} 完了 (平均${(tMs / solved / 1000).toFixed(2)}s/点, 残り約${(eta / 60).toFixed(1)}分)`);
     }
   }
 
-  const meta = {
-    kind: 'pf4way-evdiff',
-    createdAt: new Date().toISOString(),
-    blinds: { sb: SB, bb: BB }, ante: { scheme: 'all', amount: ANTE },
-    order: ORDER, axis: AXIS,
-    nodeKeys, nodeActors, nodeTypes,
-    classOrder: HAND_CLASS_ORDER,
-    stride, floatsPerNode: FLOATS_PER_NODE,
-    layout: '[G^4 points] each: [nodeKeys.length * 169 evDiff][4 eqPost(order)]',
-    samples: S,
-    // interpExplBound は validate4wayTable の実測後に手動で設定（未設定時 pfTable は既定0.06）。
-  };
-  writeFileSync(join(OUT_DIR, 'pf4way.meta.json'), JSON.stringify(meta, null, 2));
-  writeFileSync(join(OUT_DIR, 'pf4way.f32.bin'), Buffer.from(buf!.buffer, 0, buf!.byteLength));
+  saveCkpt(total, true); // 最終 bin＋meta を確定
   const gz = gzipSync(Buffer.from(buf!.buffer, 0, buf!.byteLength)).length;
   log(`\n生成完了: ${total}点 / ${((Date.now() - t0) / 1000 / 60).toFixed(1)}分`);
   log(`保存: artifacts/pf4way.f32.bin = ${(buf!.byteLength / 1024 / 1024).toFixed(2)}MB (gzip ${(gz / 1024 / 1024).toFixed(2)}MB) + meta.json`);
+  log(`（pf4way.progress.json はレジューム用。完了後は削除して構いません）`);
 }
 void main();

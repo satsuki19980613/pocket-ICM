@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import {
-  buildPfTable, lookupPf, pfInRange, type PfMeta,
+  buildPfTable, decodePfData, lookupPf, pfInRange, type PfMeta,
   solveMultiway, evaluateMultiwayStrategy, maxWorkerCap, type MultiwayNSolveOptions,
 } from '../src/index.js';
 
@@ -35,9 +35,11 @@ function buildState(st: number[]): BoardState {
 
 async function main(): Promise<void> {
   const meta = JSON.parse(readFileSync(join(ART, 'pf4way.meta.json'), 'utf8')) as PfMeta;
-  const bin = readFileSync(join(ART, 'pf4way.f32.bin'));
-  const data = new Float32Array(bin.buffer, bin.byteOffset, bin.byteLength / 4);
-  const table = buildPfTable(meta, data);
+  // dtype に応じて f32/f16 の bin を読む（f16 は decodePfData で float32 へ復号）。
+  const binName = meta.dtype === 'f16' ? 'pf4way.f16.bin' : 'pf4way.f32.bin';
+  const bin = readFileSync(join(ART, binName));
+  const ab = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength);
+  const table = buildPfTable(meta, decodePfData(meta, ab));
   const workers = maxWorkerCap();
   const gold: MultiwayNSolveOptions = { samples: 120_000, maxIters: 800, refreshEvery: 60, workers, commonRandom: true, plateauStopFrac: 0.02 };
   const poolPt = table.payouts.reduce((a, b) => a + b, 0);

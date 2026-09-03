@@ -9,6 +9,11 @@ coverage/
 .DS_Store
 .vitest/
 packages/*/artifacts/_partial-*
+# 4人テーブルの float32 master は容量大（~22MB）。配信は f16(~11MB) のみ commit し、
+# master はローカル保持（再量子化用, 無ければ gen4wayTable で再生成可）。
+packages/solver/artifacts/pf4way.f32.bin
+# 生成のレジューム中間状態（完了時に自動削除されるが、中断時の残置を無視）。
+packages/solver/artifacts/*.progress.json
 # 実スクショ・生成テンプレはゲームアセット再配布問題のためコミットしない（SPEC §10 / R-10）
 packages/ocr/local-fixtures/
 packages/ocr/templates/

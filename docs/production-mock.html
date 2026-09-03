@@ -1,0 +1,835 @@
+<title>Black Ops ICM モック</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e0f17; --bg2:#080910; --surface:#161927; --surface2:#1f2336; --surface3:#2a2f49;
+  --line:#31374f; --line2:#3d4467;
+  --text:#f3f4fb; --dim:#9aa0c4; --dim2:#6b7099;
+  --edge:#fcee0a;      /* Edgerunners yellow — brand / key CTA / HUD */
+  --cyan:#3ae7fb;      /* interactive / active */
+  --mag:#ff2e88;       /* destructive / hot */
+  --push:#3df59a;      /* PUSH / positive EV / correct */
+  --fold:#98a0c8;      /* fold neutral steel */
+  --cell-off:#212642;
+  --utg:#c9a8ff; --co:#79ebc7; --bu:#ff9ad5; --sb:#8fb4ff; --bb:#ffc773;
+  --disp:"Chakra Petch","Zen Kaku Gothic New",sans-serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --mono:"Share Tech Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--body);background:var(--bg2);color:var(--text);
+  font-feature-settings:"palt" 1;display:flex;flex-direction:column;align-items:center;min-height:100vh;
+}
+.eb{font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.tab-num{font-variant-numeric:tabular-nums}
+
+/* dev screen switcher */
+.mockbar{
+  width:100%;padding:12px 14px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;
+  border-bottom:1px solid #14161f;background:#06070c;position:sticky;top:0;z-index:80;
+}
+.mockbar span{color:var(--dim2);font-size:10px;margin-right:4px;font-family:var(--mono);letter-spacing:.12em}
+.mockbar button{
+  font-family:var(--mono);font-size:10.5px;background:#12131c;color:var(--dim);
+  border:1px solid #262b42;padding:5px 10px;border-radius:6px;cursor:pointer;letter-spacing:.04em;
+}
+.mockbar button:hover{color:var(--text);border-color:var(--line2)}
+.mockbar button[aria-current="true"]{background:var(--cyan);color:#04222a;border-color:var(--cyan);font-weight:700}
+
+.phone{
+  width:100%;max-width:404px;min-height:calc(100vh - 50px);background:var(--bg);position:relative;
+  display:flex;flex-direction:column;border-left:1px solid #14161f;border-right:1px solid #14161f;overflow:hidden;
+}
+/* faint scanline atmosphere */
+.phone::before{
+  content:"";position:absolute;inset:0;z-index:100;pointer-events:none;opacity:.35;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px);
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+.top{
+  position:sticky;top:50px;z-index:20;background:rgba(14,15,23,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);height:54px;display:flex;align-items:center;gap:10px;padding:0 14px;
+}
+.top h1{font-family:var(--disp);font-size:15px;font-weight:700;flex:1;letter-spacing:.04em}
+.top .back{background:none;border:0;color:var(--text);font-size:22px;cursor:pointer;width:24px;text-align:left}
+.info{
+  width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);
+  color:var(--dim);font-family:var(--mono);font-size:12px;cursor:pointer;flex:none;
+}
+.info:hover{color:var(--cyan);border-color:var(--cyan)}
+.av{width:32px;height:32px;border-radius:9px;flex:none;background:linear-gradient(140deg,#7b5bd6,#d65b9e);
+  display:grid;place-items:center;font-family:var(--disp);font-size:13px;font-weight:700;color:#fff;border:0;cursor:pointer}
+.av.k{background:linear-gradient(140deg,#2bb6d6,#3df59a)}
+.av.n{background:linear-gradient(140deg,#d6913f,#ff2e88)}
+.av.t{background:linear-gradient(140deg,#5b6bd6,#c9a8ff)}
+.av.s{width:38px;height:38px;font-size:15px}
+
+.body{flex:1;overflow-y:auto;padding-bottom:82px}
+.screen{display:none}
+.screen.on{display:block}
+.pad{padding:16px 14px}
+.h2{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+  margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.h2::before{content:"";width:8px;height:8px;background:var(--edge);
+  clip-path:polygon(0 0,100% 50%,0 100%);flex:none}
+.h2 .info{width:18px;height:18px;font-size:10px}
+.note{font-size:12.5px;line-height:1.75;color:var(--dim)}
+
+/* buttons */
+.btn{display:block;width:100%;padding:14px;border-radius:11px;border:0;cursor:pointer;font-family:var(--disp);
+  font-size:14.5px;font-weight:700;letter-spacing:.03em;background:var(--edge);color:#1a1900;
+  box-shadow:0 0 22px rgba(252,238,10,.22)}
+.btn:hover{filter:brightness(1.05)}
+.btn.cyan{background:var(--cyan);color:#04222a;box-shadow:0 0 22px rgba(58,231,251,.22)}
+.btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line);box-shadow:none}
+.btn.rose{background:rgba(255,46,136,.12);color:var(--mag);border:1px solid rgba(255,46,136,.4);box-shadow:none}
+.btn.line{background:transparent;color:var(--cyan);border:1.5px dashed rgba(58,231,251,.5);box-shadow:none}
+
+/* ---------- AUTH ---------- */
+.auth{padding:40px 24px 20px;text-align:center}
+.logo{width:60px;height:60px;border-radius:15px;margin:0 auto 16px;display:grid;place-items:center;
+  background:linear-gradient(150deg,var(--edge),#ff8a3d);color:#180f00;font-family:var(--disp);font-size:26px;font-weight:700;
+  box-shadow:0 0 30px rgba(252,238,10,.3);transform:rotate(-3deg)}
+.auth h2{font-family:var(--disp);font-size:24px;font-weight:700;letter-spacing:.02em}
+.auth .lead{font-size:13px;color:var(--dim);margin-top:9px;line-height:1.75}
+.form{margin-top:24px;text-align:left;display:flex;flex-direction:column;gap:10px}
+.inp{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.inp b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim2);margin-bottom:5px}
+.inp .val{font-size:14.5px}
+.inp .val.ph{color:var(--dim2)}
+.inp.key{border-color:rgba(252,238,10,.4);background:rgba(252,238,10,.04)}
+.seg2{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px;margin-bottom:4px}
+.seg2 button{flex:1;font-family:var(--disp);font-size:13px;font-weight:600;padding:9px;border-radius:8px;border:0;
+  background:transparent;color:var(--dim);cursor:pointer}
+.seg2 button[aria-pressed="true"]{background:var(--surface3);color:var(--text)}
+.capbar{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 13px}
+.capbar .ct{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:7px}
+.capbar .ct b{color:var(--cyan);font-family:var(--mono)}
+.capline{height:6px;border-radius:100px;background:var(--surface3);overflow:hidden}
+.capline i{display:block;height:100%;width:72%;background:linear-gradient(90deg,var(--cyan),var(--edge))}
+.swap{margin-top:18px;font-size:12.5px;color:var(--dim)}
+.swap button{background:none;border:0;color:var(--cyan);font:inherit;cursor:pointer;font-weight:700}
+
+/* ---------- FEED / HOME ---------- */
+.post{padding:15px 14px;border-bottom:1px solid var(--line);display:flex;gap:11px}
+.post .col{flex:1;min-width:0}
+.meta{display:flex;align-items:baseline;gap:6px;font-size:13px;margin-bottom:4px}
+.meta b{font-weight:700}
+.meta i{font-style:normal;color:var(--dim2);font-size:11.5px;font-family:var(--mono)}
+.post p{font-size:13.5px;line-height:1.65;color:#dcdef0}
+.rescard{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);
+  overflow:hidden;cursor:pointer;display:block;width:100%;text-align:left;font:inherit;color:inherit;position:relative}
+.rescard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--push)}
+.rescard.fold::before{background:var(--fold)}
+.rescard:hover{border-color:var(--line2)}
+.rc-top{padding:11px 12px 10px;display:flex;align-items:center;gap:10px}
+.rc-bot{padding:8px 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--dim);
+  display:flex;gap:12px;flex-wrap:wrap;letter-spacing:.02em}
+.verdict{font-family:var(--disp);font-size:11px;font-weight:700;padding:4px 10px;border-radius:5px;flex:none;letter-spacing:.06em}
+.verdict.push{background:rgba(61,245,154,.16);color:var(--push)}
+.verdict.fold{background:rgba(152,160,200,.14);color:var(--fold)}
+.hand{display:flex;gap:3px;flex:none}
+.card{width:26px;height:36px;border-radius:4px;background:#f4f2f7;color:#16131e;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-family:var(--disp);font-size:13px;font-weight:700;line-height:1;gap:1px}
+.card.red{color:#e0224e}.card.blue{color:#2b6be0}.card.green{color:#199a4d}
+.card em{font-style:normal;font-size:11px}
+.card.sm{width:22px;height:30px;font-size:11px}.card.sm em{font-size:9px}
+.card.big{width:44px;height:60px;font-size:21px;border-radius:6px}.card.big em{font-size:17px}
+.acts{display:flex;gap:22px;margin-top:11px;color:var(--dim2);font-size:12.5px;font-family:var(--mono)}
+.acts button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;display:flex;gap:6px;align-items:center}
+.acts button:hover{color:var(--cyan)}
+
+/* ---------- THREAD ---------- */
+.thread-head{padding:16px 14px;border-bottom:1px solid var(--line)}
+.thread-head p{font-size:15px;line-height:1.7;margin-top:11px}
+.reply{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;gap:11px}
+.reply p{font-size:13px;line-height:1.62;color:#dcdef0}
+.reply.mine{background:rgba(58,231,251,.04)}
+.editlink{background:none;border:0;color:var(--cyan);font-family:var(--mono);font-size:11px;cursor:pointer;margin-top:6px}
+.replyimg{margin-top:9px;height:104px;border-radius:10px;border:1px solid var(--line);
+  background:linear-gradient(115deg,#2a1a3a,#123028 60%,#1a2440);display:grid;place-items:center;color:#7a7292;font-size:11px;font-family:var(--mono)}
+.composer{position:sticky;bottom:0;background:rgba(14,15,23,.95);backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:9px;align-items:center}
+.composer .field{flex:1;background:var(--surface2);border:1px solid var(--line);border-radius:100px;
+  padding:10px 14px;font-size:13px;color:var(--dim2)}
+.icobtn{width:36px;height:36px;flex:none;border-radius:9px;border:1px solid var(--line);background:var(--surface2);
+  color:var(--dim);font-size:15px;cursor:pointer;display:grid;place-items:center}
+.icobtn.go{background:var(--cyan);color:#04222a;border-color:var(--cyan)}
+
+/* ---------- ICM upload ---------- */
+.shot{margin:16px 14px;border:1.5px dashed var(--line2);border-radius:16px;padding:26px 20px;text-align:center;
+  background:radial-gradient(120% 90% at 50% -10%,rgba(58,231,251,.08),var(--surface) 70%)}
+.shot .ic{font-size:30px;margin-bottom:10px}
+.shot b{display:block;font-family:var(--disp);font-size:16px;font-weight:700;margin-bottom:6px}
+.shot span{font-size:12.5px;color:var(--dim);line-height:1.7}
+.check{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.check li{list-style:none;padding:12px 13px;display:flex;gap:11px;align-items:flex-start;border-bottom:1px solid var(--line);font-size:13px}
+.check li:last-child{border-bottom:0}
+.check .mark{flex:none;width:19px;height:19px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:900;margin-top:1px}
+.check .ok .mark{background:rgba(61,245,154,.18);color:var(--push)}
+.check .ng .mark{background:rgba(255,46,136,.18);color:var(--mag)}
+.check .ng{background:rgba(255,46,136,.05)}
+.check small{display:block;color:var(--dim);font-size:11.5px;margin-top:3px;line-height:1.6}
+
+/* readout / seats */
+.readout{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.readout .row{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
+.readout .row:last-child{border-bottom:0}
+.readout .lb{color:var(--dim);width:104px;flex:none;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.readout .vl{flex:1;font-variant-numeric:tabular-nums;font-weight:500}
+.readout .edit{background:none;border:0;color:var(--cyan);font-family:var(--mono);font-size:11.5px;cursor:pointer}
+.readout .row.low{background:rgba(252,238,10,.06)}
+.readout .row.low .vl::after{content:"要確認";font-family:var(--mono);font-size:9.5px;color:var(--edge);margin-left:8px;border:1px solid rgba(252,238,10,.4);padding:1px 5px;border-radius:4px}
+.seats{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--line)}
+.seatrow{display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--surface);font-size:13px}
+.seatrow.me{background:var(--surface2)}
+.seatrow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seatrow .st{font-variant-numeric:tabular-nums;color:var(--dim);font-size:12.5px}
+.pos{flex:none;font-family:var(--disp);font-size:10px;font-weight:700;padding:3px 0;border-radius:5px;width:40px;
+  text-align:center;background:var(--surface3);color:var(--dim);letter-spacing:.03em}
+.pos.UTG{background:rgba(201,168,255,.16);color:var(--utg)}
+.pos.CO{background:rgba(121,235,199,.16);color:var(--co)}
+.pos.BU{background:rgba(255,154,213,.16);color:var(--bu)}
+.pos.SB{background:rgba(143,180,255,.16);color:var(--sb)}
+.pos.BB{background:rgba(255,199,115,.16);color:var(--bb)}
+
+/* ---------- RESULT hero ---------- */
+.vhero{position:relative;display:flex;align-items:center;gap:13px;padding:18px 14px;border-bottom:1px solid var(--line);
+  background:radial-gradient(120% 130% at 20% -20%,rgba(61,245,154,.18),transparent 62%)}
+.vhero.fold{background:radial-gradient(120% 130% at 20% -20%,rgba(152,160,200,.12),transparent 62%)}
+.vhero .rmk{position:absolute;left:8px;top:8px;width:16px;height:16px;border-left:2px solid var(--cyan);border-top:2px solid var(--cyan)}
+.vhero .rmk.br{left:auto;top:auto;right:8px;bottom:8px;border-left:0;border-top:0;border-right:2px solid var(--cyan);border-bottom:2px solid var(--cyan)}
+.vhero .cards{display:flex;gap:4px;flex:none}
+.vhero .txt{flex:1;min-width:0}
+.vhero .word{font-family:var(--disp);font-size:30px;font-weight:700;letter-spacing:.06em;line-height:1;color:var(--push);text-shadow:0 0 20px rgba(61,245,154,.4)}
+.vhero.fold .word{color:var(--fold);text-shadow:none}
+.vhero .sub{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55;font-variant-numeric:tabular-nums}
+.vhero .evbox{flex:none;text-align:right}
+.vhero .evbox b{display:block;font-family:var(--disp);font-size:19px;font-weight:700;color:var(--push);font-variant-numeric:tabular-nums;line-height:1}
+.vhero.fold .evbox b{color:var(--fold)}
+.vhero .evbox span{display:block;font-family:var(--mono);font-size:9.5px;color:var(--dim2);margin-top:5px;letter-spacing:.08em}
+
+/* action tree */
+.tree{display:flex;flex-direction:column;gap:6px}
+.arow{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.arow[data-active="true"]{border-color:var(--cyan);background:rgba(58,231,251,.06);box-shadow:0 0 0 1px rgba(58,231,251,.25)}
+.arow[data-locked="true"]{opacity:.4}
+.arow .segs{display:flex;gap:4px;flex:1;justify-content:flex-end}
+.seg{font-family:var(--disp);font-size:11.5px;font-weight:600;letter-spacing:.03em;padding:6px 13px;border-radius:6px;
+  border:1px solid transparent;background:var(--surface2);color:var(--dim2);cursor:pointer;min-width:56px}
+.seg:hover{color:var(--text)}
+.seg[aria-pressed="true"]{background:var(--surface3);color:var(--text);border-color:var(--line2)}
+.seg.act[aria-pressed="true"]{background:rgba(61,245,154,.18);color:var(--push);border-color:rgba(61,245,154,.5)}
+.arow .term{flex:1;text-align:right;font-family:var(--mono);font-size:11px;color:var(--dim2);padding-right:6px}
+
+.freq{display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:9px;background:var(--cell-off)}
+.freq div{display:grid;place-items:center;font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums}
+.freq .fp{background:var(--push);color:#052a18}
+.freq .ff{color:var(--dim2)}
+.grid{display:grid;grid-template-columns:repeat(13,1fr);gap:1.5px}
+.cell{aspect-ratio:1;border-radius:2.5px;display:grid;place-items:center;font-family:var(--mono);font-size:8px;
+  background:var(--cell-off);color:#5e6488;font-variant-numeric:tabular-nums}
+.cell.p{background:var(--push);color:#052a18}
+.cell.hl{outline:2px solid var(--cyan);outline-offset:1px;position:relative;z-index:2}
+.legend{display:flex;gap:15px;margin-top:11px;font-size:11px;color:var(--dim);flex-wrap:wrap;font-family:var(--mono)}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:5px}
+.rngtext{margin-top:11px;font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--dim);word-break:break-word}
+.eqval{font-size:12px;color:var(--dim2);font-variant-numeric:tabular-nums}
+
+/* publish block */
+.tog{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);font-size:13.5px}
+.tog:last-child{border-bottom:0}
+.tog small{display:block;color:var(--dim);font-size:11.5px;margin-top:3px;line-height:1.55}
+.sw{width:44px;height:26px;border-radius:100px;background:var(--surface3);border:0;flex:none;position:relative;cursor:pointer;transition:background .16s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#7e7794;transition:.16s}
+.sw[aria-pressed="true"]{background:rgba(61,245,154,.3)}
+.sw[aria-pressed="true"]::after{left:21px;background:var(--push)}
+.commentbox{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-size:13px;color:var(--dim2)}
+
+/* records */
+.statrow{display:flex;gap:10px}
+.stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px}
+.stat .n{font-family:var(--disp);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .n.neg{color:var(--mag)}
+.stat .l{font-size:11px;color:var(--dim);margin-top:3px}
+.rec{display:flex;gap:11px;align-items:center;padding:13px 14px;border-bottom:1px solid var(--line)}
+.rec .col{flex:1;min-width:0}
+.rec .l1{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.rec .l2{font-family:var(--mono);font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.tag{font-family:var(--mono);font-size:9.5px;font-weight:700;padding:2.5px 7px;border-radius:5px;flex:none;background:var(--surface3);color:var(--dim);letter-spacing:.04em}
+.tag.pub{background:rgba(58,231,251,.14);color:var(--cyan)}
+.recmenu{background:none;border:0;color:var(--dim2);font-size:17px;cursor:pointer;padding:4px 2px}
+
+/* settings / profile */
+.avpick{display:flex;flex-direction:column;align-items:center;padding:26px 14px 18px;border-bottom:1px solid var(--line)}
+.avbig{width:90px;height:90px;border-radius:20px;background:linear-gradient(140deg,#7b5bd6,#d65b9e);display:grid;place-items:center;
+  font-family:var(--disp);font-size:34px;font-weight:700;color:#fff;position:relative;box-shadow:0 0 26px rgba(214,91,158,.3)}
+.avbig .cam{position:absolute;right:-4px;bottom:-4px;width:30px;height:30px;border-radius:9px;background:var(--surface2);border:2px solid var(--bg);display:grid;place-items:center;font-size:13px}
+.avpick .lbl{margin-top:12px;font-family:var(--mono);font-size:11.5px;color:var(--cyan);letter-spacing:.06em}
+
+/* coming soon */
+.soon{padding:70px 30px;text-align:center}
+.soon .glyph{font-size:44px;margin-bottom:16px;filter:drop-shadow(0 0 16px rgba(252,238,10,.4))}
+.soon h3{font-family:var(--disp);font-size:20px;font-weight:700;letter-spacing:.08em;color:var(--edge)}
+.soon p{font-size:13px;color:var(--dim);margin-top:12px;line-height:1.8}
+.soon .badge{display:inline-block;margin-top:20px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  color:var(--edge);border:1px solid rgba(252,238,10,.4);border-radius:100px;padding:7px 16px}
+
+/* modal / sheet */
+.sheet{position:fixed;inset:0;z-index:200;display:none;align-items:flex-end;justify-content:center;background:rgba(4,5,10,.72);backdrop-filter:blur(4px)}
+.sheet.on{display:flex}
+.sheet .panel{width:100%;max-width:404px;background:var(--bg);border-radius:20px 20px 0 0;border-top:1px solid var(--line2);
+  max-height:88vh;overflow-y:auto;animation:up .22s cubic-bezier(.2,.8,.3,1)}
+@keyframes up{from{transform:translateY(16px);opacity:.6}to{transform:none;opacity:1}}
+.sheet .ph{position:sticky;top:0;background:var(--bg);padding:14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;z-index:2}
+.sheet .ph h3{font-family:var(--disp);font-size:15px;font-weight:700;flex:1;letter-spacing:.03em}
+.sheet .ph .x{background:none;border:0;color:var(--dim);font-size:20px;cursor:pointer}
+.gl{padding:4px 14px 22px}
+.gl dt{font-family:var(--disp);font-size:13px;font-weight:700;color:var(--text);margin-top:16px;display:flex;align-items:baseline;gap:8px;letter-spacing:.02em}
+.gl dt small{font-weight:500;font-size:11px;color:var(--dim2);font-family:var(--mono)}
+.gl dd{font-size:12.5px;line-height:1.75;color:var(--dim);margin-top:5px}
+
+/* tabs */
+.tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:404px;z-index:60;
+  background:rgba(14,15,23,.95);backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;padding:7px 0 max(7px,env(safe-area-inset-bottom))}
+.tabs button{flex:1;background:none;border:0;cursor:pointer;font-family:var(--mono);display:flex;flex-direction:column;align-items:center;gap:4px;
+  color:var(--dim2);font-size:9.5px;letter-spacing:.06em;padding:5px 0;position:relative}
+.tabs button .ic{font-size:18px;line-height:1}
+.tabs button[aria-current="true"]{color:var(--text)}
+.tabs button[aria-current="true"]::before{content:"";position:absolute;top:-7px;width:20px;height:2px;background:var(--edge);box-shadow:0 0 8px var(--edge)}
+.tabs button.soon-tab{opacity:.55}
+.tabs.hide{display:none}
+.fab{position:fixed;bottom:80px;left:50%;margin-left:120px;z-index:61;width:52px;height:52px;border-radius:15px;border:0;cursor:pointer;
+  background:var(--edge);color:#1a1900;font-size:24px;box-shadow:0 6px 22px rgba(252,238,10,.32)}
+.fab.hide{display:none}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
+</style>
+
+<nav class="mockbar">
+  <span>SCREENS</span>
+  <button data-go="auth">ログイン</button>
+  <button data-go="home" aria-current="true">ホーム</button>
+  <button data-go="thread">スレッド</button>
+  <button data-go="userpub">他人の公開</button>
+  <button data-go="icm">ICM添付</button>
+  <button data-go="confirm">条件確認</button>
+  <button data-go="error">エラー</button>
+  <button data-go="result">計算結果</button>
+  <button data-go="records">記録</button>
+  <button data-go="drill">Drill</button>
+  <button data-go="profile">設定</button>
+</nav>
+
+<div class="phone">
+  <header class="top">
+    <button class="back" id="backBtn" hidden aria-label="戻る">‹</button>
+    <h1 id="topTitle">ホーム</h1>
+    <button class="info" id="glossaryBtn" hidden title="用語集">i</button>
+    <button class="av s" id="topAv" title="記録">さ</button>
+  </header>
+
+  <div class="body">
+
+  <!-- AUTH -->
+  <section class="screen" id="s-auth">
+    <div class="auth">
+      <div class="logo">◢◤</div>
+      <h2>BLACK OPS ICM</h2>
+      <p class="lead">クラブマッチのオールイン、<br>あとから答え合わせする場所。</p>
+      <div class="seg2" style="margin-top:22px">
+        <button aria-pressed="true" id="tabLogin">ログイン</button>
+        <button aria-pressed="false" id="tabSignup">アカウント作成</button>
+      </div>
+      <div class="form" id="loginForm">
+        <div class="inp"><b>ユーザー名</b><div class="val">satsuki</div></div>
+        <div class="inp"><b>パスワード</b><div class="val">••••••••••</div></div>
+        <button class="btn" data-go="home">ログイン</button>
+      </div>
+      <div class="form" id="signupForm" hidden>
+        <div class="inp"><b>表示名</b><div class="val ph">クラブでの表示名</div></div>
+        <div class="inp"><b>ユーザー名</b><div class="val ph">@handle</div></div>
+        <div class="inp"><b>パスワード</b><div class="val ph">8文字以上</div></div>
+        <div class="inp key"><b>招待キー</b><div class="val ph">さつきから受け取ったキー</div></div>
+        <div class="capbar">
+          <div class="ct"><span>クラブの空き枠</span><b>残り 3 / 25</b></div>
+          <div class="capline"><i></i></div>
+        </div>
+        <button class="btn cyan" data-go="profile">アカウントを作成</button>
+        <p class="note" style="text-align:center">招待制です。キーが正しく、空き枠があるときだけ作成できます。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOME -->
+  <section class="screen on" id="s-home">
+    <article class="post">
+      <button class="av s k" data-go="userpub">な</button>
+      <div class="col">
+        <div class="meta"><b>なかはた</b><i>@nakahata</i><i>・12分</i></div>
+        <p>BUのPUが42.7%まで開くの、SBとBBが100%で受けてくる前提だと信じられないんだけど合ってる？</p>
+        <button class="rescard" data-go="thread">
+          <div class="rc-top"><div class="hand"><div class="card">K<em>♠</em></div><div class="card red">7<em>♦</em></div></div>
+            <span class="verdict push">PUSH</span><span style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto">5 LEFT · BU</span></div>
+          <div class="rc-bot"><span>13.4bb</span><span>PU 42.7%</span><span>EV +0.21pt</span></div>
+        </button>
+        <div class="acts"><button data-go="thread">💬 8</button><button>♡ 14</button><button>↗</button></div>
+      </div>
+    </article>
+    <article class="post">
+      <button class="av s" data-go="records">さ</button>
+      <div class="col">
+        <div class="meta"><b>さつき</b><i>@satsuki</i><i>・1時間</i></div>
+        <p>UTGのK6s、押しでいいらしい。後ろのCAが0.5%しかないからね。フォールドしてた自分を殴りたい。</p>
+        <button class="rescard" data-go="thread">
+          <div class="rc-top"><div class="hand"><div class="card">K<em>♠</em></div><div class="card green">6<em>♣</em></div></div>
+            <span class="verdict push">PUSH</span><span style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto">5 LEFT · UTG</span></div>
+          <div class="rc-bot"><span>18.2bb</span><span>PU 39.4%</span><span>EV +0.18pt</span></div>
+        </button>
+        <div class="acts"><button data-go="thread">💬 23</button><button>♡ 41</button><button>↗</button></div>
+      </div>
+    </article>
+    <article class="post">
+      <button class="av s n" data-go="userpub">海</button>
+      <div class="col">
+        <div class="meta"><b>海空</b><i>@umisora</i><i>・3時間</i></div>
+        <p>COのPUが2.7%で99+しかないの、UTGが39%も押してくる後ろだからか。ポジションで全然違うね。</p>
+        <button class="rescard fold" data-go="thread">
+          <div class="rc-top"><div class="hand"><div class="card red">Q<em>♥</em></div><div class="card blue">9<em>♦</em></div></div>
+            <span class="verdict fold">FOLD</span><span style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto">5 LEFT · CO</span></div>
+          <div class="rc-bot"><span>11.5bb</span><span>PU 2.7%</span><span>EV −0.09pt</span></div>
+        </button>
+        <div class="acts"><button>💬 15</button><button>♡ 9</button><button>↗</button></div>
+      </div>
+    </article>
+    <article class="post">
+      <button class="av s t" data-go="userpub">た</button>
+      <div class="col">
+        <div class="meta"><b>たまご</b><i>@tamago</i><i>・5時間</i></div>
+        <p>今日のクラブマッチ、押し引きだけで2ptくらい落としてた。地味に効くね。</p>
+        <div class="acts"><button>💬 4</button><button>♡ 18</button><button>↗</button></div>
+      </div>
+    </article>
+  </section>
+
+  <!-- THREAD -->
+  <section class="screen" id="s-thread">
+    <div class="thread-head">
+      <div style="display:flex;gap:11px;align-items:center">
+        <div class="av s">さ</div>
+        <div><div style="font-size:14px;font-weight:700">さつき</div><div style="font-size:11.5px;color:var(--dim2);font-family:var(--mono)">@satsuki</div></div>
+      </div>
+      <p>UTGのK6s、押しでいいらしい。後ろのCAが0.5%しかないからね。フォールドしてた自分を殴りたい。</p>
+      <button class="editlink">✎ コメントを編集</button>
+      <button class="rescard" data-go="result" style="margin-top:11px">
+        <div class="rc-top"><div class="hand"><div class="card">K<em>♠</em></div><div class="card green">6<em>♣</em></div></div>
+          <span class="verdict push">PUSH</span><span style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto">5 LEFT · UTG</span></div>
+        <div class="rc-bot"><span>18.2bb</span><span>PU 39.4%</span><span>EV +0.18pt</span></div>
+      </button>
+      <div class="acts" style="margin-top:12px"><button>💬 23</button><button>♡ 41</button><button>↗</button></div>
+    </div>
+    <div class="reply">
+      <div class="av s k">な</div>
+      <div class="col"><div class="meta"><b>なかはた</b><i>@nakahata</i><i>・52分</i></div>
+        <p>CAが0.5%ってAAだけってこと？そんなに受けないもんなの。</p></div>
+    </div>
+    <div class="reply mine">
+      <div class="av s">さ</div>
+      <div class="col"><div class="meta"><b>さつき</b><i>@satsuki</i><i>・44分</i></div>
+        <p>そう。全員スタック深いから、ここで飛ぶリスクが割に合わない。ICMが効いてる場面。</p>
+        <button class="editlink">✎ 編集</button></div>
+    </div>
+    <div class="reply">
+      <div class="av s n">海</div>
+      <div class="col"><div class="meta"><b>海空</b><i>@umisora</i><i>・30分</i></div>
+        <p>似たスポットで自分も降りてた。これです。</p><div class="replyimg">SCREENSHOT.PNG</div></div>
+    </div>
+    <div class="composer">
+      <button class="icobtn" title="画像を添付">🖼</button>
+      <div class="field">返信を書く…</div>
+      <button class="icobtn go" title="送信">↑</button>
+    </div>
+  </section>
+
+  <!-- OTHER USER'S PUBLIC RESULTS -->
+  <section class="screen" id="s-userpub">
+    <div class="pad" style="display:flex;align-items:center;gap:13px;border-bottom:1px solid var(--line)">
+      <div class="av s n" style="width:46px;height:46px;font-size:17px">海</div>
+      <div><div style="font-size:16px;font-weight:700">海空</div>
+        <div style="font-family:var(--mono);font-size:11.5px;color:var(--dim2)">@umisora · 公開 12 件</div></div>
+    </div>
+    <div class="pad" style="padding-bottom:6px"><h2 class="h2">海空 が公開した計算</h2></div>
+    <div class="rec">
+      <div class="hand"><div class="card red sm">Q<em>♥</em></div><div class="card blue sm">9<em>♦</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict fold">FOLD</span></div><div class="l2">5 LEFT · CO · 11.5bb · −0.09pt</div></div>
+      <button class="recmenu" data-go="thread">›</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">A<em>♠</em></div><div class="card green sm">K<em>♣</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict push">PUSH</span></div><div class="l2">3 LEFT · BU · 9.1bb · +0.44pt</div></div>
+      <button class="recmenu" data-go="thread">›</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card blue sm">J<em>♦</em></div><div class="card sm">T<em>♠</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict push">PUSH</span></div><div class="l2">4 LEFT · SB · 15.0bb · +0.12pt</div></div>
+      <button class="recmenu" data-go="thread">›</button>
+    </div>
+  </section>
+
+  <!-- ICM UPLOAD -->
+  <section class="screen" id="s-icm">
+    <div class="shot">
+      <div class="ic">📷</div>
+      <b>スクリーンショットを選ぶ</b>
+      <span>自分の手番が回ってきた場面を<br>そのまま撮ったものを選んでね</span>
+      <div style="margin-top:16px"><button class="btn" data-go="confirm">写真を選ぶ</button></div>
+    </div>
+    <div class="pad" style="padding-top:2px">
+      <button class="btn line" id="manualBtn">手入力する</button>
+      <p class="note" style="margin-top:8px;text-align:center">写真がなくても、手入力だけで計算できます。</p>
+    </div>
+    <div class="pad" style="padding-top:6px">
+      <h2 class="h2">読み取れる条件</h2>
+      <ul class="check">
+        <li class="ok"><span class="mark">✓</span><div>プリフロップの画面<small>フロップ以降は押し引きの計算対象外です</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>自分の手番が回ってきた状態<small>アクション前・後の画面は状況が確定しません</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>全画面のまま<small>切り抜くとスタックやポジションが読めません</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>BB表示<small>チップ総額表示でも動きますが、BB表示が確実です</small></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CONFIRM -->
+  <section class="screen" id="s-confirm">
+    <div class="pad">
+      <h2 class="h2">読み取った内容</h2>
+      <div class="readout">
+        <div class="row"><span class="lb">Blinds</span><span class="vl">0.5 / 1 &nbsp;ante 0.25</span><button class="edit">修正</button></div>
+        <div class="row"><span class="lb">Hand</span><span class="vl" style="display:flex;gap:4px"><span class="card sm">K<em>♠</em></span><span class="card green sm">6<em>♣</em></span></span><button class="edit">修正</button></div>
+        <div class="row"><span class="lb">Action</span><span class="vl">Unopened</span><button class="edit">修正</button></div>
+        <div class="row"><span class="lb">Players left</span><span class="vl">5</span><button class="edit">修正</button></div>
+      </div>
+    </div>
+    <div class="pad" style="padding-top:0">
+      <h2 class="h2">Stacks</h2>
+      <div class="seats">
+        <div class="seatrow me"><span class="pos UTG">UTG</span><span class="nm">さつき</span><span class="st">18.2bb</span></div>
+        <div class="seatrow"><span class="pos CO">CO</span><span class="nm">海空</span><span class="st">16.8bb</span></div>
+        <div class="seatrow"><span class="pos BU">BU</span><span class="nm">なかはた</span><span class="st">13.6bb</span></div>
+        <div class="seatrow"><span class="pos SB">SB</span><span class="nm">たまご</span><span class="st">12.7bb</span></div>
+        <div class="seatrow"><span class="pos BB">BB</span><span class="nm">せなぴょん</span><span class="st">20.8bb</span></div>
+      </div>
+      <p class="note" style="margin-top:12px">違っていたら「修正」から直せます。直した内容がそのまま計算に使われます。</p>
+      <div style="margin-top:16px"><button class="btn" data-go="result">この内容で計算する</button></div>
+    </div>
+  </section>
+
+  <!-- ERROR -->
+  <section class="screen" id="s-error">
+    <div class="pad">
+      <div style="background:rgba(255,46,136,.09);border:1px solid rgba(255,46,136,.3);border-radius:12px;padding:15px 14px;margin-bottom:18px">
+        <div style="font-family:var(--disp);font-size:15px;font-weight:700;color:var(--mag);margin-bottom:6px">この写真では計算できません</div>
+        <div style="font-size:12.5px;color:#e3a8c0;line-height:1.7">条件が2つ揃っていません。直して撮り直すか、読めた分を手で埋めてください。</div>
+      </div>
+      <h2 class="h2">読み取れる条件</h2>
+      <ul class="check">
+        <li class="ng"><span class="mark">!</span><div>プリフロップの画面<small>フロップの画面でした。ボードにカードが3枚出ています</small></div></li>
+        <li class="ok"><span class="mark">✓</span><div>自分の手番が回ってきた状態</div></li>
+        <li class="ok"><span class="mark">✓</span><div>全画面のまま</div></li>
+        <li class="ng"><span class="mark">!</span><div>全員のスタックが読めること<small>右上の1席がスタンプで隠れています</small></div></li>
+      </ul>
+      <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+        <button class="btn" data-go="icm">別の写真を選ぶ</button>
+        <button class="btn ghost" id="manualBtn2">読めた分を手で埋める</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section class="screen" id="s-result">
+    <div class="vhero" id="vhero">
+      <span class="rmk"></span><span class="rmk br"></span>
+      <div class="cards"><div class="card big">K<em>♠</em></div><div class="card green big">6<em>♣</em></div></div>
+      <div class="txt"><div class="word">PUSH</div><div class="sub">UTG · 18.2bb · 5 LEFT<br>PU range 39.4% に含まれます</div></div>
+      <div class="evbox"><b>+0.18</b><span>EV (PT)</span></div>
+    </div>
+    <div class="pad" style="padding-bottom:10px">
+      <h2 class="h2">Action tree</h2>
+      <div class="tree" id="tree"></div>
+      <p class="note" id="treeNote" style="margin-top:9px"></p>
+    </div>
+    <div class="pad" style="padding-top:4px">
+      <h2 class="h2"><span id="rangeLabel">UTG — PU range</span><button class="info" data-glossary title="用語集">i</button></h2>
+      <div class="freq" id="freq"></div>
+      <div class="grid" id="grid"></div>
+      <div class="legend">
+        <span><i style="background:var(--push)"></i>取るハンド</span>
+        <span><i style="background:var(--cell-off)"></i>取らない</span>
+        <span style="color:var(--cyan)"><i style="background:transparent;border:2px solid var(--cyan)"></i>自分の手</span>
+      </div>
+      <p class="rngtext" id="rngText"></p>
+    </div>
+    <div class="pad" style="padding-top:6px">
+      <h2 class="h2"><span>ICM equity</span><button class="info" data-glossary title="用語集">i</button></h2>
+      <div class="readout">
+        <div class="row"><span class="lb">EQPre</span><span class="vl">21.44%</span><span class="eqval">3.43pt</span></div>
+        <div class="row"><span class="lb">EQPost</span><span class="vl">22.56%</span><span class="eqval">3.61pt</span></div>
+        <div class="row"><span class="lb">EQDiff</span><span class="vl" style="color:var(--push);font-weight:700">+1.12%</span><span class="eqval" style="color:var(--push)">+0.18pt</span></div>
+      </div>
+      <p class="note" style="margin-top:10px">EQは賞金プール比。クラブマッチは合計16ptなので、1.00% = 0.16pt。</p>
+    </div>
+    <div class="pad" style="padding-top:6px">
+      <h2 class="h2">この記録</h2>
+      <div style="border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden">
+        <div class="tog"><div>ホームで公開する<small>クラブのみんなが見られ、スレッドで話せます</small></div>
+          <button class="sw" aria-pressed="false" data-toggle></button></div>
+        <div style="padding:13px 14px"><div class="commentbox">コメントを書いて公開する…</div></div>
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px">
+        <button class="btn ghost" data-go="records">保存した記録を見る</button>
+        <button class="btn rose">この記録を削除する</button>
+      </div>
+      <p class="note" style="margin-top:12px">計算した記録は自動で保存されています。公開は任意です。</p>
+    </div>
+  </section>
+
+  <!-- RECORDS -->
+  <section class="screen" id="s-records">
+    <div class="pad" style="padding-bottom:8px">
+      <div class="statrow">
+        <div class="stat"><div class="n">142</div><div class="l">記録した場面</div></div>
+        <div class="stat"><div class="n neg">−4.7pt</div><div class="l">EV loss 合計</div></div>
+      </div>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">K<em>♠</em></div><div class="card green sm">6<em>♣</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict push">PUSH</span><span class="tag">非公開</span></div><div class="l2">5 LEFT · UTG · 18.2bb · +0.18pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">A<em>♠</em></div><div class="card green sm">J<em>♣</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict fold">FOLD</span><span class="tag pub">公開中</span></div><div class="l2">6 LEFT · UTG · 9.8bb · −0.34pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card red sm">Q<em>♥</em></div><div class="card blue sm">9<em>♦</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict fold">FOLD</span><span class="tag">非公開</span></div><div class="l2">5 LEFT · CO · 11.5bb · −0.09pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+    <div class="rec">
+      <div class="hand"><div class="card sm">T<em>♠</em></div><div class="card red sm">T<em>♥</em></div></div>
+      <div class="col"><div class="l1"><span class="verdict push">PUSH</span><span class="tag pub">公開中</span></div><div class="l2">3 LEFT · SB · 14.1bb · +0.62pt</div></div>
+      <button class="recmenu">⋯</button>
+    </div>
+  </section>
+
+  <!-- DRILL (coming soon) -->
+  <section class="screen" id="s-drill">
+    <div class="soon">
+      <div class="glyph">◎</div>
+      <h3>TRAINING MODE</h3>
+      <p>ランダム出題でオールイン判断を鍛えるモードを準備中です。<br>5〜6人の即時求解ができ次第、公開します。</p>
+      <span class="badge">COMING SOON</span>
+    </div>
+  </section>
+
+  <!-- PROFILE / SETTINGS -->
+  <section class="screen" id="s-profile">
+    <div class="avpick">
+      <div class="avbig">さ<span class="cam">📷</span></div>
+      <div class="lbl">アイコンを変える</div>
+    </div>
+    <div class="pad">
+      <div class="readout">
+        <div class="row"><span class="lb">表示名</span><span class="vl">さつき</span><button class="edit">変更</button></div>
+        <div class="row"><span class="lb">ユーザー名</span><span class="vl">@satsuki</span><button class="edit">変更</button></div>
+        <div class="row"><span class="lb">パスワード</span><span class="vl">••••••••••</span><button class="edit">変更</button></div>
+      </div>
+    </div>
+    <div class="pad" style="padding-top:0">
+      <h2 class="h2">公開のしかた</h2>
+      <div style="border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden">
+        <div class="tog"><div>計算したら最初から公開する<small>切っておくと、1件ずつ自分で公開を選べます</small></div><button class="sw" aria-pressed="false" data-toggle></button></div>
+        <div class="tog"><div>EV loss の合計を見せる<small>プロフィールに表示されます</small></div><button class="sw" aria-pressed="true" data-toggle></button></div>
+      </div>
+    </div>
+    <div class="pad" style="padding-top:0">
+      <h2 class="h2">アカウント</h2>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button class="btn ghost" data-go="auth">ログアウト</button>
+        <button class="btn rose">アカウントを削除する</button>
+      </div>
+      <p class="note" style="margin-top:10px">削除すると、記録・公開したスレッド・画像もすべて消えます。取り消せません。</p>
+    </div>
+  </section>
+
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-go="home" aria-current="true"><span class="ic">⌂</span>ホーム</button>
+    <button data-go="icm"><span class="ic">♠</span>ICM</button>
+    <button data-go="drill" class="soon-tab"><span class="ic">◎</span>Drill</button>
+    <button data-go="records"><span class="ic">▤</span>記録</button>
+    <button data-go="profile"><span class="ic">⚙</span>設定</button>
+  </nav>
+  <button class="fab" id="fab" data-go="icm" title="計算する">＋</button>
+</div>
+
+<!-- MANUAL INPUT MODAL -->
+<div class="sheet" id="manualSheet">
+  <div class="panel">
+    <div class="ph"><h3>手入力</h3><button class="x" id="manX" aria-label="閉じる">✕</button></div>
+    <div style="padding:6px 14px 22px">
+      <div class="readout" style="margin-bottom:14px">
+        <div class="row"><span class="lb">Players</span><span class="vl">5</span><button class="edit">▾</button></div>
+        <div class="row"><span class="lb">Blinds</span><span class="vl">0.5 / 1</span><button class="edit">▾</button></div>
+        <div class="row"><span class="lb">Ante</span><span class="vl">0.25 (all)</span><button class="edit">▾</button></div>
+        <div class="row"><span class="lb">My hand</span><span class="vl" style="display:flex;gap:4px"><span class="card sm">K<em>♠</em></span><span class="card green sm">6<em>♣</em></span></span><button class="edit">選ぶ</button></div>
+        <div class="row"><span class="lb">My position</span><span class="vl">UTG</span><button class="edit">▾</button></div>
+        <div class="row"><span class="lb">Action</span><span class="vl">Unopened</span><button class="edit">▾</button></div>
+      </div>
+      <h2 class="h2">各席のスタック (bb)</h2>
+      <div class="seats" style="margin-bottom:16px">
+        <div class="seatrow me"><span class="pos UTG">UTG</span><span class="nm">自分</span><span class="st">18.2</span></div>
+        <div class="seatrow"><span class="pos CO">CO</span><span class="nm">—</span><span class="st">16.8</span></div>
+        <div class="seatrow"><span class="pos BU">BU</span><span class="nm">—</span><span class="st">13.6</span></div>
+        <div class="seatrow"><span class="pos SB">SB</span><span class="nm">—</span><span class="st">12.7</span></div>
+        <div class="seatrow"><span class="pos BB">BB</span><span class="nm">—</span><span class="st">20.8</span></div>
+      </div>
+      <button class="btn" data-go="result" id="manCalc">この内容で計算する</button>
+    </div>
+  </div>
+</div>
+
+<!-- GLOSSARY -->
+<div class="sheet" id="glossary">
+  <div class="panel">
+    <div class="ph"><h3>用語</h3><button class="x" id="glX" aria-label="閉じる">✕</button></div>
+    <dl class="gl">
+      <dt>PU <small>Push</small></dt><dd>まだ誰もチップを入れていない状態から、最初にオールインする側。ツリー上段。</dd>
+      <dt>CA <small>Call</small></dt><dd>PUに対してコールする側。まだ誰もコールしていない状態での受け。</dd>
+      <dt>OC <small>Overcall</small></dt><dd>PUとCAが既に入っている場面でさらに乗る側。2人に囲まれる分ずっと狭くなります。</dd>
+      <dt>Range</dt><dd>そのアクションを取るハンドの集合。押し引きの均衡では0か100かで、混ぜる手はありません。</dd>
+      <dt>EV</dt><dd>自分のこのハンドで、PUした場合とFOLDした場合の期待pt差。プラスなら押しが得。一番見てほしい数字です。</dd>
+      <dt>EQPre / EQPost / EQDiff</dt><dd>ハンド前後の期待ptとその差。レンジ全体の平均で「この場面が有利かどうか」を表します。</dd>
+      <dt>ICM <small>Independent Chip Model</small></dt><dd>チップ量を期待獲得ptに変換するモデル。飛ぶリスクが実際より重く効きます。</dd>
+      <dt>Effective stack</dt><dd>実際にやり取りされる最大チップ量。短いほうのスタックで決まります。</dd>
+    </dl>
+  </div>
+</div>
+
+<script>
+/* ---------- routing ---------- */
+const titles={auth:"",home:"ホーム",thread:"スレッド",userpub:"公開した計算",icm:"ICMを計算する",confirm:"内容を確かめる",error:"内容を確かめる",result:"計算結果",records:"保存した記録",drill:"Training",profile:"設定"};
+const noTabs=["auth"], noFab=["auth","icm","confirm","error","result","thread","userpub","drill"], backOn=["thread","userpub","confirm","error","result"];
+function go(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on",s.id==="s-"+id));
+  document.querySelectorAll(".mockbar button").forEach(b=>b.setAttribute("aria-current",String(b.dataset.go===id)));
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-current",String(b.dataset.go===id)));
+  document.getElementById("topTitle").textContent=titles[id]||"";
+  document.getElementById("tabs").classList.toggle("hide",noTabs.includes(id));
+  document.getElementById("fab").classList.toggle("hide",noFab.includes(id));
+  document.getElementById("backBtn").hidden=!backOn.includes(id);
+  document.getElementById("glossaryBtn").hidden=(id!=="result");
+  document.getElementById("topAv").hidden=(id==="auth");
+  document.querySelector(".body").scrollTop=0;window.scrollTo(0,0);
+}
+document.addEventListener("click",e=>{const t=e.target.closest("[data-go]");if(t){e.preventDefault();go(t.dataset.go);}});
+document.getElementById("topAv").onclick=()=>go("records");
+document.getElementById("backBtn").onclick=()=>go("home");
+
+/* auth tab switch */
+const tabLogin=document.getElementById("tabLogin"),tabSignup=document.getElementById("tabSignup");
+function authMode(signup){tabLogin.setAttribute("aria-pressed",String(!signup));tabSignup.setAttribute("aria-pressed",String(signup));
+  document.getElementById("loginForm").hidden=signup;document.getElementById("signupForm").hidden=!signup;}
+tabLogin.onclick=()=>authMode(false);tabSignup.onclick=()=>authMode(true);
+
+/* modals */
+function openSheet(el){el.classList.add("on")}
+function closeSheet(el){el.classList.remove("on")}
+const manual=document.getElementById("manualSheet");
+document.getElementById("manualBtn").onclick=()=>openSheet(manual);
+document.getElementById("manualBtn2").onclick=()=>openSheet(manual);
+document.getElementById("manX").onclick=()=>closeSheet(manual);
+document.getElementById("manCalc").onclick=()=>closeSheet(manual);
+manual.addEventListener("click",e=>{if(e.target===manual)closeSheet(manual)});
+const gloss=document.getElementById("glossary");
+document.getElementById("glossaryBtn").onclick=()=>openSheet(gloss);
+document.querySelectorAll("[data-glossary]").forEach(b=>b.onclick=()=>openSheet(gloss));
+document.getElementById("glX").onclick=()=>closeSheet(gloss);
+gloss.addEventListener("click",e=>{if(e.target===gloss)closeSheet(gloss)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSheet(gloss);closeSheet(manual);}});
+
+/* toggles */
+document.querySelectorAll("[data-toggle]").forEach(b=>b.onclick=()=>b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")==="true"?"false":"true"));
+
+/* ---------- range notation ---------- */
+const R=["A","K","Q","J","T","9","8","7","6","5","4","3","2"];const ri=r=>R.indexOf(r);
+function handName(i,j){return i===j?R[i]+R[i]:(j>i?R[i]+R[j]+"s":R[j]+R[i]+"o");}
+function parseRange(str){const set=new Set();if(!str)return set;
+  if(/any\s*two/i.test(str)){for(let i=0;i<13;i++)for(let j=0;j<13;j++)set.add(handName(i,j));return set;}
+  str.split(/\s+/).forEach(tok=>{if(!tok)return;const plus=tok.endsWith("+");const t=plus?tok.slice(0,-1):tok;let m;
+    if((m=/^([AKQJT98765432])x$/.exec(t))){const a=m[1];for(let k=0;k<13;k++)if(ri(R[k])>ri(a)){set.add(a+R[k]+"s");set.add(a+R[k]+"o");}return;}
+    if(t.length===2&&t[0]===t[1]){const a=t[0];if(plus){for(let k=0;k<=ri(a);k++)set.add(R[k]+R[k]);}else set.add(a+a);return;}
+    if((m=/^([AKQJT98765432])([AKQJT98765432])([so])$/.exec(t))){const hi=m[1],lo=m[2],s=m[3];
+      if(plus){for(let k=ri(lo);k>ri(hi);k--)set.add(hi+R[k]+s);}else set.add(hi+lo+s);}});
+  return set;}
+
+/* ---------- action tree (5-handed sample HRC solution) ---------- */
+const POS=["UTG","CO","BU","SB","BB"];
+const T={
+  "":{pct:39.4,r:"44+ Ax K2s+ K6o+ Q6s+ Q8o+ J7s+ J9o+ T8s+ T9o 98s"},
+  "UTG:F":{pct:2.7,r:"99+"},
+  "UTG:F,CO:F":{pct:42.7,r:"44+ Ax K2s+ K5o+ Q4s+ Q8o+ J7s+ J8o+ T7s+ T9o 97s+ 87s"},
+  "UTG:F,CO:F,BU:F":{pct:100,r:"Any two"},
+  "UTG:P":{pct:0.5,r:"AA"},
+  "UTG:P,CO:F":{pct:0.5,r:"AA"},"UTG:P,CO:F,BU:F":{pct:100,r:"Any two"},
+  "UTG:P,CO:F,BU:F,SB:F":{pct:100,r:"Any two"},"UTG:P,CO:F,BU:C":{pct:0.5,r:"AA"},
+  "UTG:P,CO:F,BU:C,SB:F":{pct:100,r:"Any two"},"UTG:P,CO:F,BU:F,SB:C":{pct:100,r:"Any two"},
+  "UTG:P,CO:C":{pct:0.5,r:"AA"},"UTG:P,CO:C,BU:F":{pct:0.5,r:"AA"},
+  "UTG:P,CO:C,BU:F,SB:F":{pct:100,r:"Any two"},"UTG:P,CO:C,BU:C":{pct:0.5,r:"AA"},
+  "UTG:P,CO:C,BU:C,SB:F":{pct:100,r:"Any two"},"UTG:P,CO:C,BU:F,SB:C":{pct:100,r:"Any two"},
+  "UTG:F,CO:P":{pct:0.5,r:"AA"},"UTG:F,CO:P,BU:F":{pct:100,r:"Any two"},
+  "UTG:F,CO:P,BU:F,SB:F":{pct:100,r:"Any two"},"UTG:F,CO:P,BU:C":{pct:0.5,r:"AA"},
+  "UTG:F,CO:P,BU:C,SB:F":{pct:100,r:"Any two"},"UTG:F,CO:P,BU:F,SB:C":{pct:100,r:"Any two"},
+  "UTG:F,CO:F,BU:P":{pct:100,r:"Any two"},"UTG:F,CO:F,BU:P,SB:F":{pct:100,r:"Any two"},
+  "UTG:F,CO:F,BU:P,SB:C":{pct:100,r:"Any two"},"UTG:F,CO:F,BU:F,SB:P":{pct:100,r:"Any two"}
+};
+const MY_IDX=0,MY_HAND="K6o"; /* K♠6♣ = offsuit */
+let state=["P","F","F","F","F"],active=0;
+function actionsFor(i){const before=state.slice(0,i);const pushed=before.includes("P");const called=before.includes("C");
+  if(!pushed)return[["F","FOLD"],["P","PU"]];if(!called)return[["F","FOLD"],["C","CA"]];return[["F","FOLD"],["O","OC"]];}
+function keyFor(i){return POS.slice(0,i).map((p,k)=>p+":"+state[k]).join(",");}
+function isTerminal(i){return i===POS.length-1&&!state.slice(0,i).includes("P");}
+function renderTree(){const el=document.getElementById("tree");el.innerHTML="";
+  POS.forEach((p,i)=>{const row=document.createElement("div");row.className="arow";row.dataset.active=String(active===i);
+    const term=isTerminal(i);row.dataset.locked=String(term);
+    const badge=document.createElement("span");badge.className="pos "+p;badge.textContent=p;row.appendChild(badge);
+    if(term){const t=document.createElement("span");t.className="term";t.textContent="no decision";row.appendChild(t);}
+    else{const segs=document.createElement("div");segs.className="segs";
+      actionsFor(i).forEach(([code,label])=>{const b=document.createElement("button");b.className="seg"+(code!=="F"?" act":"");
+        b.textContent=label;b.setAttribute("aria-pressed",String(state[i]===code));
+        b.onclick=()=>{state[i]=code;for(let k=i+1;k<POS.length;k++)state[k]="F";active=i;render();};segs.appendChild(b);});
+      row.appendChild(segs);}
+    el.appendChild(row);});
+  document.getElementById("treeNote").textContent=active===MY_IDX
+    ?"自分の判断はこの行。下の行を切り替えると、後ろの人が何を受けてくるかが見られます。"
+    :"後ろの人がどう受けてくるかを見ています。自分の行に戻すと判定に戻ります。";}
+function renderRange(){const node=T[keyFor(active)];const label=document.getElementById("rangeLabel");
+  const freq=document.getElementById("freq");const grid=document.getElementById("grid");const txt=document.getElementById("rngText");
+  if(isTerminal(active)||!node){label.textContent=POS[active]+" — no decision";
+    freq.innerHTML='<div class="ff" style="width:100%">全員フォールドでBBが取ります</div>';grid.innerHTML="";txt.textContent="";return;}
+  const actLabel=actionsFor(active)[1][1];label.textContent=POS[active]+" — "+actLabel+" range";
+  const p=node.pct,f=100-p;
+  freq.innerHTML=(p>0?`<div class="fp" style="width:${p}%">${p}%</div>`:"")+(f>0?`<div class="ff" style="width:${f}%">${f.toFixed(1)}%</div>`:"");
+  const set=parseRange(node.r);grid.innerHTML="";
+  for(let i=0;i<13;i++)for(let j=0;j<13;j++){const n=handName(i,j);const d=document.createElement("div");
+    d.className="cell"+(set.has(n)?" p":"")+((active===MY_IDX&&n===MY_HAND)?" hl":"");d.textContent=n;grid.appendChild(d);}
+  txt.textContent=node.r==="Any two"?"Any two — 全ハンド":node.r;}
+function render(){renderTree();renderRange();}
+render();
+</script>

@@ -16,6 +16,7 @@ export * from './sidepot.js';
 export * from './showdownMc.js';
 export * from './cardRemoval.js';
 export * from './mcConfig.js';
+export * from './pfTable.js';
 export * from './pf3wayTable.js';
 
 // 依存性注入: Node では HU テーブルの既定ローダを node:fs 版に結線する

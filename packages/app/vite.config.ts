@@ -30,6 +30,21 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,bin,json,woff2,svg,png}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // 4人テーブル(f16, ~11MB)は precache しない（インストールを重くしない）。
+        // 初回の4人求解で fetch → runtimeCaching(CacheFirst)でキャッシュ＝以後オフライン可。
+        // 3人(1.33MB)/HU は従来どおり precache（インストール時からオフライン）。
+        globIgnores: ['**/pf4way.f16-*.bin'],
+        runtimeCaching: [
+          {
+            urlPattern: /pf4way\.f16-.*\.bin$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'pf4way-table',
+              expiration: { maxEntries: 2 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

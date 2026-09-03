@@ -11,8 +11,12 @@ import {
   loadPf3wayTableBrowser,
   pf3wayInRange,
   lookupPf3way,
+  loadPfTableBrowser,
+  pfInRange,
+  lookupPf,
   type LoadedHuTable,
   type Pf3wayTable,
+  type PfTable,
   type McRunner,
   type ShowdownMcResult,
 } from '@oshihiki/solver';
@@ -22,6 +26,9 @@ import huMetaUrl from '../../solver/artifacts/hu-equity-169.meta.json?url';
 // 3人 push or fold / AOF 事前計算テーブル（同上の静的アセット）。
 import pf3wayBinUrl from '../../solver/artifacts/pf3way.f32.bin?url';
 import pf3wayMetaUrl from '../../solver/artifacts/pf3way.meta.json?url';
+// 4人 push or fold / AOF 事前計算テーブル（f16 量子化版・同上の静的アセット）。
+import pf4wayBinUrl from '../../solver/artifacts/pf4way.f16.bin?url';
+import pf4wayMetaUrl from '../../solver/artifacts/pf4way.meta.json?url';
 import type {
   McRequest,
   McResultMsg,
@@ -52,6 +59,13 @@ let pf3wayPromise: Promise<Pf3wayTable> | null = null;
 function getPf3wayTable(): Promise<Pf3wayTable> {
   pf3wayPromise ??= loadPf3wayTableBrowser({ meta: pf3wayMetaUrl, bin: pf3wayBinUrl });
   return pf3wayPromise;
+}
+
+// 4人テーブルは初回の4人求解でのみ fetch（~11MB を遅延ロード, 以後キャッシュ）。
+let pf4wayPromise: Promise<PfTable> | null = null;
+function getPf4wayTable(): Promise<PfTable> {
+  pf4wayPromise ??= loadPfTableBrowser({ meta: pf4wayMetaUrl, bin: pf4wayBinUrl });
+  return pf4wayPromise;
 }
 
 interface CommonNode {
@@ -128,6 +142,18 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
       }
       if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
       dto = toDto(r, 3, state.heroPos, state.heroHand);
+    } else if (state.playersLeft === 4) {
+      // 4人も事前計算テーブル（GOLD精度）を補間して即時解。範囲外・条件不一致・
+      // 読込失敗時は N-way ソルバーへフォールバック（3人と同型）。
+      let r: CommonResult | null = null;
+      try {
+        const pf = await getPf4wayTable();
+        if (pfInRange(pf, state)) r = lookupPf(pf, state) as unknown as CommonResult;
+      } catch {
+        r = null; // フォールバック
+      }
+      if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
+      dto = toDto(r, 4, state.heroPos, state.heroHand);
     } else {
       const r = await solveMultiway(state, { workers: 0, mcRunner, ...opts });
       dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);

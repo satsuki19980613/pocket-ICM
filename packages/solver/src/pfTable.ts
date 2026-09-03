@@ -15,6 +15,7 @@
 import type { BoardState, Position, SolutionNode } from '@oshihiki/core';
 import { formatRange, comboCount, parseHandClass } from '@oshihiki/core';
 import { icmEquities, payoutsForPlayers } from './icm.js';
+import { decodeFloat16 } from './halfFloat.js';
 import type { MultiwayNSolveResult } from './nwaySolver.js';
 
 const TOTAL_COMBOS = 1326;
@@ -37,6 +38,17 @@ export interface PfMeta {
   samples: number;
   /** 補間戦略の検証済み exploitability 上限（validate*wayTable の実測に基づく）。未指定は既定値。 */
   interpExplBound?: number;
+  /** bin の要素型。'f16'=float16(2byte, 容量半減), 既定/未指定は 'f32'。 */
+  dtype?: 'f32' | 'f16';
+}
+
+/**
+ * バイナリ（ArrayBuffer）を meta.dtype に従って Float32Array へ復号する。
+ * f16 は読込時に一度だけ float32 へ展開（探索は従来どおり float32 で行う）。
+ */
+export function decodePfData(meta: PfMeta, buf: ArrayBuffer): Float32Array {
+  if (meta.dtype === 'f16') return decodeFloat16(new Uint16Array(buf));
+  return new Float32Array(buf);
 }
 
 export interface PfTable {

@@ -16,6 +16,7 @@ export * from './sidepot.js';
 export * from './showdownMc.js';
 export * from './cardRemoval.js';
 export * from './mcConfig.js';
+export * from './halfFloat.js';
 export * from './pfTable.js';
 export * from './pf3wayTable.js';
 

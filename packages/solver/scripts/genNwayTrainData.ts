@@ -88,6 +88,34 @@ async function main(): Promise<void> {
   const BIN = join(OUT_DIR, `${TAG}.train.f32.bin`);
   const META = join(OUT_DIR, `${TAG}.train.meta.json`);
   const PROG = join(OUT_DIR, `${TAG}.train.progress.json`);
+  // ダッシュボード（genDashboard.ts）との file-based IPC。
+  // control: {action:'run'|'pause'|'stop'} をダッシュボードが書き、本スクリプトが点間で読む。
+  // status: 進捗/ETA を本スクリプトが点ごとに書き、ダッシュボードが表示する。
+  const CONTROL = join(OUT_DIR, `${TAG}.control.json`);
+  const STATUS = join(OUT_DIR, `${TAG}.status.json`);
+  const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+  const readControl = (): 'run' | 'pause' | 'stop' => {
+    try {
+      const c = JSON.parse(readFileSync(CONTROL, 'utf8')) as { action?: string };
+      return c.action === 'pause' || c.action === 'stop' ? c.action : 'run';
+    } catch { return 'run'; }
+  };
+  const writeStatus = (
+    doneN: number, solvedN: number, elapsedSolveMs: number, lastStacks: number[] | null,
+    state: 'running' | 'paused' | 'stopped' | 'done',
+  ): void => {
+    const avgMs = solvedN > 0 ? elapsedSolveMs / solvedN : 0;
+    const etaMs = avgMs * (total - doneN);
+    try {
+      writeFileSync(STATUS, JSON.stringify({
+        tag: TAG, players: N, samples: S, axis: AXIS,
+        done: doneN, total, resumeDone, solved: solvedN,
+        avgMsPerPoint: avgMs, etaMs, state,
+        lastStacks, updatedAt: new Date().toISOString(),
+        pid: process.pid,
+      }));
+    } catch { /* status 書込み失敗は無視 */ }
+  };
 
   const buildMeta = (): object => ({
     kind: `${TAG}-train`,
@@ -143,7 +171,23 @@ async function main(): Promise<void> {
   for (const ix of snake()) {
     if (done < resumeDone) { done++; flatRow++; continue; }
 
-    const st = buildState(ix.map((i) => AXIS[i]!));
+    // 制御ポーリング（ダッシュボードからの pause / stop / CPU休憩）。点間でのみ効くので
+    // 途中の点を壊さない。stop はチェックポイント保存して正常終了（次回レジューム可）。
+    const nextStacks = ix.map((i) => AXIS[i]!);
+    let ctl = readControl();
+    while (ctl === 'pause') {
+      writeStatus(done, done - resumeDone, tMs, nextStacks, 'paused');
+      await sleep(1000);
+      ctl = readControl();
+    }
+    if (ctl === 'stop') {
+      if (buf) saveCkpt(done, false);
+      writeStatus(done, done - resumeDone, tMs, nextStacks, 'stopped');
+      log(`  停止要求で中断: ${done}/${total} 済（次回レジューム可）`);
+      return;
+    }
+
+    const st = buildState(nextStacks);
     const opts = warm ? { ...gold, initStrategy: warm, initIterations: 120 } : gold;
     const s0 = Date.now();
     const res = await solveMultiway(st, opts);
@@ -177,6 +221,7 @@ async function main(): Promise<void> {
     done++; flatRow++;
     const solved = done - resumeDone;
     if (done % CKPT_EVERY === 0 && done < total) saveCkpt(done, false);
+    writeStatus(done, solved, tMs, nextStacks, done === total ? 'done' : 'running');
     if (done % 25 === 0 || done === total) {
       const eta = (tMs / solved) * (total - done) / 1000;
       log(`  ${done}/${total} 完了 (平均${(tMs / solved / 1000).toFixed(2)}s/点, 残り約${(eta / 60).toFixed(1)}分)`);
@@ -184,6 +229,7 @@ async function main(): Promise<void> {
   }
 
   saveCkpt(total, true);
+  writeStatus(total, total - resumeDone, tMs, null, 'done');
   const gz = gzipSync(Buffer.from(buf!.buffer, 0, buf!.byteLength)).length;
   log(`\n生成完了: ${total}点 / ${((Date.now() - t0) / 1000 / 60).toFixed(1)}分`);
   log(`保存: artifacts/${TAG}.train.f32.bin = ${(buf!.byteLength / 1024 / 1024).toFixed(2)}MB (gzip ${(gz / 1024 / 1024).toFixed(2)}MB) + meta.json`);

@@ -168,6 +168,32 @@ export interface MultiwayNSolveOptions {
    * ブラウザ（App）は Web Worker プールをここに注入して並列化する。
    */
   mcRunner?: McRunner;
+  /**
+   * 共通乱数（Common Random Numbers）。**既定 false**。true にすると、反復（epoch）を
+   * またいで MC のサンプル列を固定し、equity 見積りを「レンジ変化だけ」の滑らかな関数にする。
+   * epoch ごとの再サンプリング・ノイズが消えるため exploitability が単調に落ち、収束判定
+   * （早期停止・plateau 停止）が安定して機能する。最終評価だけは独立シードで引き直し、
+   * サンプルへの過適合（楽観バイアス）を避ける。事前計算のグリッド生成で必須。
+   */
+  commonRandom?: boolean;
+  /**
+   * ウォームスタート初期戦略（node.key → 169 クラス頻度）。近傍グリッド点の解を初期値に
+   * 与えると、勾配が緩やかなため少ない反復で収束する。省略時は全ノード 0.5 から開始。
+   */
+  initStrategy?: Map<string, Float64Array>;
+  /**
+   * ウォームスタート時の「見かけ上すでに経過した反復数」。fictitious play の平均化重み
+   * w=1/(t+initIterations+1) を小さくして初期戦略を保護する（大きいほど初期値を尊重）。
+   * 既定 0（コールドスタート）。
+   */
+  initIterations?: number;
+  /**
+   * plateau 早期停止。指定すると、exploitability の相対改善が直近チェックでこの割合を
+   * 下回ったら停止する（例 0.02 = 2%未満の改善で頭打ちとみなす）。MC ノイズ床が
+   * targetExploitabilityPt より高くて絶対しきい値に到達できない場合でも、頭打ちを検出して
+   * 無駄な反復を止める。commonRandom と併用推奨。省略時は無効（従来どおり絶対しきい値のみ）。
+   */
+  plateauStopFrac?: number;
 }
 
 export interface MultiwayNSolveResult {
@@ -547,10 +573,13 @@ function eqPost(eng: Engine, ev: EVBundle): number[] {
   return post;
 }
 
-/** 初期戦略（全ノード 0.5）。 */
-function initStrategies(eng: Engine): Map<number, F64> {
+/** 初期戦略（既定は全ノード 0.5）。warm があれば node.key 一致ノードをその値で初期化（複製）。 */
+function initStrategies(eng: Engine, warm?: Map<string, F64>): Map<number, F64> {
   const strat = new Map<number, F64>();
-  for (const nd of eng.nodes) strat.set(nd.id, new Float64Array(N_CLASSES).fill(0.5));
+  for (const nd of eng.nodes) {
+    const w = warm?.get(nd.key);
+    strat.set(nd.id, w && w.length === N_CLASSES ? Float64Array.from(w) : new Float64Array(N_CLASSES).fill(0.5));
+  }
   return strat;
 }
 
@@ -621,25 +650,31 @@ export async function solveMultiway(
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
   const cardRemoval = opts.cardRemoval ?? false;
+  const commonRandom = opts.commonRandom ?? false;
+  const initIters = opts.initIterations ?? 0;
+  const plateauFrac = opts.plateauStopFrac;
   const eng = buildEngine(state, samples, seed, workers, opts.mcRunner);
   const poolPt = eng.payouts.reduce((a, b) => a + b, 0);
   // ノードレベル MC の推定量バイアス + アクション確率のカードリムーバル近似で
   // 均衡でも ~プール比 0.1% の床を持つ（M3 申し送り）。しきい値は床の上に置く。
   const targetExpl = opts.targetExploitabilityPt ?? poolPt * 0.0015;
+  // CRN 時は反復間で同一シードを使い回す（epoch を固定）。非 CRN は従来どおり epoch で再サンプル。
+  const iterEpoch = (t: number): number => (commonRandom ? 0 : Math.floor(t / refreshEvery));
 
   try {
-    const strat = initStrategies(eng);
+    const strat = initStrategies(eng, opts.initStrategy);
     await eng.refresh(strat, 0);
 
     let iterations = 0;
     let exploitabilityPt = Number.POSITIVE_INFINITY;
     let converged = false;
+    let prevExpl = Number.POSITIVE_INFINITY;
 
     for (let t = 1; t <= maxIters; t++) {
       iterations = t;
-      if (t > 1 && t % refreshEvery === 0) await eng.refresh(strat, Math.floor(t / refreshEvery));
+      if (t > 1 && t % refreshEvery === 0) await eng.refresh(strat, iterEpoch(t));
       const ev = computeEVs(eng, strat, cardRemoval);
-      const w = 1 / (t + 1);
+      const w = 1 / (t + initIters + 1);
       for (const nd of eng.nodes) {
         const aev = ev.aggrEV.get(nd.id)!;
         const fev = ev.foldEV.get(nd.id)!;
@@ -655,11 +690,18 @@ export async function solveMultiway(
           converged = true;
           break;
         }
+        // plateau 停止: 相対改善が閾値未満なら頭打ちとみなして打ち切る（CRN 前提で有効）。
+        if (plateauFrac !== undefined && Number.isFinite(prevExpl)) {
+          const improve = (prevExpl - exploitabilityPt) / Math.max(prevExpl, 1e-9);
+          if (improve < plateauFrac) break;
+        }
+        prevExpl = exploitabilityPt;
       }
     }
 
-    // 最終見積りで EV / exploitability / EQPost を確定
-    await eng.refresh(strat, 0x7fffffff);
+    // 最終見積りで EV / exploitability / EQPost を確定。
+    // CRN 時は学習に使った固定シードと別の独立シードで引き直し、サンプルへの過適合を避ける。
+    await eng.refresh(strat, commonRandom ? 1 : 0x7fffffff);
     const finalEv = computeEVs(eng, strat, cardRemoval);
     exploitabilityPt = exploitability(eng, strat, finalEv);
     converged = exploitabilityPt <= targetExpl;

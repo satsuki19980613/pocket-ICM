@@ -12,13 +12,12 @@
  * 範囲外（実効>maxbb 等）は pfInRange()=false を返すので、呼び出し側で solveMultiway に
  * フォールバックする。
  */
-import type { BoardState, Position, SolutionNode } from '@oshihiki/core';
-import { formatRange, comboCount, parseHandClass } from '@oshihiki/core';
-import { icmEquities, payoutsForPlayers } from './icm.js';
+import type { BoardState, Position } from '@oshihiki/core';
+import { comboCount, parseHandClass } from '@oshihiki/core';
+import { payoutsForPlayers } from './icm.js';
 import { decodeFloat16 } from './halfFloat.js';
 import type { MultiwayNSolveResult } from './nwaySolver.js';
-
-const TOTAL_COMBOS = 1326;
+import { assemblePfResult, stackTotals } from './pfResult.js';
 
 /** interpExplBound 未指定テーブルの既定 exploitability 上限（3人の実証値）。 */
 export const PF_DEFAULT_INTERP_EXPL_BOUND = 0.06;
@@ -73,20 +72,9 @@ export function buildPfTable(meta: PfMeta, data: Float32Array): PfTable {
   };
 }
 
-function antePaid(ante: { scheme: string; amount: number }, pos: Position): number {
-  if (ante.scheme === 'none') return 0;
-  if (ante.scheme === 'all') return ante.amount;
-  return pos === 'BB' ? ante.amount : 0;
-}
-
-/** state から order 順の総スタック(bb)を得る（total = stack + bet + ante拠出）。 */
+/** state から order 順の総スタック(bb)を得る（stackTotals＝nnTable と共有）。 */
 function totalsOf(table: PfTable, state: BoardState): number[] {
-  const { order, ante } = table.meta;
-  return order.map((pos) => {
-    const seat = state.seats.find((s) => s.pos === pos && s.state !== 'empty');
-    if (!seat) throw new Error(`pfTable: missing live seat ${pos}`);
-    return seat.stack + seat.bet + antePaid(ante, pos);
-  });
+  return stackTotals(table.meta.order, table.meta.ante, state);
 }
 
 /** この state を事前計算テーブルで解けるか（D人・条件一致・範囲内）。 */
@@ -146,61 +134,26 @@ export function lookupPf(table: PfTable, state: BoardState): MultiwayNSolveResul
     if (w !== 0) corners.push([flatIndex(ix, G), w]);
   }
 
-  // eqPre はスタックから厳密に再計算（丸め回避）。eqPost は補間。
-  const eqPre = icmEquities(totals, payouts);
+  // 各ノードのクラス別 EV差と席ごとの eqPost を多重線形補間で得る（eqPre は totals から厳密再計算）。
   const eqPost = new Array<number>(D).fill(0);
   const eqPostOff = nNodes * floatsPerNode;
   for (const [pIdx, w] of corners) {
     const b = pIdx * stride;
     for (let s = 0; s < D; s++) eqPost[s]! += w * data[b + eqPostOff + s]!;
   }
-  const equity: Record<string, { pre: number; post: number }> = {};
-  for (let s = 0; s < D; s++) equity[order[s]!] = { pre: eqPre[s]!, post: eqPost[s]! };
-
-  const quality = { exploitability: explBound, converged: true, iterations: 0 };
-  const strategies = new Map<string, Float64Array>();
-  const nodes: SolutionNode[] = [];
+  const evDiffByNode: Float64Array[] = [];
   for (let n = 0; n < nNodes; n++) {
     const evDiff = new Float64Array(NC);
     for (const [pIdx, w] of corners) {
       const off = pIdx * stride + n * floatsPerNode;
       for (let c = 0; c < NC; c++) evDiff[c]! += w * data[off + c]!;
     }
-    const freqArr = new Float64Array(NC);
-    const freq: Record<string, number> = {};
-    const ev: Record<string, number> = {};
-    const hands: string[] = [];
-    let weighted = 0;
-    for (let c = 0; c < NC; c++) {
-      const label = classOrder[c]!;
-      const push = evDiff[c]! >= 0 ? 1 : 0; // ゼロ交差 → 純戦略
-      freqArr[c] = push;
-      freq[label] = push;
-      ev[label] = evDiff[c]!;
-      if (push >= 0.5) hands.push(label);
-      weighted += combos[c]! * push;
-    }
-    strategies.set(nodeKeys[n]!, freqArr);
-    nodes.push({
-      key: nodeKeys[n]!,
-      actor: nodeActors[n]! as SolutionNode['actor'],
-      actionType: nodeTypes[n]! as SolutionNode['actionType'],
-      pct: (weighted / TOTAL_COMBOS) * 100,
-      range: formatRange(hands),
-      hands,
-      freq,
-      ev,
-      equity: equity as SolutionNode['equity'],
-      quality,
-    });
+    evDiffByNode.push(evDiff);
   }
 
-  return {
-    nodes,
-    iterations: 0,
-    exploitabilityPt: explBound,
-    converged: true,
-    equity,
-    strategies,
-  };
+  // ゼロ交差→純戦略・レンジ化・EQ 埋めは pfResult に集約（NN 蒸留と単一の真実）。
+  return assemblePfResult({
+    order, nodeKeys, nodeActors, nodeTypes, classOrder,
+    combos, payouts, totals, evDiffByNode, eqPost, explBound,
+  });
 }

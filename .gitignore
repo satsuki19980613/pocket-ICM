@@ -17,3 +17,6 @@ packages/solver/artifacts/*.progress.json
 # 実スクショ・生成テンプレはゲームアセット再配布問題のためコミットしない（SPEC §10 / R-10）
 packages/ocr/local-fixtures/
 packages/ocr/templates/
+
+# NN 蒸留: 教師データ(f32, 大容量・再生成可)はローカル保持。モデル(model.bin)は出荷用に commit。
+packages/solver/artifacts/nn*way.train.*

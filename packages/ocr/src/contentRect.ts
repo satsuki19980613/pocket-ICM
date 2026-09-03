@@ -89,11 +89,30 @@ function cropPx(img: Rgba, r: Rect): Rgba {
 }
 
 /**
- * 領域に「認識できる数値」が載るか。**低解像度対応**: cr へ写像した領域を原画像から
- * 切り出し、その領域が較正解像度で占めるべき画素サイズへ拡大してから NCC で認識する。
- * これにより検出も抽出（拡大後に読む）と同じグリフスケールで判定でき、縮小画像のまま
- * 読んで外す従来の弱点を解消する。canonH は cr が canonical アスペクトを保つ前提。
+ * 領域を cr へ写像→原画像から切り出し→較正解像度で占めるべき画素サイズへ拡大してから
+ * NCC 認識し、Read（値＋信頼度）を返す。**低解像度対応**: 検出も抽出（拡大後に読む）と
+ * 同じグリフスケールで判定でき、縮小画像のまま読んで外す従来の弱点を解消する。
+ * canonH は cr が canonical アスペクトを保つ前提。
  */
+function recognizeNorm(
+  img: Rgba,
+  orig: FracRect,
+  cr: ContentRect,
+  canonW: number,
+  canonH: number,
+  digits: readonly Template[],
+  minCh?: number,
+): { value: number; conf: number } {
+  const mapped = mapFrac(orig, cr);
+  const rp = toPx(mapped, img.w, img.h);
+  if (rp.w <= 2 || rp.h <= 2) return { value: NaN, conf: 0 };
+  const crop = cropPx(img, rp);
+  const tw = Math.max(4, Math.round(orig.w * canonW));
+  const th = Math.max(4, Math.round(orig.h * canonH));
+  const up = resampleRgba(crop, tw, th);
+  return recognizeAmount(up, { x: 0, y: 0, w: tw, h: th }, digits, minCh !== undefined ? { minCh } : {});
+}
+
 function readsDigitsNorm(
   img: Rgba,
   orig: FracRect,
@@ -103,17 +122,10 @@ function readsDigitsNorm(
   digits: readonly Template[],
   minCh?: number,
 ): boolean {
-  const mapped = mapFrac(orig, cr);
-  const rp = toPx(mapped, img.w, img.h);
-  if (rp.w <= 2 || rp.h <= 2) return false;
-  const crop = cropPx(img, rp);
-  const tw = Math.max(4, Math.round(orig.w * canonW));
-  const th = Math.max(4, Math.round(orig.h * canonH));
-  const up = resampleRgba(crop, tw, th);
-  return Number.isFinite(recognizeAmount(up, { x: 0, y: 0, w: tw, h: th }, digits, minCh !== undefined ? { minCh } : {}).value);
+  return Number.isFinite(recognizeNorm(img, orig, cr, canonW, canonH, digits, minCh).value);
 }
 
-/** cr の自己整合スコア: スタックが実認識できる席数（0..席数）。領域拡大で低解像度でも機能。 */
+/** cr の自己整合スコア: スタックが実認識できる席数（0..席数, 整数）。Android 高速パス判定用。 */
 export function scoreContentRect(
   img: Rgba,
   profile: FrameProfile,
@@ -125,6 +137,32 @@ export function scoreContentRect(
   let s = 0;
   for (const seat of profile.seats)
     if (readsDigitsNorm(img, seat.stack, cr, canonW, canonH, digits, seat.stackMinCh)) s++;
+  return s;
+}
+
+/**
+ * cr のランキング用スコア（信頼度加重）。スタックだけでなく **pot / blinds / ante** も
+ * アンカーに含め、実際に読めた値の信頼度を合算する。単なる finite 数だと「位置ズレでも
+ * finite なゴミ」を拾って最適 cr を外すため、信頼度和で真の整列位置を選ぶ。pot を含める
+ * ことで pot が読める cr を優先でき、実機 iPhone の pot 欠落（→棄却）を避けられる。
+ */
+function scoreCr(
+  img: Rgba,
+  profile: FrameProfile,
+  cr: ContentRect,
+  canonW: number,
+  canonH: number,
+  digits: readonly Template[],
+): number {
+  let s = 0;
+  const add = (r: { value: number; conf: number }) => {
+    if (Number.isFinite(r.value)) s += r.conf;
+  };
+  for (const seat of profile.seats) add(recognizeNorm(img, seat.stack, cr, canonW, canonH, digits, seat.stackMinCh));
+  // ヘッダ・中央のアンカー（位置整合の強い手掛かり）。
+  add(recognizeNorm(img, profile.pot, cr, canonW, canonH, digits));
+  add(recognizeNorm(img, profile.blindsNum, cr, canonW, canonH, digits));
+  add(recognizeNorm(img, profile.ante, cr, canonW, canonH, digits));
   return s;
 }
 
@@ -208,19 +246,25 @@ export function detectContentRect(
   const aspectOff = Math.abs(boxAspect - canonAspect) / canonAspect > 0.05;
   if (hasBars || aspectOff) return box;
 
-  // 2) 帯無し・較正版アスペクト（実機 iPhone/Android）。全画面満点なら即採用（高速パス）。
-  const full = scoreContentRect(img, profile, FULL_FRAME, digits, canonW, canonH);
-  if (full >= perfect) return FULL_FRAME;
+  // 2) 帯無し・較正版アスペクト（実機 iPhone/Android）。全画面が全席読めれば即採用（高速パス）。
+  if (scoreContentRect(img, profile, FULL_FRAME, digits, canonW, canonH) >= perfect) return FULL_FRAME;
 
-  const scales = opts.scales ?? [0.96, 0.98, 1.0, 1.01, 1.02, 1.03];
-  const offsets = opts.offsets ?? [-0.02, -0.01, 0, 0.01, 0.02];
+  // フィット矩形を基準にスケール・オフセットを総当り、**信頼度加重スコア**最大の cr を選ぶ。
+  // 実機 iPhone はセーフエリアで最大 ±4% 内寄せ（y は負方向にも）ずれるため広めに探る。
+  const scales = opts.scales ?? [0.94, 0.96, 0.98, 1.0, 1.02];
+  const offsets = opts.offsets ?? [-0.04, -0.03, -0.02, -0.01, 0, 0.01, 0.02, 0.03, 0.04];
+  // **全画面を基準に、有意に上回る cr のみ採用**（マージン）。アスペクトが合う機種
+  // （Android/実機）は全画面がほぼ最適なので、僅差のズレ候補で全画面を上書きさせない
+  // （＝Android 回帰防止）。実機 iPhone のように全画面が大きく外れる場合のみ内寄せ cr を選ぶ。
+  const MARGIN = 0.75;
+  const fullScore = scoreCr(img, profile, FULL_FRAME, canonW, canonH, digits);
   let best: ContentRect = FULL_FRAME;
-  let bestScore = full;
+  let bestScore = fullScore + MARGIN;
   for (const sc of scales)
     for (const ox of offsets)
       for (const oy of offsets) {
         const cr = fitRect(img, canonAspect, sc, ox, oy);
-        const s = scoreContentRect(img, profile, cr, digits, canonW, canonH);
+        const s = scoreCr(img, profile, cr, canonW, canonH, digits);
         if (s > bestScore) {
           bestScore = s;
           best = cr;

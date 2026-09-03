@@ -8,13 +8,20 @@ import {
   solveMultiway,
   solveHu,
   loadHuTableBrowser,
+  loadPf3wayTableBrowser,
+  pf3wayInRange,
+  lookupPf3way,
   type LoadedHuTable,
+  type Pf3wayTable,
   type McRunner,
   type ShowdownMcResult,
 } from '@oshihiki/solver';
 // HU equity テーブルは静的アセットとして同梱（?url でハッシュ付き URL に解決）。
 import huBinUrl from '../../solver/artifacts/hu-equity-169.f32.bin?url';
 import huMetaUrl from '../../solver/artifacts/hu-equity-169.meta.json?url';
+// 3人 push or fold / AOF 事前計算テーブル（同上の静的アセット）。
+import pf3wayBinUrl from '../../solver/artifacts/pf3way.f32.bin?url';
+import pf3wayMetaUrl from '../../solver/artifacts/pf3way.meta.json?url';
 import type {
   McRequest,
   McResultMsg,
@@ -39,6 +46,12 @@ let tablePromise: Promise<LoadedHuTable> | null = null;
 function getHuTable(): Promise<LoadedHuTable> {
   tablePromise ??= loadHuTableBrowser({ meta: huMetaUrl, bin: huBinUrl });
   return tablePromise;
+}
+
+let pf3wayPromise: Promise<Pf3wayTable> | null = null;
+function getPf3wayTable(): Promise<Pf3wayTable> {
+  pf3wayPromise ??= loadPf3wayTableBrowser({ meta: pf3wayMetaUrl, bin: pf3wayBinUrl });
+  return pf3wayPromise;
 }
 
 interface CommonNode {
@@ -103,6 +116,18 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
       const table = await getHuTable();
       const r = solveHu(state, { table, ...(opts?.maxIters ? { maxIters: opts.maxIters } : {}) });
       dto = toDto(r as unknown as CommonResult, 2, state.heroPos, state.heroHand);
+    } else if (state.playersLeft === 3) {
+      // 3人は事前計算テーブル（GOLD精度）を補間して即時解。範囲外(実効>maxbb 等)や
+      // 条件不一致・読込失敗時は N-way ソルバーへフォールバック。
+      let r: CommonResult | null = null;
+      try {
+        const pf = await getPf3wayTable();
+        if (pf3wayInRange(pf, state)) r = lookupPf3way(pf, state) as unknown as CommonResult;
+      } catch {
+        r = null; // フォールバック
+      }
+      if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
+      dto = toDto(r, 3, state.heroPos, state.heroHand);
     } else {
       const r = await solveMultiway(state, { workers: 0, mcRunner, ...opts });
       dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);

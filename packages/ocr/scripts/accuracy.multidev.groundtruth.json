@@ -1,0 +1,213 @@
+{
+  "_README": "多機種(PCブラウザ・デバイスエミュ)GT。AI目視3体で作成しペアで相互検算([[ocr-accuracy-verification]])。extractRawReadsAuto(黒帯検出→canonical拡大)を accuracy.ts --auto --gt で採点。画像は local-fixtures(gitignore)。XR=1791x828(16:9をピラーボックス) / SE=1334x750(16:9全画面)。ブラウザ描画は16:9でAndroid実機2.167とアスペクトが違うが、黒帯crop+stretchでcanonicalへ正規化される。",
+  "frames": {
+    "index.html(iPhone XR)1.png": {
+      "note": "4-max chips, hero=BC first-in(未レイズ), D=TL", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.5, "heroHand":"77",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":29.75,"bet":0,"button":true},
+        "TC": {"occ":"occupied","action":"none","stack":29.25,"bet":0.5},
+        "TR": {"occ":"occupied","action":"none","stack":28.75,"bet":1},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":29.75,"bet":0,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"CO", "playersLeft":4}
+    },
+    "index.html(iPhone XR)2.png": {
+      "note": "XR1 と同一局面", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.5, "heroHand":"77",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":29.75,"bet":0,"button":true},
+        "TC": {"occ":"occupied","action":"none","stack":29.25,"bet":0.5},
+        "TR": {"occ":"occupied","action":"none","stack":28.75,"bet":1},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":29.75,"bet":0,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"CO", "playersLeft":4}
+    },
+    "index.html(iPhone SE)1.png": {
+      "note": "4-max chips (XR1 と同一局面のSE)", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.5, "heroHand":"77",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":29.75,"bet":0,"button":true},
+        "TC": {"occ":"occupied","action":"none","stack":29.25,"bet":0.5},
+        "TR": {"occ":"occupied","action":"none","stack":28.75,"bet":1},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":29.75,"bet":0,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"CO", "playersLeft":4}
+    },
+    "index.html(iPhone SE)2.png": {
+      "note": "4-max bb (SE1 と同一局面のBB表示)", "displayMode": "bb",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.5, "heroHand":"77",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":29.8,"bet":0,"button":true},
+        "TC": {"occ":"occupied","action":"none","stack":29.3,"bet":0.5},
+        "TR": {"occ":"occupied","action":"none","stack":28.8,"bet":1},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":29.8,"bet":0,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"CO", "playersLeft":4}
+    },
+    "index.html(iPhone XR)4.png": {
+      "note": "3-max chips, TC=D オールイン, hero=BC SB がシャブに直面", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":31.25, "heroHand":"74o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":28.5,"bet":1},
+        "TC": {"occ":"occupied","action":"allin","stack":0,"bet":29,"button":true},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":60.25,"bet":0.5,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":3}
+    },
+    "index.html(iPhone SE)3.png": {
+      "note": "3-max chips (XR4 と同一局面のSE)", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":31.25, "heroHand":"74o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":28.5,"bet":1},
+        "TC": {"occ":"occupied","action":"allin","stack":0,"bet":29,"button":true},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":60.25,"bet":0.5,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":3}
+    },
+    "index.html(iPhone XR)3.png": {
+      "note": "3-max bb (XR4 と同一局面のBB表示)", "displayMode": "bb",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":31.3, "heroHand":"74o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":28.5,"bet":1},
+        "TC": {"occ":"occupied","action":"allin","stack":0,"bet":29,"button":true},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":60.3,"bet":0.5,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":3}
+    },
+    "index.html(iPhone SE)4.png": {
+      "note": "3-max bb (SE3 と同一局面のBB表示)", "displayMode": "bb",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":31.3, "heroHand":"74o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":28.5,"bet":1},
+        "TC": {"occ":"occupied","action":"allin","stack":0,"bet":29,"button":true},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":60.3,"bet":0.5,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":3}
+    },
+    "index.html(iPhone XR)5.png": {
+      "note": "HU chips, hero=BC(SB+D) first-in", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.0, "heroHand":"T9s",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":39.8,"bet":1},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":43.9,"bet":0.5,"hero":true,"button":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":2}
+    },
+    "index.html(iPhone SE)6.png": {
+      "note": "HU chips (XR5 と同一局面のSE)", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.0, "heroHand":"T9s",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":39.8,"bet":1},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":43.9,"bet":0.5,"hero":true,"button":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":2}
+    },
+    "index.html(iPhone SE)5.png": {
+      "note": "HU bb (SE6 と同一局面のBB表示)", "displayMode": "bb",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.0, "heroHand":"T9s",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":39.8,"bet":1},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":43.9,"bet":0.5,"hero":true,"button":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":2}
+    },
+    "index.html(iPhone XR)9.png": {
+      "note": "HU chips, hero=BC(SB+D) first-in", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.0, "heroHand":"54o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":37.8,"bet":1},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":45.9,"bet":0.5,"hero":true,"button":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":2}
+    },
+    "index.html(iPhone SE)10.png": {
+      "note": "HU chips (XR9 と同一局面のSE)", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.0, "heroHand":"54o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":37.8,"bet":1},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":45.9,"bet":0.5,"hero":true,"button":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":2}
+    },
+    "index.html(iPhone SE)9.png": {
+      "note": "HU bb (SE10 と同一局面のBB表示)", "displayMode": "bb",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.0, "heroHand":"54o",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":37.8,"bet":1},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":45.9,"bet":0.5,"hero":true,"button":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":true, "heroPos":"SB", "playersLeft":2}
+    },
+    "index.html(iPhone XR)8.png": {
+      "note": "HU 待機/ハンド間(手札未配・pot無)=対象外", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":0, "heroHand":"",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":39.8,"bet":0},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":45.9,"bet":0,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":false}
+    },
+    "index.html(iPhone SE)7.png": {
+      "note": "HU 待機/ハンド間(手札未配・pot無)=対象外", "displayMode": "chips",
+      "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":0, "heroHand":"",
+      "seats": {
+        "TL": {"occ":"occupied","action":"none","stack":39.8,"bet":0},
+        "TC": {"occ":"empty"},
+        "TR": {"occ":"empty"},
+        "BR": {"occ":"empty"},
+        "BC": {"occ":"occupied","action":"none","stack":45.9,"bet":0,"hero":true},
+        "BL": {"occ":"empty"}
+      },
+      "expect": {"ok":false}
+    }
+  }
+}

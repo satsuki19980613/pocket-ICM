@@ -15,11 +15,16 @@
 
 import type { FracRect } from './layout.js';
 import { toPx } from './layout.js';
+import type { Rect } from './types.js';
 import type { Rgba } from './color.js';
 import type { FrameProfile, SeatProfile } from './frameProfile.js';
 import type { FracPoint } from './button.js';
 import type { Template } from './match.js';
 import { recognizeAmount } from './numberField.js';
+import { resampleRgba } from './resize.js';
+
+/** 較正解像度（横）。extractRawReadsAuto と一致させる。 */
+export const CANON_W = 2730;
 
 /** ゲーム内容が画面内で占める割合矩形。既定は全画面。 */
 export type ContentRect = FracRect;
@@ -62,41 +67,128 @@ export function mapProfile(profile: FrameProfile, cr: ContentRect): FrameProfile
   };
 }
 
-/**
- * 領域に「認識できる数値」が載るか（デジット NCC で実認識, finite なら 1）。
- * 単なる成分の有無ではなく実際に数字として読めるかを見る（装飾の誤検出を避ける）。
- * BB 表示（"19.2 BB"）でも先頭の数値部は chips 認識で finite になるので位置合わせ指標に足る。
- */
-function readsDigits(img: Rgba, f: FracRect, digits: readonly Template[], minCh?: number): boolean {
-  const rect = toPx(f, img.w, img.h);
-  if (rect.w <= 2 || rect.h <= 2) return false;
-  return Number.isFinite(recognizeAmount(img, rect, digits, minCh !== undefined ? { minCh } : {}).value);
+/** 画素矩形で切り出す（原画像から）。 */
+function cropPx(img: Rgba, r: Rect): Rgba {
+  const x0 = Math.max(0, Math.min(img.w - 1, r.x));
+  const y0 = Math.max(0, Math.min(img.h - 1, r.y));
+  const w = Math.max(1, Math.min(img.w - x0, r.w));
+  const h = Math.max(1, Math.min(img.h - y0, r.h));
+  const data = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const srow = (y0 + y) * img.w;
+    for (let x = 0; x < w; x++) {
+      const s = (srow + x0 + x) * 4;
+      const d = (y * w + x) * 4;
+      data[d] = img.data[s]!;
+      data[d + 1] = img.data[s + 1]!;
+      data[d + 2] = img.data[s + 2]!;
+      data[d + 3] = 255;
+    }
+  }
+  return { w, h, data };
 }
 
-/** cr の自己整合スコア: 数値が実認識できるスタック席数（0..席数）。 */
+/**
+ * 領域に「認識できる数値」が載るか。**低解像度対応**: cr へ写像した領域を原画像から
+ * 切り出し、その領域が較正解像度で占めるべき画素サイズへ拡大してから NCC で認識する。
+ * これにより検出も抽出（拡大後に読む）と同じグリフスケールで判定でき、縮小画像のまま
+ * 読んで外す従来の弱点を解消する。canonH は cr が canonical アスペクトを保つ前提。
+ */
+function readsDigitsNorm(
+  img: Rgba,
+  orig: FracRect,
+  cr: ContentRect,
+  canonW: number,
+  canonH: number,
+  digits: readonly Template[],
+  minCh?: number,
+): boolean {
+  const mapped = mapFrac(orig, cr);
+  const rp = toPx(mapped, img.w, img.h);
+  if (rp.w <= 2 || rp.h <= 2) return false;
+  const crop = cropPx(img, rp);
+  const tw = Math.max(4, Math.round(orig.w * canonW));
+  const th = Math.max(4, Math.round(orig.h * canonH));
+  const up = resampleRgba(crop, tw, th);
+  return Number.isFinite(recognizeAmount(up, { x: 0, y: 0, w: tw, h: th }, digits, minCh !== undefined ? { minCh } : {}).value);
+}
+
+/** cr の自己整合スコア: スタックが実認識できる席数（0..席数）。領域拡大で低解像度でも機能。 */
 export function scoreContentRect(
   img: Rgba,
   profile: FrameProfile,
   cr: ContentRect,
   digits: readonly Template[],
+  canonW: number = CANON_W,
+  canonH: number = Math.round(CANON_W / profile.aspect),
 ): number {
-  const p = mapProfile(profile, cr);
   let s = 0;
-  for (const seat of p.seats) if (readsDigits(img, seat.stack, digits, seat.stackMinCh)) s++;
+  for (const seat of profile.seats)
+    if (readsDigitsNorm(img, seat.stack, cr, canonW, canonH, digits, seat.stackMinCh)) s++;
   return s;
 }
 
+/**
+ * 「フィット矩形」: canonical アスペクトを保ったまま画面に内接させた content 矩形
+ * （scale=1・中央寄せ）。アスペクトが一致する機種は全画面、広い機種はピラーボックス
+ * （左右に余白）、狭い機種はレターボックス（上下に余白）になる。拡大時の縦横歪みを防ぐ。
+ */
+function fitRect(img: Rgba, canonAspect: number, scale: number, dx: number, dy: number): ContentRect {
+  const fitWpx = Math.min(img.w, img.h * canonAspect);
+  const fitHpx = fitWpx / canonAspect;
+  const w = (scale * fitWpx) / img.w;
+  const h = (scale * fitHpx) / img.h;
+  return { x: (1 - w) / 2 + dx, y: (1 - h) / 2 + dy, w, h };
+}
+
+/**
+ * レターボックス/ピラーボックスの黒帯を除いた content 矩形を検出。
+ * ゲーム描画が画面を満たさない機種（ブラウザ版は 16:9 で描画し左右に黒帯）では、
+ * ほぼ純黒（各チャンネル<20）で埋まった端の行/列を帯とみなして除く。テンプレ非依存で
+ * レイアウトにも依存しない強い信号。帯が無ければ全画面を返す。
+ */
+export function detectContentBox(img: Rgba, darkMax = 20, fillFrac = 0.9): ContentRect {
+  const { w, h, data } = img;
+  const isDark = (x: number, y: number): boolean => {
+    const i = (y * w + x) * 4;
+    return Math.max(data[i]!, data[i + 1]!, data[i + 2]!) < darkMax;
+  };
+  const colDark = (x: number): boolean => {
+    let c = 0;
+    for (let y = 0; y < h; y++) if (isDark(x, y)) c++;
+    return c / h > fillFrac;
+  };
+  const rowDark = (y: number): boolean => {
+    let c = 0;
+    for (let x = 0; x < w; x++) if (isDark(x, y)) c++;
+    return c / w > fillFrac;
+  };
+  let x0 = 0;
+  while (x0 < w - 1 && colDark(x0)) x0++;
+  let x1 = w - 1;
+  while (x1 > x0 && colDark(x1)) x1--;
+  let y0 = 0;
+  while (y0 < h - 1 && rowDark(y0)) y0++;
+  let y1 = h - 1;
+  while (y1 > y0 && rowDark(y1)) y1--;
+  return { x: x0 / w, y: y0 / h, w: (x1 - x0 + 1) / w, h: (y1 - y0 + 1) / h };
+}
+
 export interface DetectContentRectOptions {
-  /** 一様スケール候補。既定 [0.86..1.0]。 */
+  /** スケール候補（フィット矩形基準）。既定 [0.96..1.03]。 */
   readonly scales?: readonly number[];
-  /** オフセット候補（x,y 共通）。既定 [-0.03..0.08]。 */
+  /** オフセット候補（x,y 共通, フィット矩形の中心からのズレ）。既定 [-0.02..0.02]。 */
   readonly offsets?: readonly number[];
 }
 
 /**
- * コンテンツ矩形を自動検出。全画面が満点（全席）なら即返す（Android 高速パス）。
- * そうでなければ一様スケール＋オフセットを総当りし、実認識スコア最大の cr を返す
- * （全画面も候補なので、優劣が無ければ全画面が残る）。digits テンプレが必要。
+ * コンテンツ矩形を自動検出。
+ *  1) **黒帯検出**で content box を求める。左右/上下に帯がある（ブラウザ版=16:9 を
+ *     ピラーボックス）か、box のアスペクトが較正版と大きく違う（SE 等 16:9 全画面）場合は、
+ *     その box を返す（切り出し→canonical へ拡大で 16:9→21:9 の圧縮を復元）。
+ *  2) 帯が無く box がほぼ全画面＝較正版と同アスペクト（実機 iPhone/Android）は、
+ *     アスペクト整合フィット矩形でスケール・オフセットを少数総当りし、スタック実認識
+ *     スコア最大の cr を返す（わずかなセーフエリア内寄せを吸収）。全画面満点なら即返す。
  */
 export function detectContentRect(
   img: Rgba,
@@ -105,18 +197,30 @@ export function detectContentRect(
   opts: DetectContentRectOptions = {},
 ): ContentRect {
   const perfect = profile.seats.length;
-  const full = scoreContentRect(img, profile, FULL_FRAME, digits);
+  const canonAspect = profile.aspect;
+  const canonW = CANON_W;
+  const canonH = Math.round(CANON_W / canonAspect);
+
+  // 1) 黒帯検出。帯があるか、box アスペクトが較正版と大きく違えばそれを採用。
+  const box = detectContentBox(img);
+  const hasBars = box.w < 0.98 || box.h < 0.98;
+  const boxAspect = (box.w * img.w) / (box.h * img.h);
+  const aspectOff = Math.abs(boxAspect - canonAspect) / canonAspect > 0.05;
+  if (hasBars || aspectOff) return box;
+
+  // 2) 帯無し・較正版アスペクト（実機 iPhone/Android）。全画面満点なら即採用（高速パス）。
+  const full = scoreContentRect(img, profile, FULL_FRAME, digits, canonW, canonH);
   if (full >= perfect) return FULL_FRAME;
 
-  const scales = opts.scales ?? [0.86, 0.9, 0.94, 0.98, 1.0];
-  const offsets = opts.offsets ?? [-0.03, 0, 0.015, 0.03, 0.05, 0.08];
+  const scales = opts.scales ?? [0.96, 0.98, 1.0, 1.01, 1.02, 1.03];
+  const offsets = opts.offsets ?? [-0.02, -0.01, 0, 0.01, 0.02];
   let best: ContentRect = FULL_FRAME;
   let bestScore = full;
   for (const sc of scales)
     for (const ox of offsets)
       for (const oy of offsets) {
-        const cr: ContentRect = { x: ox, y: oy, w: sc, h: sc };
-        const s = scoreContentRect(img, profile, cr, digits);
+        const cr = fitRect(img, canonAspect, sc, ox, oy);
+        const s = scoreContentRect(img, profile, cr, digits, canonW, canonH);
         if (s > bestScore) {
           bestScore = s;
           best = cr;

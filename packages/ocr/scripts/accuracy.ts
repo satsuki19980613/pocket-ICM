@@ -13,7 +13,7 @@
  */
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
-import { extractRawReads, type ExtractTemplates } from '../src/extract.js';
+import { extractRawReads, extractRawReadsAuto, type ExtractTemplates } from '../src/extract.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
 import { runOcrPipeline, type OcrValidation } from '../src/pipeline.js';
 import { templatesFromJson } from '../src/templates.js';
@@ -32,7 +32,10 @@ const templates: ExtractTemplates = {
 
 // ---- 正解ラベル ----
 const DIR = 'local-fixtures';
-const GT = JSON.parse(readFileSync('scripts/accuracy.groundtruth.json', 'utf8')) as {
+const argvPre = process.argv.slice(2);
+const gtPath = argvPre.includes('--gt') ? argvPre[argvPre.indexOf('--gt') + 1]! : 'scripts/accuracy.groundtruth.json';
+const useAuto = argvPre.includes('--auto'); // 多機種: コンテンツ矩形検出→拡大の入口を使う
+const GT = JSON.parse(readFileSync(gtPath, 'utf8')) as {
   frames: Record<string, GtFrame>;
 };
 type SeatId = 'TL' | 'TC' | 'TR' | 'BR' | 'BC' | 'BL';
@@ -92,7 +95,9 @@ for (const [frame, gt] of Object.entries(GT.frames)) {
   const t0 = Date.now();
   const img = decodePng(readFileSync(path));
   const rgba: Rgba = { w: img.width, h: img.height, data: img.rgba };
-  const reads: RawReads = extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
+  const reads: RawReads = useAuto
+    ? extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads
+    : extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
   const res: OcrValidation = runOcrPipeline(reads);
   const ms = Date.now() - t0;
 

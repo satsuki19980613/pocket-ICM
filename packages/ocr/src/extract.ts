@@ -64,6 +64,21 @@ const norm = (r: Read<number>, bb: number): Read<number> =>
   bb > 0 && Number.isFinite(r.value) ? { value: r.value / bb, conf: r.conf } : { value: r.value, conf: r.conf };
 
 /**
+ * ブラインドのサニタイズ。SB < BB はポーカーの不変条件。低解像度でヘッダ "600/1200" の
+ * SB を誤読して sb>=bb になると、下流の buildBoardState が「SB は BB より小さく」で
+ * ハード拒否し、プリフィル→確認の流れが死ぬ（実 iPhone で観測）。sb が不正（非有限/
+ * <=0/>=bb）なら **bb の半分**（この game の標準・SB=BB/2）に置換し、低信頼でフラグする
+ * （確認画面で強調され、利用者が修正できる＝プリフィルの原則を維持）。bb が読めない時は触らない。
+ */
+function sanitizeBlinds(sb: Read<number>, bb: Read<number>): { sb: Read<number>; bb: Read<number> } {
+  if (Number.isFinite(bb.value) && bb.value > 0) {
+    const bad = !Number.isFinite(sb.value) || sb.value <= 0 || sb.value >= bb.value;
+    if (bad) return { sb: { value: bb.value / 2, conf: Math.min(sb.conf, 0.3) }, bb };
+  }
+  return { sb, bb };
+}
+
+/**
  * フレーム → RawReads（chips 表示前提, 金額は BB 換算）。
  * 席は profile.seats の時計回り順で並ぶ（derivePositions のリング順）。
  */
@@ -163,7 +178,7 @@ export function extractRawReads(
 
   return {
     street,
-    blinds: { sb: norm(blinds.sb, bbChips), bb: norm(blinds.bb, bbChips) },
+    blinds: sanitizeBlinds(norm(blinds.sb, bbChips), norm(blinds.bb, bbChips)),
     ante: { scheme: opts.anteScheme ?? 'all', amount: norm(anteChips, bbChips) },
     pot,
     heroHand,

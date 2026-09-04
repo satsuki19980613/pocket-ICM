@@ -118,6 +118,15 @@ export function pfInRange(table: PfTable, state: BoardState): boolean {
   return pfCoverage(table, state) === 'in';
 }
 
+/**
+ * 'in' の時に、いずれかの席が axis 上限（25bb）を超えて**クランプ**されたか。
+ * true なら結果は「深い相手を25bbとみなした近似値」＝UI で「近似」明示に使う。
+ */
+export function pfApproxClamped(table: PfTable, state: BoardState): boolean {
+  const hi = table.meta.axis[table.meta.axis.length - 1]!;
+  return totalsOf(table, state).some((t) => t > hi + 1e-6);
+}
+
 /** axis 上の値 v の下側区間 index と比率（非等間隔対応, 範囲外はクランプ）。 */
 function seg(axis: number[], v: number): [number, number, number] {
   const last = axis.length - 1;

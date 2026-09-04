@@ -45,6 +45,11 @@ export interface SolveResultDto {
   /** 席（ポジション）→ EQPre/EQPost（実払い pt）。 */
   equity: Record<string, { pre: number; post: number }>;
   nodes: SolveNodeDto[];
+  /**
+   * 近似の注記（任意）。事前計算テーブルで「25bb超の深い相手を25bbにクランプ」した等、
+   * 厳密でない近似で解いた場合に、UI で「近似（目安）」を明示するための一言。
+   */
+  approxNote?: string;
 }
 
 export type SolveResponse =

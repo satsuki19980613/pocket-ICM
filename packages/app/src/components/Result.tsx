@@ -68,6 +68,12 @@ export function Result(props: {
 
   return (
     <div className="result-wrap">
+      {result.approxNote && (
+        <div className="approx-note">
+          <span className="approx-badge">近似</span>
+          {result.approxNote}
+        </div>
+      )}
       {headline ? (
         <div className={`panel vhero ${verdictOf(headline) === 'PUSH' ? '' : 'fold'}`}>
           <div className={`verdict ${verdictOf(headline) === 'PUSH' ? 'push' : 'fold'}`}>{verdictOf(headline)}</div>

@@ -11,6 +11,8 @@ import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
 // Drill（訓練）は SPEC §5.6 により一旦 Coming Soon。DrillView 実装はコード上温存（未配線）。
 import { ComingSoon } from './components/ComingSoon';
+import { Home } from './components/Home';
+import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
 import { Admin } from './components/Admin';
 import { buildBoardState, defaultForm, type BoardForm } from './formModel';
@@ -20,7 +22,52 @@ import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
-type Screen = 'icm' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill' | 'settings' | 'admin';
+type Screen =
+  | 'home'
+  | 'icm'
+  | 'confirm'
+  | 'solving'
+  | 'result'
+  | 'error'
+  | 'history'
+  | 'drill'
+  | 'settings'
+  | 'admin';
+
+/** 各画面のヘッダタイトル（モックの titles マップ準拠）。 */
+const TITLES: Record<Screen, string> = {
+  home: 'Home',
+  icm: 'ICM',
+  confirm: '条件確認',
+  solving: '計算中',
+  result: '計算結果',
+  error: '条件確認',
+  history: '記録',
+  drill: 'Training',
+  settings: '設定',
+  admin: 'クラブ管理',
+};
+
+/** 下段タブを出す画面（トップレベル）。フロー中（confirm/solving/result/error/admin）は隠す。 */
+const TAB_SCREENS: Screen[] = ['home', 'icm', 'drill', 'history', 'settings'];
+
+/** 画面 → アクティブなタブ（history は「記録」タブ、settings は「設定」タブ）。 */
+function tabForScreen(s: Screen): TabKey | null {
+  switch (s) {
+    case 'home':
+      return 'home';
+    case 'icm':
+      return 'icm';
+    case 'drill':
+      return 'drill';
+    case 'history':
+      return 'records';
+    case 'settings':
+      return 'settings';
+    default:
+      return null;
+  }
+}
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
@@ -44,7 +91,7 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
 export function App(): JSX.Element {
   // 認証セッション。undefined=判定中（初期ロード）, null=未ログイン, Session=ログイン済み。
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [screen, setScreen] = useState<Screen>('icm');
+  const [screen, setScreen] = useState<Screen>('home');
   // 手入力モーダル（写真起点・確認の修正・エラーの手埋めから開く）。
   const [manualOpen, setManualOpen] = useState(false);
   // エラーが写真経路由来か（「別の写真を選ぶ」を出すか）。
@@ -83,9 +130,9 @@ export function App(): JSX.Element {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      // ログアウト/削除でセッションが切れたら画面状態を初期化（再ログイン時に icm 起点）。
+      // ログアウト/削除でセッションが切れたら画面状態を初期化（再ログイン時に home 起点）。
       if (!s) {
-        setScreen('icm');
+        setScreen('home');
         setViewing(null);
       }
     });
@@ -189,6 +236,51 @@ export function App(): JSX.Element {
     }
   }
 
+  /** 下段タブの遷移。 */
+  function navTab(key: TabKey): void {
+    setViewing(null);
+    switch (key) {
+      case 'home':
+        setScreen('home');
+        break;
+      case 'icm':
+        setScreen('icm');
+        break;
+      case 'drill':
+        setScreen('drill');
+        break;
+      case 'records':
+        void refreshRecords();
+        setScreen('history');
+        break;
+      case 'settings':
+        setScreen('settings');
+        break;
+    }
+  }
+
+  /** フロー画面のヘッダ「戻る」。タブ画面は戻るを出さない。 */
+  function backFor(s: Screen): (() => void) | null {
+    switch (s) {
+      case 'confirm':
+      case 'error':
+        return () => setScreen('icm');
+      case 'admin':
+        return () => setScreen('settings');
+      case 'result':
+        return () => {
+          if (viewing) {
+            setViewing(null);
+            setScreen('history');
+          } else {
+            setScreen('icm');
+          }
+        };
+      default:
+        return null;
+    }
+  }
+
   // セッション判定中は最小のローディング（チラつき防止）。
   if (session === undefined) {
     return (
@@ -210,30 +302,25 @@ export function App(): JSX.Element {
     );
   }
 
+  const showTabs = TAB_SCREENS.includes(screen);
+  const back = backFor(screen);
+  const activeTab = tabForScreen(screen);
+
   return (
-    <div className="app">
-      <header className="hdr">
-        <h1>Black Ops ICM</h1>
-        <span className="tag">PUSH / FOLD</span>
-        <div className="navgrp">
-          <button type="button" className="navrec" onClick={() => setScreen('drill')}>
-            訓練
+    <div className={`app${showTabs ? ' has-tabs' : ''}`}>
+      <header className="topbar">
+        {back ? (
+          <button type="button" className="tb-back" aria-label="戻る" onClick={back}>
+            ‹
           </button>
-          <button
-            type="button"
-            className="navrec"
-            onClick={() => {
-              void refreshRecords();
-              setScreen('history');
-            }}
-          >
-            記録{records.length > 0 ? ` (${records.length})` : ''}
-          </button>
-          <button type="button" className="navrec" onClick={() => setScreen('settings')}>
-            設定
-          </button>
-        </div>
+        ) : (
+          <span className="tb-sp" />
+        )}
+        <h1 className="tb-title">{TITLES[screen]}</h1>
+        <span className="tb-sp" />
       </header>
+
+      {screen === 'home' && <Home onGoIcm={() => setScreen('icm')} />}
 
       {screen === 'icm' && (
         <IcmInput onScreenshot={onScreenshot} onManual={() => setManualOpen(true)} ocrBusy={ocrBusy} />
@@ -327,9 +414,14 @@ export function App(): JSX.Element {
         />
       )}
 
-      <footer className="ft">
-        端末ローカル完結・RTA なし。数値は実払い pt。求解は端末内（Web Worker）。
-      </footer>
+      {/* ホームからは FAB で計算へ（モックの ＋→ICM）。 */}
+      {screen === 'home' && (
+        <button type="button" className="fab" aria-label="計算する" onClick={() => setScreen('icm')}>
+          ＋
+        </button>
+      )}
+
+      {showTabs && activeTab && <TabBar active={activeTab} onNav={navTab} />}
     </div>
   );
 }

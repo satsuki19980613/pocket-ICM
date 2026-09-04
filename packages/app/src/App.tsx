@@ -11,6 +11,7 @@ import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
 import { DrillView } from './components/DrillView';
 import { Settings } from './components/Settings';
+import { Admin } from './components/Admin';
 import { buildBoardState, defaultForm, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
@@ -18,7 +19,7 @@ import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
-type Screen = 'icm' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill' | 'settings';
+type Screen = 'icm' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill' | 'settings' | 'admin';
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
@@ -291,7 +292,11 @@ export function App(): JSX.Element {
 
       {screen === 'drill' && <DrillView onExit={() => setScreen('icm')} />}
 
-      {screen === 'settings' && <Settings onBack={() => setScreen('icm')} />}
+      {screen === 'settings' && (
+        <Settings onBack={() => setScreen('icm')} onOpenAdmin={() => setScreen('admin')} />
+      )}
+
+      {screen === 'admin' && <Admin onBack={() => setScreen('settings')} />}
 
       {screen === 'error' && (
         <ErrorView

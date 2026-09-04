@@ -16,7 +16,7 @@ import { validateDisplayName, validatePassword } from '../auth/validate';
  *   本セッションでは対象外＝読み取り専用／準備中表示。ログイン成功/削除後は App の
  *   onAuthStateChange がゲート（認証画面）へ戻す。
  */
-export function Settings(props: { onBack: () => void }): JSX.Element {
+export function Settings(props: { onBack: () => void; onOpenAdmin: () => void }): JSX.Element {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
@@ -302,6 +302,15 @@ export function Settings(props: { onBack: () => void }): JSX.Element {
         </div>
         <p className="note">削除すると、記録・公開したスレッド・画像もすべて消えます。取り消せません。</p>
       </div>
+
+      {profile?.is_admin && (
+        <div className="pad pt0">
+          <h2 className="scr-h sm">管理</h2>
+          <button type="button" className="btn cyan" onClick={props.onOpenAdmin}>
+            クラブ管理（招待キー・上限）
+          </button>
+        </div>
+      )}
 
       <div className="pad pt0">
         <button type="button" className="btn ghost" onClick={props.onBack}>

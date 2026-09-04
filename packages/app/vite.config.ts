@@ -30,6 +30,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,bin,json,woff2,svg,png}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // 新デプロイ時に旧バージョンの precache を確実に破棄する（旧UIが居座らないように）。
+        // registerType:'autoUpdate' は skipWaiting/clientsClaim を有効化＝新SWが即座に支配。
+        cleanupOutdatedCaches: true,
         // 4人テーブル(f16, ~11MB)は precache しない（インストールを重くしない）。
         // 初回の4人求解で fetch → runtimeCaching(CacheFirst)でキャッシュ＝以後オフライン可。
         // 3人(1.33MB)/HU は従来どおり precache（インストール時からオフライン）。

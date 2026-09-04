@@ -1680,16 +1680,4 @@ button.cell { cursor: pointer; }
 .userpub-item .rescard { margin-top: 0; }
 .home-empty small { display: block; margin-top: 8px; font-size: 12px; color: var(--dim2); line-height: 1.7; }
 
-/* 近似注記（深い相手を25bbクランプ等）。エラーではなく情報＝シアン系。 */
-.approx-note {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: var(--s3); padding: 10px 12px;
-  border: 1px solid rgba(58, 230, 255, 0.4); background: rgba(58, 230, 255, 0.06);
-  color: var(--dim); font-size: 12px; line-height: 1.55;
-}
-.approx-badge {
-  flex: none; font-family: var(--disp); font-weight: 700; font-size: 11px;
-  letter-spacing: 0.08em; padding: 2px 8px; color: var(--cyan-ink); background: var(--cyan);
-}
-
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

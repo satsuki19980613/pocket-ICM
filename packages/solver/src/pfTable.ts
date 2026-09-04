@@ -87,13 +87,14 @@ function totalsOf(table: PfTable, state: BoardState): number[] {
 /** この state を事前計算テーブルで解けるか（D人・条件一致・範囲内）。 */
 /**
  * この state をテーブルでどう扱えるか。
- *  - 'in'       : 補間で即時に解ける（相手が上限超でも lookup 側で 25bb にクランプ）。
+ *  - 'in'       : 補間で即時に解ける（**全席が上限25bb以下**・条件一致）。
  *  - 'heroDeep' : **hero 自身が上限超**＝push/fold（AOF）が最適でない深さ → 対象外表示すべき。
- *  - 'off'      : 人数/ブラインド/アンティ方式が不一致 → 汎用ソルバーへフォールバック。
+ *  - 'off'      : 人数/ブラインド/アンティ方式が不一致、または**相手に25bb超の深い席**がある
+ *                → 汎用ソルバー（厳密 MC）へ。
  *
- * 方針（さつき決定 2026-09-04）: 相手だけが 25bb 超の深いスタックの局面は、その席を
- * 25bb にクランプして即時に近似回答する（hero が短ければ実用上ほぼ問題ない）。
- * hero 自身が 25bb 超なら push/fold の前提が崩れるので「対象外」とする。
+ * 方針（さつき決定 2026-09-04・再決定）: 深い相手を25bbにクランプする近似はズレが大きい
+ * （実測 SB 68%↔11%）ため**採用しない**。相手が深い局面は厳密 MC で解く（HRC一致・遅い）。
+ * テーブル即時は「全席25bb以下」の時だけ。hero 自身が25bb超は AOF 前提が崩れるので対象外。
  * アンティは 0.25 近傍を許容（実ゲームのチップ丸め対策, PF_ANTE_TOL）。
  */
 export type PfCoverage = 'in' | 'heroDeep' | 'off';
@@ -109,22 +110,14 @@ export function pfCoverage(table: PfTable, state: BoardState): PfCoverage {
   const totals = totalsOf(table, state); // order 順
   const heroIdx = order.indexOf(state.heroPos);
   if (heroIdx >= 0 && totals[heroIdx]! > hi + 1e-6) return 'heroDeep';
-  // hero が上限以下なら 'in'。相手の上限超は lookupPf の seg() が 25bb にクランプする。
+  // 相手に上限超の深い席があればテーブル不可＝厳密 MC へ（クランプしない）。
+  if (totals.some((t) => t > hi + 1e-6)) return 'off';
   return 'in';
 }
 
-/** 補間で即時に解ける（下限クランプ可・相手の上限超はクランプ・hero は上限以下）。 */
+/** 補間で即時に解ける（全席が上限以下・条件一致）。下限未満はクランプ許容。 */
 export function pfInRange(table: PfTable, state: BoardState): boolean {
   return pfCoverage(table, state) === 'in';
-}
-
-/**
- * 'in' の時に、いずれかの席が axis 上限（25bb）を超えて**クランプ**されたか。
- * true なら結果は「深い相手を25bbとみなした近似値」＝UI で「近似」明示に使う。
- */
-export function pfApproxClamped(table: PfTable, state: BoardState): boolean {
-  const hi = table.meta.axis[table.meta.axis.length - 1]!;
-  return totalsOf(table, state).some((t) => t > hi + 1e-6);
 }
 
 /** axis 上の値 v の下側区間 index と比率（非等間隔対応, 範囲外はクランプ）。 */

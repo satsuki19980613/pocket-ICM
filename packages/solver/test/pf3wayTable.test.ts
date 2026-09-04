@@ -72,12 +72,12 @@ describe('pf3wayTable interpolation', () => {
     expect(r.nodes[0]!.freq['72o']!).toBe(0);
   });
 
-  it('範囲判定: hero短=可（相手の上限超はクランプ）, hero深/人数不一致=不可', () => {
+  it('範囲判定: 全席上限以下=可, 相手深/hero深/人数不一致=不可（厳密MCへ）', () => {
     const t = synthTable(); // hero=BU, hi=20
     expect(pf3wayInRange(t, state(15, 15, 15))).toBe(true);
-    // 相手（BB）が上限超でも hero(BU) が短ければ可（クランプ）。
-    expect(pf3wayInRange(t, state(15, 15, 25))).toBe(true);
-    // hero(BU) 自身が上限超 → 対象外（'in' でない）。
+    // 相手（BB）が上限超 → クランプせず不可（厳密 MC へ）。
+    expect(pf3wayInRange(t, state(15, 15, 25))).toBe(false);
+    // hero(BU) 自身が上限超 → 不可。
     expect(pf3wayInRange(t, state(25, 15, 15))).toBe(false);
     expect(pf3wayInRange(t, state(5, 5, 5))).toBe(true); // 下限未満はクランプ許容
     const s4 = state(15, 15, 15); (s4 as { playersLeft: number }).playersLeft = 4;

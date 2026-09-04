@@ -12,7 +12,6 @@ import {
   lookupPf3way,
   loadPfTableBrowser,
   pfCoverage,
-  pfApproxClamped,
   lookupPf,
   type LoadedHuTable,
   type Pf3wayTable,
@@ -43,10 +42,6 @@ import type {
 // 遅い MC を回さず、この文言を結果画面ではなくエラー画面に出して手入力修正へ促す。
 const OUT_OF_SCOPE_MSG =
   '自分のスタックが深すぎます（25bb超）。押し引き（オールインか降り）で最適に近づくのは概ね25bb以下です。';
-
-// 深い相手（25bb超）を25bbにクランプして解いた時の近似注記。
-const APPROX_CLAMP_NOTE =
-  '相手に深いスタック（25bb超）がいるため、その席を25bbとみなした近似値です（目安）。';
 
 let mcReqId = 1;
 const mcPending = new Map<number, { resolve: (r: ShowdownMcResult[]) => void; reject: (e: Error) => void }>();
@@ -143,36 +138,27 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
       // 3人は事前計算テーブル（GOLD精度）を補間して即時解。相手だけが25bb超なら
       // その席を25bbにクランプして即時。hero自身が25bb超なら対象外。条件不一致・
       // 読込失敗時は N-way ソルバーへフォールバック。
+      // 全席25bb以下なら事前計算テーブルで即時。相手が深い('off')は厳密 MC へ。
+      // hero 自身が深い('heroDeep')は AOF 対象外。
       let r: CommonResult | null = null;
-      let approx = false;
       const pf = await getPf3wayTable().catch(() => null);
       if (pf) {
         const cov = pfCoverage(pf, state);
         if (cov === 'heroDeep') throw new Error(OUT_OF_SCOPE_MSG);
-        if (cov === 'in') {
-          r = lookupPf3way(pf, state) as unknown as CommonResult;
-          approx = pfApproxClamped(pf, state);
-        }
+        if (cov === 'in') r = lookupPf3way(pf, state) as unknown as CommonResult;
       }
       if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
       dto = toDto(r, 3, state.heroPos, state.heroHand);
-      if (approx) dto.approxNote = APPROX_CLAMP_NOTE;
     } else if (state.playersLeft === 4) {
-      // 4人も同型（クランプ＋hero深すぎは対象外＋フォールバック）。
       let r: CommonResult | null = null;
-      let approx = false;
       const pf = await getPf4wayTable().catch(() => null);
       if (pf) {
         const cov = pfCoverage(pf, state);
         if (cov === 'heroDeep') throw new Error(OUT_OF_SCOPE_MSG);
-        if (cov === 'in') {
-          r = lookupPf(pf, state) as unknown as CommonResult;
-          approx = pfApproxClamped(pf, state);
-        }
+        if (cov === 'in') r = lookupPf(pf, state) as unknown as CommonResult;
       }
       if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
       dto = toDto(r, 4, state.heroPos, state.heroHand);
-      if (approx) dto.approxNote = APPROX_CLAMP_NOTE;
     } else {
       const r = await solveMultiway(state, { workers: 0, mcRunner, ...opts });
       dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);

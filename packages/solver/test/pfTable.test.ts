@@ -83,11 +83,11 @@ describe('pfTable interpolation (4-way / quadlinear)', () => {
     expect(r.nodes[0]!.freq['72o']!).toBe(0);
   });
 
-  it('カバレッジ: hero短=in（相手の上限超はクランプ）, hero深=heroDeep, 条件不一致=off', () => {
+  it('カバレッジ: 全席上限以下=in, hero深=heroDeep, 相手深/条件不一致=off（厳密MCへ）', () => {
     const t = synthTable(); // axis [10,20] hi=20, hero=CO
     expect(pfCoverage(t, state(15, 15, 15, 15))).toBe('in');
-    // 相手（BB）が上限超でも hero が短ければ in（相手席は lookup で 20 にクランプ）。
-    expect(pfCoverage(t, state(15, 15, 15, 25))).toBe('in');
+    // 相手（BB）が上限超 → クランプせず 'off'（厳密 MC へ）。
+    expect(pfCoverage(t, state(15, 15, 15, 25))).toBe('off');
     // hero 自身が上限超 → heroDeep（push/fold 対象外）。
     expect(pfCoverage(t, state(25, 15, 15, 15))).toBe('heroDeep');
     expect(pfCoverage(t, state(5, 5, 5, 5))).toBe('in'); // 下限未満はクランプ許容
@@ -98,8 +98,9 @@ describe('pfTable interpolation (4-way / quadlinear)', () => {
     expect(pfCoverage(t, noAnte)).toBe('off');
     const s3 = state(15, 15, 15, 15); (s3 as { playersLeft: number }).playersLeft = 3;
     expect(pfCoverage(t, s3)).toBe('off');
-    // 後方互換: pfInRange は 'in' のみ true。
+    // pfInRange は 'in' のみ true。
     expect(pfInRange(t, state(15, 15, 15, 15))).toBe(true);
+    expect(pfInRange(t, state(15, 15, 15, 25))).toBe(false); // 相手深は不可（MCへ）
     expect(pfInRange(t, state(25, 15, 15, 15))).toBe(false);
   });
 

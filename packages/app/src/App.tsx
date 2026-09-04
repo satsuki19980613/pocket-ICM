@@ -146,6 +146,8 @@ export function App(): JSX.Element {
   // OCR プリフィルの低信頼フィールド（"UTG.stack" 等）。確認画面で強調する。
   const [lowConf, setLowConf] = useState<string[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
+  // 深い局面（25bb超の席あり）は厳密 MC で解くため時間がかかる → 計算中の文言を変える。
+  const [solvingDeep, setSolvingDeep] = useState(false);
   // 記録（履歴）: IndexedDB から読み込み。
   const [records, setRecords] = useState<SpotRecord[]>([]);
   // 結果画面の由来（保存可否・戻り先を決める）。
@@ -411,6 +413,8 @@ export function App(): JSX.Element {
       return;
     }
     setResultOrigin({ kind: 'solve' }); // 新規求解は保存可
+    // 25bb超の席があるとテーブルを使えず厳密 MC＝時間がかかる（HRC一致優先）。
+    setSolvingDeep(state.seats.some((s) => s.stack + s.bet > 25));
     setScreen('solving');
     try {
       const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
@@ -583,8 +587,17 @@ export function App(): JSX.Element {
       {screen === 'solving' && (
         <div className="panel solving">
           <div className="spinner" />
-          <p>求解中…（端末内 Web Worker）</p>
-          <p className="sub">人数が多いほど時間がかかります（並列化は後続）。</p>
+          {solvingDeep ? (
+            <>
+              <p>正確に計算中…（深いスタックのため）</p>
+              <p className="sub">25bb超の席があるので、丸めず厳密に解いています（数十秒かかることがあります）。</p>
+            </>
+          ) : (
+            <>
+              <p>求解中…（端末内 Web Worker）</p>
+              <p className="sub">短い局面は数秒で終わります。</p>
+            </>
+          )}
         </div>
       )}
 

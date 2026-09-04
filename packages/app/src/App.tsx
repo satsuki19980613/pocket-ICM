@@ -20,6 +20,7 @@ import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
 import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
+import { SAMPLE_POSTS, type SamplePost } from './data/sampleFeed';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
 type Screen =
@@ -107,6 +108,8 @@ export function App(): JSX.Element {
   // 記録（履歴）: IndexedDB から読み込み。viewing は履歴からの読み取り専用再表示。
   const [records, setRecords] = useState<SpotRecord[]>([]);
   const [viewing, setViewing] = useState<SpotRecord | null>(null);
+  // ホームのサンプル投稿を開いた読み取り専用結果（保存 UI なし）。
+  const [sampleView, setSampleView] = useState(false);
 
   async function refreshRecords(): Promise<void> {
     try {
@@ -220,9 +223,33 @@ export function App(): JSX.Element {
     }
   }
 
+  /** ホームのサンプル投稿を開く → 実ソルバーで解いて読み取り専用結果を表示。 */
+  async function openSample(post: SamplePost): Promise<void> {
+    const built = buildBoardState(post.form);
+    if (!built.ok || !built.state) return; // サンプルは常に妥当
+    setViewing(null);
+    setSampleView(true);
+    setState(built.state);
+    setScreen('solving');
+    try {
+      const { result: dto, ms: elapsed } = await solveInWorker(
+        built.state,
+        solveOptsForN(built.state.playersLeft),
+      );
+      setResult(dto);
+      setMs(elapsed);
+      setScreen('result');
+    } catch (e) {
+      setErrFromPhoto(false);
+      setIssues([e instanceof Error ? e.message : String(e)]);
+      setScreen('error');
+    }
+  }
+
   async function solve(): Promise<void> {
     if (!state) return;
     setViewing(null); // 新規求解は読み取り専用でない
+    setSampleView(false);
     setScreen('solving');
     try {
       const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
@@ -239,6 +266,7 @@ export function App(): JSX.Element {
   /** 下段タブの遷移。 */
   function navTab(key: TabKey): void {
     setViewing(null);
+    setSampleView(false);
     switch (key) {
       case 'home':
         setScreen('home');
@@ -320,7 +348,7 @@ export function App(): JSX.Element {
         <span className="tb-sp" />
       </header>
 
-      {screen === 'home' && <Home onGoIcm={() => setScreen('icm')} />}
+      {screen === 'home' && <Home posts={SAMPLE_POSTS} onOpen={openSample} />}
 
       {screen === 'icm' && (
         <IcmInput onScreenshot={onScreenshot} onManual={() => setManualOpen(true)} ocrBusy={ocrBusy} />
@@ -344,7 +372,19 @@ export function App(): JSX.Element {
       )}
 
       {screen === 'result' && state && result && (
-        viewing ? (
+        sampleView ? (
+          <Result
+            state={state}
+            result={result}
+            ms={ms}
+            readOnly
+            backLabel="ホームに戻る"
+            onBack={() => {
+              setSampleView(false);
+              setScreen('home');
+            }}
+          />
+        ) : viewing ? (
           <Result
             state={state}
             result={result}

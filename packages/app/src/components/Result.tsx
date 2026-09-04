@@ -28,6 +28,8 @@ export function Result(props: {
   savedAction?: HeroAction;
   savedEvLoss?: number;
   savedPublished?: boolean;
+  /** 戻るボタンの文言（未指定なら readOnly=記録一覧 / 通常=別のスポット）。 */
+  backLabel?: string;
 }): JSX.Element {
   const { result, state } = props;
   const [action, setAction] = useState<HeroAction | null>(null);
@@ -177,7 +179,7 @@ export function Result(props: {
       </div>
 
       <button type="button" className="btn ghost wide" onClick={props.onBack}>
-        {props.readOnly ? '記録一覧に戻る' : '別のスポットを入力'}
+        {props.backLabel ?? (props.readOnly ? '記録一覧に戻る' : '別のスポットを入力')}
       </button>
     </div>
   );

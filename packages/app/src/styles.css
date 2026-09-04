@@ -614,6 +614,103 @@ select.inp { appearance: none; cursor: pointer; }
   padding: 5px 12px;
 }
 
+/* ---- ホーム・フィード（サンプル投稿） ---- */
+.feed-note {
+  padding: 12px 14px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--dim2);
+  font-family: var(--mono);
+  border-bottom: 1px solid var(--line);
+}
+.post { padding: 15px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
+.post .col { flex: 1; min-width: 0; }
+.av {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: var(--disp);
+  font-weight: 700;
+  font-size: 15px;
+  background: linear-gradient(140deg, #8a6bd0, #d65b9e);
+}
+.av.k { background: linear-gradient(140deg, #2bb6d6, #33e6ff); }
+.av.n { background: linear-gradient(140deg, #d6913f, #ff3b3b); }
+.av.t { background: linear-gradient(140deg, #5b6bd6, #c9a8ff); }
+.meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; margin-bottom: 4px; }
+.meta b { font-weight: 700; }
+.meta i { font-style: normal; color: var(--dim2); font-size: 11px; font-family: var(--mono); }
+.post p { margin: 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; }
+.rescard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 10px;
+  padding: 0;
+  color: inherit;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+.rescard::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--yellow); }
+.rescard.fold::before { background: var(--red); }
+.rescard:hover { border-color: var(--line-2); }
+.rc-top { padding: 11px 12px 10px; display: flex; align-items: center; gap: 10px; }
+.rc-bot {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  display: flex;
+  gap: 14px;
+}
+.rc-verdict {
+  font-family: var(--disp);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  flex: none;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rc-verdict.push { background: var(--yellow); color: var(--yellow-ink); }
+.rc-verdict.fold { background: rgba(255, 59, 59, 0.15); color: var(--red); border: 1px solid rgba(255, 59, 59, 0.45); }
+.rc-seat { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.hand { display: flex; gap: 3px; flex: none; }
+.fcard {
+  width: 26px;
+  height: 34px;
+  border-radius: 3px;
+  background: #f6f7ec;
+  color: #14150e;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--disp);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.05;
+}
+.fcard em { font-style: normal; font-size: 11px; }
+.fcard.heart { color: #d21f2b; }
+.fcard.diamond { color: #2b6bff; }
+.fcard.club { color: #1f9d57; }
+.acts {
+  display: flex;
+  gap: 22px;
+  margin-top: 11px;
+  color: var(--dim2);
+  font-size: 12.5px;
+  font-family: var(--mono);
+}
+
 /* ---- フォーム ---- */
 .grp { margin-bottom: var(--s4); }
 .grp2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-bottom: var(--s4); }

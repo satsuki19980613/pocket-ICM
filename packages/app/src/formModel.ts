@@ -27,8 +27,12 @@ export interface BoardForm {
   stacks: Partial<Record<Position, string>>;
 }
 
-/** 指定人数の既定フォーム（等スタック 15bb, blinds 0.5/1, ante なし）。 */
-export function defaultForm(playersLeft = 5): BoardForm {
+/**
+ * 指定人数の既定フォーム（等スタック 15bb, blinds 0.5/1, **全員アンティ 0.25**）。
+ * アンティ all 0.25 はこのゲームの標準であり、事前計算テーブル（HU/3人/4人）と同条件。
+ * これにより既定のまま計算すると 4 人まで即時・決定的に解ける（範囲外の遅い MC を避ける）。
+ */
+export function defaultForm(playersLeft = 4): BoardForm {
   const positions = positionsForPlayersLeft(playersLeft);
   const stacks: Partial<Record<Position, string>> = {};
   for (const p of positions) stacks[p] = '15';
@@ -36,8 +40,8 @@ export function defaultForm(playersLeft = 5): BoardForm {
     playersLeft,
     sb: '0.5',
     bb: '1',
-    anteScheme: 'none',
-    anteAmount: '0',
+    anteScheme: 'all',
+    anteAmount: '0.25',
     heroPos: positions[0]!,
     heroHand: 'A5s',
     stacks,

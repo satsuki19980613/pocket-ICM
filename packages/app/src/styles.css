@@ -240,6 +240,105 @@ select.inp { appearance: none; cursor: pointer; }
 }
 .btn.red:hover:not(:disabled) { background: rgba(255, 59, 59, 0.16); filter: none; }
 .btn.wide { margin-top: var(--s1); }
+/* サインアップ CTA = 面取りシアン（ログインの黄 CTA と差別化・情報/操作系のアクセント） */
+.btn.cyan {
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  clip-path: var(--chamfer);
+}
+.btn.cyan:hover:not(:disabled) { filter: brightness(1.06); }
+.btn.cyan:active:not(:disabled) { filter: brightness(0.92); }
+
+/* ---- 認証（ログイン / サインアップ） ---- */
+.auth { padding: 34px 20px 24px; text-align: center; }
+.auth .logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: var(--yellow-ink);
+  font-family: var(--disp);
+  font-size: 28px;
+  font-weight: 700;
+  clip-path: var(--chamfer);
+  box-shadow: 0 0 32px rgba(252, 238, 10, 0.32);
+}
+.auth h2 {
+  font-family: var(--disp);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.auth .lead { font-size: 13px; color: var(--dim); margin-top: 8px; line-height: 1.75; }
+
+.seg2 {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  margin: 22px 0 4px;
+}
+.seg2 button {
+  flex: 1;
+  font-family: var(--disp);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  transition: color 150ms var(--ease);
+}
+.seg2 button[aria-pressed='true'] {
+  color: var(--yellow);
+  border-bottom-color: var(--yellow);
+  background: rgba(252, 238, 10, 0.05);
+}
+
+.auth .form { margin-top: 14px; text-align: left; display: flex; flex-direction: column; gap: 10px; }
+.afield { display: block; }
+.afield b {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim2);
+  margin-bottom: 5px;
+}
+.afield.key .inp { border-color: rgba(252, 238, 10, 0.5); background: rgba(252, 238, 10, 0.05); }
+.afield-err { display: block; margin-top: 5px; font-size: 12px; font-style: normal; color: var(--red); }
+
+.auth-err {
+  margin: 2px 0 0;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--red);
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.4);
+}
+.auth-unconfigured {
+  margin: 14px 0 0;
+  padding: 9px 11px;
+  font-size: 12px;
+  color: var(--dim);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.auth .note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--dim2);
+}
+.auth .note.c { text-align: center; }
 
 /* ---- フォーム ---- */
 .grp { margin-bottom: var(--s4); }

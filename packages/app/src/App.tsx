@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import type { BoardState } from '@oshihiki/core';
+import { Auth } from './components/Auth';
+import { supabase, isConfigured } from './supabase/client';
+import { signOut } from './supabase/api';
 import { IcmInput } from './components/IcmInput';
 import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
@@ -36,6 +40,8 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
 }
 
 export function App(): JSX.Element {
+  // 認証セッション。undefined=判定中（初期ロード）, null=未ログイン, Session=ログイン済み。
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [screen, setScreen] = useState<Screen>('icm');
   // 手入力モーダル（写真起点・確認の修正・エラーの手埋めから開く）。
   const [manualOpen, setManualOpen] = useState(false);
@@ -64,6 +70,30 @@ export function App(): JSX.Element {
   useEffect(() => {
     void refreshRecords();
   }, []);
+
+  // 認証セッションの監視。起動時に現在のセッションを取得し、以後の変化（ログイン/
+  // ログアウト/トークン更新）を購読する。未設定（isConfigured=false）でも getSession は
+  // 空セッションを返すので null になり、認証画面が出る。
+  useEffect(() => {
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setSession(data.session);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function onLogout(): Promise<void> {
+    await signOut();
+    // onAuthStateChange が session=null にし、認証画面へ戻る。画面状態は初期化しておく。
+    setScreen('icm');
+    setViewing(null);
+  }
 
   /** 結果画面から現在の局面を記録する。published=ホーム公開フラグ（既定 false, 反映は M6）。 */
   async function onSave(heroAction: HeroAction, published: boolean): Promise<void> {
@@ -159,6 +189,27 @@ export function App(): JSX.Element {
     }
   }
 
+  // セッション判定中は最小のローディング（チラつき防止）。
+  if (session === undefined) {
+    return (
+      <div className="app">
+        <div className="panel solving">
+          <div className="spinner" />
+          <p>読み込み中…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 未ログインは認証画面のみ（招待制クラブ＝全機能ログイン必須）。
+  if (session === null) {
+    return (
+      <div className="app">
+        <Auth configured={isConfigured} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="hdr">
@@ -177,6 +228,9 @@ export function App(): JSX.Element {
             }}
           >
             記録{records.length > 0 ? ` (${records.length})` : ''}
+          </button>
+          <button type="button" className="navrec" onClick={() => void onLogout()}>
+            ログアウト
           </button>
         </div>
       </header>

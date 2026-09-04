@@ -22,3 +22,8 @@ packages/ocr/templates/
 packages/solver/artifacts/nn*way.train.*
 packages/solver/artifacts/nn*way.control.json
 packages/solver/artifacts/nn*way.status.json
+packages/solver/artifacts/nn*way.progress.json
+
+# Python 進捗モニタの生成物
+__pycache__/
+*.pyc

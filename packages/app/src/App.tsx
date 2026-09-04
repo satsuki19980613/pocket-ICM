@@ -21,6 +21,13 @@ import type { SolveResultDto } from './solverProtocol';
 import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
 import { SAMPLE_POSTS, type SamplePost } from './data/sampleFeed';
+import sampleResultsJson from './data/sampleResults.json';
+
+// 事前計算済みのサンプル結果（id → {state, result, ms}）。JSON なので型を明示。
+const SAMPLE_RESULTS = sampleResultsJson as unknown as Record<
+  string,
+  { state: BoardState; result: SolveResultDto; ms: number }
+>;
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
 type Screen =
@@ -223,27 +230,19 @@ export function App(): JSX.Element {
     }
   }
 
-  /** ホームのサンプル投稿を開く → 実ソルバーで解いて読み取り専用結果を表示。 */
-  async function openSample(post: SamplePost): Promise<void> {
-    const built = buildBoardState(post.form);
-    if (!built.ok || !built.state) return; // サンプルは常に妥当
+  /**
+   * ホームのサンプル投稿を開く。結果は事前計算済み（data/sampleResults.json＝公開データ相当）
+   * なので求解せず即座に表示する（読み取り専用）。M6 の公開結果もこの「解を持ち歩く」形になる。
+   */
+  function openSample(post: SamplePost): void {
+    const pre = SAMPLE_RESULTS[post.id];
+    if (!pre) return;
     setViewing(null);
     setSampleView(true);
-    setState(built.state);
-    setScreen('solving');
-    try {
-      const { result: dto, ms: elapsed } = await solveInWorker(
-        built.state,
-        solveOptsForN(built.state.playersLeft),
-      );
-      setResult(dto);
-      setMs(elapsed);
-      setScreen('result');
-    } catch (e) {
-      setErrFromPhoto(false);
-      setIssues([e instanceof Error ? e.message : String(e)]);
-      setScreen('error');
-    }
+    setState(pre.state);
+    setResult(pre.result);
+    setMs(pre.ms);
+    setScreen('result');
   }
 
   async function solve(): Promise<void> {

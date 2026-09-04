@@ -28,12 +28,15 @@ export interface SamplePost {
   comments: number;
 }
 
-/** 全席均一スタックのスポットを作る（サンプル用の簡便ヘルパ）。 */
+/**
+ * 全席均一スタックのスポットを作る（サンプル用の簡便ヘルパ）。
+ * アンティは all 0.25（このゲーム標準＝事前計算テーブルと同条件なので即時・決定的に解ける）。
+ */
 function spot(playersLeft: number, heroPos: Position, heroHand: string, bb: number): BoardForm {
   const f = defaultForm(playersLeft);
   const stacks: Partial<Record<Position, string>> = {};
   for (const p of Object.keys(f.stacks) as Position[]) stacks[p] = String(bb);
-  return { ...f, heroPos, heroHand, stacks };
+  return { ...f, heroPos, heroHand, stacks, anteScheme: 'all', anteAmount: '0.25' };
 }
 
 // スポットは高速テーブル圏（HU/3人）で即時・決定的。verdict/pu/ev は実求解に一致（in-browser 照合済）。
@@ -53,8 +56,8 @@ export const SAMPLE_POSTS: SamplePost[] = [
     ],
     posLabel: '3 LEFT · BU',
     verdict: 'PUSH',
-    pu: 'PU 17.7%',
-    ev: 'EV +0.033pt',
+    pu: 'PU 39.1%',
+    ev: 'EV +0.020pt',
     likes: 14,
     comments: 8,
   },
@@ -72,8 +75,8 @@ export const SAMPLE_POSTS: SamplePost[] = [
     ],
     posLabel: '3 LEFT · SB',
     verdict: 'PUSH',
-    pu: 'PU 45.3%',
-    ev: 'EV +0.070pt',
+    pu: 'PU 78.9%',
+    ev: 'EV +0.122pt',
     likes: 41,
     comments: 23,
   },
@@ -92,8 +95,8 @@ export const SAMPLE_POSTS: SamplePost[] = [
     ],
     posLabel: '3 LEFT · BU',
     verdict: 'FOLD',
-    pu: 'PU 14.9%',
-    ev: 'EV −0.103pt',
+    pu: 'PU 30.0%',
+    ev: 'EV −0.045pt',
     likes: 9,
     comments: 15,
   },

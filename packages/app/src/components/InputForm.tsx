@@ -112,7 +112,7 @@ export function InputForm(props: {
             <div key={pos} className={`seatrow${form.heroPos === pos ? ' hero' : ''}`}>
               <button
                 type="button"
-                className={`posbadge${form.heroPos === pos ? ' on' : ''}`}
+                className={`posbadge pos-${pos}${form.heroPos === pos ? ' on' : ''}`}
                 onClick={() => set({ heroPos: pos })}
                 title="hero に設定"
               >

@@ -44,7 +44,7 @@ export function Confirm(props: {
       <div className="seats-ro">
         {state.seats.map((s) => (
           <div key={s.pos} className={`seatrow-ro${s.pos === state.heroPos ? ' hero' : ''}`}>
-            <span className="posbadge sm">{s.pos}</span>
+            <span className={`posbadge sm pos-${s.pos}`}>{s.pos}</span>
             <span className={`stk${low.has(`${s.pos}.stack`) ? ' lowconf' : ''}`}>{s.stack}bb</span>
             {s.bet > 0 && (
               <span className={`betchip${low.has(`${s.pos}.bet`) ? ' lowconf' : ''}`}>bet {s.bet}</span>

@@ -6,10 +6,12 @@ import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/m
 
 const ACTION_JA: Record<string, string> = { PU: '先手プッシュ (PU)', CA: 'コール (CA)', OC: 'オーバーコール (OC)' };
 
-/** EV の大きさバンド（SPEC §4）。|EV|<0.05 小 / 0.05–0.2 / >0.2 大。 */
-function evBand(ev: number): 'minor' | 'mid' | 'major' {
-  const a = Math.abs(ev);
-  return a < 0.05 ? 'minor' : a <= 0.2 ? 'mid' : 'major';
+/**
+ * EV の符号で色分け（CP2077 配色: 黄=+EV / 赤=−EV）。判定と一致し、モックの
+ * evbox（push→黄 / fold→赤）に沿う。赤は「損失」だけに使う原則を保つ。
+ */
+function evClass(ev: number): 'pos' | 'neg' {
+  return ev >= 0 ? 'pos' : 'neg';
 }
 
 /** 基本の結果画面（3-1c）＋記録（3-2）。判定・EV・レンジ表・EQ・収束品質・全ノード。 */
@@ -57,7 +59,7 @@ export function Result(props: {
           </div>
           <div className="evbox">
             <span className="evlabel">EV（フォールド比, 実払い pt）</span>
-            <b className={`evval ${evBand(headline.heroEv)}`}>
+            <b className={`evval ${evClass(headline.heroEv)}`}>
               {headline.heroEv >= 0 ? '+' : ''}
               {headline.heroEv.toFixed(3)}
             </b>
@@ -128,7 +130,7 @@ export function Result(props: {
               <span className="ht">{ACTION_JA[n.actionType]?.split(' ')[0] ?? n.actionType}</span>
               <span className={`hv ${verdictOf(n) === 'PUSH' ? 'push' : 'fold'}`}>{verdictOf(n)}</span>
               <span className="hpct">{n.pct.toFixed(1)}%</span>
-              <span className={`hev ${evBand(n.heroEv)}`}>
+              <span className={`hev ${evClass(n.heroEv)}`}>
                 {n.heroEv >= 0 ? '+' : ''}
                 {n.heroEv.toFixed(3)}
               </span>

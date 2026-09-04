@@ -15,11 +15,11 @@
 | 項目 | 値 |
 |---|---|
 | 最終更新 | 2026-09-04 |
-| 計画ステータス | **承認・確定済み（マージ済み）**。次セッションから実装開始 |
-| 進行中マイルストーン | **M1（次セッションで着手）** |
-| 次アクション | M1 冒頭: さつきが Supabase 無料アカウント作成（カード無し）→ 私が画面付きで案内 → スキーマ/RLS/招待・上限・管理 Edge Function |
+| 計画ステータス | **実装中**。M2 完了・M1 は足場完成（実機待ち） |
+| 進行中マイルストーン | **M1（バックエンド足場完成・Supabase 実機適用待ち）** ／ **M2 ✅完了** |
+| 次アクション | ①M1: さつきが Supabase プロジェクト作成（現在 Supabase 側で障害・復旧待ち）→ URL/anon key を受領→SQL適用→関数deploy→初回管理者→DoD検証。②M3 着手可（M2 完了済み） |
 | 並行トラック | M0（教師データ生成）はさつきが **`教師データ生成モニタ.pyw`**（ネイティブGUI）で随時実行可 |
-| ブロッカー | なし（Supabase アカウントはさつき操作が要る＝M1 冒頭で案内） |
+| ブロッカー | M1: Supabase プロジェクト作成が Supabase 側の障害で不可（2026-09-04・復旧待ち）。コード側の足場は全て完成・commit 済み |
 
 ---
 
@@ -37,8 +37,8 @@
 | # | マイルストーン | 状態 | 依存 | トラック |
 |---|---|---|---|---|
 | **M0** | 教師データ生成（進捗GUI稼働） | 🟨進行中 | 済 | B |
-| **M1** | バックエンド基盤（Auth/DB/RLS/招待/上限/管理） | ⬜未着手 | — | A |
-| **M2** | デザイン・トークン刷新（CP2077 黄60/赤20/青20） | ⬜未着手 | — | A |
+| **M1** | バックエンド基盤（Auth/DB/RLS/招待/上限/管理） | 🟨足場完成・実機待ち | — | A |
+| **M2** | デザイン・トークン刷新（CP2077 黄60/赤20/青20） | ✅完了 | — | A |
 | **M2.5** | 管理画面をモックに追加（`admin`） | ⬜未着手 | M2 | A |
 | **M3** | ICM 入力の刷新（写真起点/手入力モーダル/確認/エラー） | ⬜未着手 | M2 | A |
 | **M4** | 計算結果の刷新（Action tree 全ポジ×全条件） | ⬜未着手 | M2,M3 | A |
@@ -77,11 +77,12 @@
 - **DoD**: 実機で「招待キー発行（管理）→そのキーでサインアップ→ログイン→アカウント削除」が通り、
   無効キー/期限切れ/26人目/非管理者の管理操作がいずれも**サーバ側で拒否**される。
 
-### M2 — デザイン・トークン刷新 ⬜
-- [ ] `styles.css` にモックのトークン（黄60/赤20/青20・面取り・ブラケット・フォント）を移植
-- [ ] 共通UI（ボタン/パネル/タブ/バッジ/モーダル）をモック準拠に
-- [ ] 既存全画面が新配色で破綻しないか確認
-- **DoD**: 既存画面がモックの見た目に一致し、`frontend-design-principles` の自己レビュー（swap/squint/signature/token）に合格。
+### M2 — デザイン・トークン刷新 ✅
+- [x] `styles.css` にモックのトークン（黄60/赤20/青20・面取り・ブラケット・フォント）を移植（全面書き換え・既存クラス名維持でJSX不変）
+- [x] 共通UI（ボタン=面取り黄CTA/ghost=シアン/red・パネル・segbtn・posbadge=6ポジション色・verdict・stat・rec）をモック準拠に（※タブ/モーダルは SNS 実装の M6/M7 で新設）
+- [x] 既存全画面が新配色で破綻しないか確認（form/confirm/result[PUSH黄・FOLD赤]/records/drill/solving/error を実機で目視）
+- [x] index.html に Rajdhani/Zen Kaku/Share Tech Mono を追加。EV 色を符号ベース（+EV=黄/−EV=赤）へ修正し「赤=損失のみ」を担保
+- **DoD**: ✅ 既存画面がモックの見た目に一致し、`frontend-design-principles` の自己レビュー（swap/squint/signature/token）に合格。build/tsc clean。
 
 ### M2.5 — 管理画面をモックに追加 ⬜
 - [ ] `docs/production-mock.html` に `admin` 画面を追加（登録状況/上限編集/キー発行・一覧・取消）
@@ -140,6 +141,17 @@
 
 ## 5. 進捗ログ（新しい順・セッション引き継ぎ）
 
+- **2026-09-04（5, M2）**: **M2 デザイン・トークン刷新＝完了**。`styles.css` を CP2077（黄60/赤20/青20・
+  面取りプレート・ハザードティック・コーナーブラケット・Rajdhani/Zen Kaku/Share Tech Mono）へ全面書き換え
+  （既存クラス名維持＝JSX/テスト不変）。position 6色フックを Confirm/InputForm に最小追加。EV 色を符号ベース
+  （+EV=黄/−EV=赤）に修正し「赤=損失のみ」を担保（`evBand`→`evClass`）。index.html にフォント追加。
+  実機で全画面目視（form/confirm/result[PUSH黄・FOLD赤ブラケット]/records/drill[HUDレーダー・4色デッキ]/solving/error）。
+  **408 tests green・tsc/vite build clean**（CSS 20.4KB/gzip4.79）。self-review 合格。
+- **2026-09-04（4, M1 足場）**: **M1 バックエンド足場＝完成・commit（4b9de2b）**。`supabase/`（migrations 0001–0005＝
+  schema/functions/RLS/storage/seed, functions 5本＝signup/issue-invite/revoke-invite/set-max-accounts/delete-account,
+  gen-invite.mjs, README）＋フロント配線（`src/supabase/{client,api}.ts`・@supabase/supabase-js）＋warm-ping cron。
+  招待キーは SHA-256 ハッシュのみ保存・使い捨て・期限7日、`claim_invite` で原子的消費＋上限厳守。
+  **Supabase 実機適用は Supabase 側障害で保留**（プロジェクト作成不可・復旧待ち）。復旧後に URL/anon key 受領→SQL→deploy→DoD 検証。
 - **2026-09-04（3）**: 計画を**承認・マージ確定**。次セッションで M1 着手。進捗モニタを
   ネイティブGUI（Tkinter `教師データ生成モニタ.pyw`）化し起動不具合を解消・実機起動確認済み。
 - **2026-09-04（2）**: 仕様書 SPEC.md / 本実装計画書を作成。招待キーを「1人ずつ・使い捨て・管理画面発行」に確定。

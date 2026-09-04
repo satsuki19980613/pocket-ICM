@@ -37,13 +37,18 @@ export function floatToHalfBits(value: number): number {
   return half & 0xffff;
 }
 
+// ビット再解釈用のスクラッチ（モジュール共有・単一スレッドJVなので再入なし）。
+// 呼び出しごとの new Int32Array/Float32Array 確保を避ける（大量復号の主要コスト源だった）。
+const _i = new Int32Array(1);
+const _f = new Float32Array(_i.buffer);
+
 /** float16 のビット（Uint16）→ float32 値。 */
 export function halfBitsToFloat(h: number): number {
   const sign = (h & 0x8000) << 16;
   const exp = (h >>> 10) & 0x1f;
   const mantissa = h & 0x3ff;
-  const i = new Int32Array(1);
-  const f = new Float32Array(i.buffer);
+  const i = _i;
+  const f = _f;
 
   if (exp === 0) {
     if (mantissa === 0) {
@@ -70,9 +75,22 @@ export function encodeFloat16(src: Float32Array): Uint16Array {
   return out;
 }
 
-/** float16 ビット列（Uint16Array）→ Float32Array。 */
+// 全 65536 通りの half → float32 を一度だけ表引き化（初回のみ生成・以後共有）。
+// これで大量復号は「アロケーション・分岐なしのメモリコピー」になる（~1s → 数十ms）。
+let HALF_LUT: Float32Array | null = null;
+function halfLut(): Float32Array {
+  if (HALF_LUT) return HALF_LUT;
+  const lut = new Float32Array(65536);
+  for (let h = 0; h < 65536; h++) lut[h] = halfBitsToFloat(h);
+  HALF_LUT = lut;
+  return lut;
+}
+
+/** float16 ビット列（Uint16Array）→ Float32Array（65536 エントリの LUT で高速復号）。 */
 export function decodeFloat16(src: Uint16Array): Float32Array {
-  const out = new Float32Array(src.length);
-  for (let i = 0; i < src.length; i++) out[i] = halfBitsToFloat(src[i]!);
+  const lut = halfLut();
+  const n = src.length;
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = lut[src[i]!]!;
   return out;
 }

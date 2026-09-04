@@ -30,6 +30,8 @@ export interface GoldDiscOptions {
   readonly minAreaFrac?: number;
   /** 許容アスペクト w/h。既定 [0.7, 1.5]。 */
   readonly aspectRange?: [number, number];
+  /** ディスクとみなす席アンカーへの最大距離（フレーム割合）。既定 0.08。 */
+  readonly maxAnchorDist?: number;
 }
 
 export interface DiscResult {
@@ -39,8 +41,12 @@ export interface DiscResult {
   readonly area: number;
 }
 
-/** テーブル領域内の最大ゴールドディスクの中心（フレーム割合）。見つからなければ null。 */
-export function goldDiscCenter(img: Rgba, tableRect: Rect, opts: GoldDiscOptions = {}): DiscResult | null {
+/**
+ * テーブル領域内の「ディスク状（アスペクト≈1・面積下限以上）」の金ブロブ候補を全て返す。
+ * 中央のキャラ絵の金装飾・プレートの金枠など、D ディスクより大きい金ブロブが混じるため、
+ * 「最大」で選ぶと誤検出する。呼び出し側（detectButtonSeat）が席アンカー最近傍で D を選ぶ。
+ */
+export function goldDiscCandidates(img: Rgba, tableRect: Rect, opts: GoldDiscOptions = {}): DiscResult[] {
   const minR = opts.minR ?? 170;
   const minG = opts.minG ?? 110;
   const maxB = opts.maxB ?? 120;
@@ -48,10 +54,11 @@ export function goldDiscCenter(img: Rgba, tableRect: Rect, opts: GoldDiscOptions
   const [aLo, aHi] = opts.aspectRange ?? [0.7, 1.5];
   const x0 = Math.max(0, Math.floor(tableRect.x));
   const y0 = Math.max(0, Math.floor(tableRect.y));
-  const x1 = Math.min(img.w, x0 + tableRect.w);
-  const y1 = Math.min(img.h, y0 + tableRect.h);
+  // 整数ピクセル寸法にする（connectedComponents は整数 stride 前提）。
+  const x1 = Math.min(img.w, Math.round(tableRect.x + tableRect.w));
+  const y1 = Math.min(img.h, Math.round(tableRect.y + tableRect.h));
   const w = Math.max(0, x1 - x0), h = Math.max(0, y1 - y0);
-  if (w === 0 || h === 0) return null;
+  if (w === 0 || h === 0) return [];
   const mask = new Uint8Array(w * h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
@@ -60,14 +67,21 @@ export function goldDiscCenter(img: Rgba, tableRect: Rect, opts: GoldDiscOptions
       mask[y * w + x] = R > minR && G > minG && B < maxB && R - B > minRB ? 1 : 0;
     }
   const minArea = (opts.minAreaFrac ?? 0.0003) * w * h;
-  let best: DiscResult | null = null;
+  const out: DiscResult[] = [];
   for (const c of connectedComponents(mask, w, h, 8)) {
     if (c.area < minArea) continue;
     const aspect = c.w / c.h;
     if (aspect < aLo || aspect > aHi) continue;
-    if (best === null || c.area > best.area) {
-      best = { cx: (x0 + c.x + c.w / 2) / img.w, cy: (y0 + c.y + c.h / 2) / img.h, area: c.area };
-    }
+    out.push({ cx: (x0 + c.x + c.w / 2) / img.w, cy: (y0 + c.y + c.h / 2) / img.h, area: c.area });
+  }
+  return out;
+}
+
+/** テーブル領域内の最大ゴールドディスクの中心（フレーム割合）。見つからなければ null。（後方互換） */
+export function goldDiscCenter(img: Rgba, tableRect: Rect, opts: GoldDiscOptions = {}): DiscResult | null {
+  let best: DiscResult | null = null;
+  for (const c of goldDiscCandidates(img, tableRect, opts)) {
+    if (best === null || c.area > best.area) best = c;
   }
   return best;
 }
@@ -82,16 +96,25 @@ export function detectButtonSeat(
   seatAnchors: readonly FracPoint[],
   opts: GoldDiscOptions = {},
 ): Read<number> {
-  const disc = goldDiscCenter(img, tableRect, opts);
-  if (disc === null || seatAnchors.length === 0) return { value: -1, conf: 0 };
-  const dists = seatAnchors.map((a) => Math.hypot(a.x - disc.cx, a.y - disc.cy));
-  let best = 0;
-  for (let i = 1; i < dists.length; i++) if (dists[i]! < dists[best]!) best = i;
-  const sorted = [...dists].sort((p, q) => p - q);
-  const d0 = sorted[0]!, d1 = sorted[1] ?? Infinity;
-  // 最近傍が近く（<0.08）、2 位と十分離れていれば高信頼。
-  const near = Math.max(0, 1 - d0 / 0.08);
-  const sep = d1 === Infinity ? 1 : Math.min(1, (d1 - d0) / 0.1);
-  const conf = Math.max(0, Math.min(1, 0.5 * near + 0.5 * sep));
-  return { value: best, conf };
+  const cands = goldDiscCandidates(img, tableRect, opts);
+  if (cands.length === 0 || seatAnchors.length === 0) return { value: -1, conf: 0 };
+  const maxDist = opts.maxAnchorDist ?? 0.08;
+
+  // D ディスクは席プレート（≈アンカー）の上に載る。中央のキャラ絵の金装飾やプレートの
+  // 金枠はどのアンカーからも遠い。よって「席アンカーに最も近いディスク状ブロブ」を D とする
+  // （最大面積ではなく、アンカー最近傍で選ぶ）。同点近傍は面積が大きい方（本物のディスク）。
+  let best: { seat: number; dist: number; area: number } | null = null;
+  for (const c of cands) {
+    let ni = 0, nd = Infinity;
+    for (let i = 0; i < seatAnchors.length; i++) {
+      const d = Math.hypot(seatAnchors[i]!.x - c.cx, seatAnchors[i]!.y - c.cy);
+      if (d < nd) { nd = d; ni = i; }
+    }
+    if (best === null || nd < best.dist - 1e-6 || (Math.abs(nd - best.dist) <= 1e-6 && c.area > best.area)) {
+      best = { seat: ni, dist: nd, area: c.area };
+    }
+  }
+  if (best === null || best.dist > maxDist) return { value: -1, conf: 0 };
+  const conf = Math.max(0, Math.min(1, 1 - best.dist / maxDist));
+  return { value: best.seat, conf };
 }

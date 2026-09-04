@@ -1,0 +1,23 @@
+# Supabase 無料枠の 7日ポーズ対策（SPEC §7）。週1で軽く ping して休止を防ぐ。
+# 必要な GitHub Secret: SUPABASE_URL（例: https://xxxx.supabase.co）
+#   Settings → Secrets and variables → Actions → New repository secret。
+# REST に対して無認証で叩くだけ（401 が返っても DB は起きる = warm 目的は達成）。
+name: warm-ping
+
+on:
+  schedule:
+    - cron: '17 3 * * 1' # 毎週月曜 03:17 UTC
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            echo "SUPABASE_URL secret 未設定。スキップ。"
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' "${{ secrets.SUPABASE_URL }}/rest/v1/" || echo 000)
+          echo "HTTP $code（DB が warm になれば目的達成）"

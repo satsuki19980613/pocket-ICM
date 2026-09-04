@@ -1,0 +1,18 @@
+# Supabase CLI 設定（`supabase link` 後に project_id が上書きされる）。
+# 関数は既定で JWT 検証を有効に保つ（anon キーが JWT なので signup も通る）。
+project_id = "pocket-icm"
+
+[functions.signup]
+verify_jwt = true
+
+[functions.issue-invite]
+verify_jwt = true
+
+[functions.revoke-invite]
+verify_jwt = true
+
+[functions.set-max-accounts]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true

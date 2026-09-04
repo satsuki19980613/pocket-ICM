@@ -27,3 +27,10 @@ packages/solver/artifacts/nn*way.progress.json
 # Python 進捗モニタの生成物
 __pycache__/
 *.pyc
+
+# 環境変数（Supabase 接続情報・秘密を含む）。.env.example のみコミット。
+.env
+.env.local
+.env.*.local
+packages/*/.env
+packages/*/.env.local

@@ -34,3 +34,6 @@ __pycache__/
 .env.*.local
 packages/*/.env
 packages/*/.env.local
+
+# Supabase CLI ローカル状態
+supabase/.temp/

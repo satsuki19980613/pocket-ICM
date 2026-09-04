@@ -15,9 +15,9 @@
 | 項目 | 値 |
 |---|---|
 | 最終更新 | 2026-09-04 |
-| 計画ステータス | **実装中**。M2・M3・M4 完了・M1 は足場完成（実機待ち） |
-| 進行中マイルストーン | **M1（バックエンド足場完成・Supabase 実機適用待ち）** ／ **M2・M3・M4 ✅完了** |
-| 次アクション | ①M1: さつきが Supabase プロジェクト作成（現在 Supabase 側で障害・復旧待ち）→ URL/anon key を受領→SQL適用→関数deploy→初回管理者→DoD検証。②M2.5（管理画面モック）着手可。M5/M6 は M1 依存で待ち |
+| 計画ステータス | **実装中**。M1（バックエンド実機稼働）・M2・M3・M4 完了 |
+| 進行中マイルストーン | **M1・M2・M3・M4 ✅完了**（M1 は Supabase 実機に適用・DoD 検証済み） |
+| 次アクション | M1 で backend が生きたので **M5（記録タブ・Supabase連携）** が着手可。フロントの認証UI（ログイン/サインアップ）は M7 で実装。M2.5（管理画面モック）も着手可 |
 | 並行トラック | M0（教師データ生成）はさつきが **`教師データ生成モニタ.pyw`**（ネイティブGUI）で随時実行可 |
 | ブロッカー | M1: Supabase プロジェクト作成が Supabase 側の障害で不可（2026-09-04・復旧待ち）。コード側の足場は全て完成・commit 済み |
 
@@ -37,7 +37,7 @@
 | # | マイルストーン | 状態 | 依存 | トラック |
 |---|---|---|---|---|
 | **M0** | 教師データ生成（進捗GUI稼働） | 🟨進行中 | 済 | B |
-| **M1** | バックエンド基盤（Auth/DB/RLS/招待/上限/管理） | 🟨足場完成・実機待ち | — | A |
+| **M1** | バックエンド基盤（Auth/DB/RLS/招待/上限/管理） | ✅実機稼働・DoD検証 | — | A |
 | **M2** | デザイン・トークン刷新（CP2077 黄60/赤20/青20） | ✅完了 | — | A |
 | **M2.5** | 管理画面をモックに追加（`admin`） | ⬜未着手 | M2 | A |
 | **M3** | ICM 入力の刷新（写真起点/手入力モーダル/確認/エラー） | ✅完了 | — | A |
@@ -141,6 +141,15 @@
 
 ## 5. 進捗ログ（新しい順・セッション引き継ぎ）
 
+- **2026-09-04（8, M1 実機稼働）**: **M1 バックエンドを Supabase 実機に適用・DoD 検証＝完了**。プロジェクト
+  `bpxrbxnylgedjhvhfsvk`（Tokyo）作成 → `apply-all.sql`（0001〜0005 結合）を SQL Editor で一括適用 →
+  Edge Function 5本を CLI（`npx supabase functions deploy`）でデプロイ → `gen-invite.mjs`＋`bootstrap-signup.mjs`
+  で初回アカウント作成（signup→login 成功）→ `is_admin=true` 付与。**新方式 API キー（`sb_publishable_…`, JWT 非対応）**
+  に対応し **`signup` のみ `verify_jwt=false`**（config.toml, 招待キー必須チェックは関数内で担保・管理/削除はセッション JWT で通る）。
+  `m1-verify.mjs` でサーバ側拒否を独立検証＝**5 PASS/0 FAIL**（invalid_invite / weak_password / invalid_handle /
+  未認証の issue-invite=unauthorized / 無効ログイン）。**env はさつきが端末内で管理**（`.claude/settings.json` に
+  Read/Edit/Write の deny、値はチャットに出さず）。**残**: フロント認証UI（ログイン/サインアップ）は M7、warm-ping の
+  GitHub Secret `SUPABASE_URL` は任意で後日、アカウント削除/上限/期限切れ拒否は関数デプロイ済み（未実行）。
 - **2026-09-04（7, M4）**: **M4 計算結果の刷新（Action tree）＝完了**。純モデル `tree/model.ts`（`@oshihiki/core` の
   `normalizeKey`＝全席ベクトルのキー文法をそのまま使い、`result.nodes` を key で引く）＋`ActionTree.tsx`（全ポジ
   行動順に常時表示・行内トグル FOLD/PU・CA・OC・上流 push で受け側 CA/OC 解錠・BB ウォークは no decision ロック・

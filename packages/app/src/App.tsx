@@ -11,7 +11,9 @@ import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
 // Drill（訓練）は SPEC §5.6 により一旦 Coming Soon。DrillView 実装はコード上温存（未配線）。
 import { ComingSoon } from './components/ComingSoon';
-import { Home } from './components/Home';
+import { Home, type FeedState } from './components/Home';
+import { Thread } from './components/Thread';
+import { UserPub } from './components/UserPub';
 import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
 import { Admin } from './components/Admin';
@@ -19,19 +21,32 @@ import { buildBoardState, defaultForm, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
 import { prefillFromScreenshot } from './ocr/screenshotPrefill';
-import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
-import { SAMPLE_POSTS, type SamplePost } from './data/sampleFeed';
-import sampleResultsJson from './data/sampleResults.json';
-
-// 事前計算済みのサンプル結果（id → {state, result, ms}）。JSON なので型を明示。
-const SAMPLE_RESULTS = sampleResultsJson as unknown as Record<
-  string,
-  { state: BoardState; result: SolveResultDto; ms: number }
->;
+import {
+  buildRecord,
+  evLossOf,
+  headlineNode,
+  type HeroAction,
+  type SpotRecord,
+} from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
+import {
+  addComment,
+  deleteComment,
+  editComment,
+  getThread,
+  listFeed,
+  publishResult,
+  setLike,
+  uploadThreadImage,
+  type FeedAuthor,
+  type FeedPost,
+  type ThreadDetail,
+} from './supabase/feed';
 
 type Screen =
   | 'home'
+  | 'thread'
+  | 'userpub'
   | 'icm'
   | 'confirm'
   | 'solving'
@@ -42,9 +57,20 @@ type Screen =
   | 'settings'
   | 'admin';
 
+/**
+ * 結果画面の由来。solve=新規求解（保存可）、record=履歴の再表示（読み取り専用）、
+ * thread=公開結果の閲覧（読み取り専用・戻るはスレッドへ）。
+ */
+type ResultOrigin =
+  | { kind: 'solve' }
+  | { kind: 'record'; rec: SpotRecord }
+  | { kind: 'thread'; threadId: string };
+
 /** 各画面のヘッダタイトル（モックの titles マップ準拠）。 */
 const TITLES: Record<Screen, string> = {
   home: 'Home',
+  thread: 'スレッド',
+  userpub: '公開結果',
   icm: 'ICM',
   confirm: '条件確認',
   solving: '計算中',
@@ -56,7 +82,7 @@ const TITLES: Record<Screen, string> = {
   admin: 'クラブ管理',
 };
 
-/** 下段タブを出す画面（トップレベル）。フロー中（confirm/solving/result/error/admin）は隠す。 */
+/** 下段タブを出す画面（トップレベル）。フロー中は隠す。 */
 const TAB_SCREENS: Screen[] = ['home', 'icm', 'drill', 'history', 'settings'];
 
 /** 画面 → アクティブなタブ（history は「記録」タブ、settings は「設定」タブ）。 */
@@ -112,11 +138,19 @@ export function App(): JSX.Element {
   // OCR プリフィルの低信頼フィールド（"UTG.stack" 等）。確認画面で強調する。
   const [lowConf, setLowConf] = useState<string[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
-  // 記録（履歴）: IndexedDB から読み込み。viewing は履歴からの読み取り専用再表示。
+  // 記録（履歴）: IndexedDB から読み込み。
   const [records, setRecords] = useState<SpotRecord[]>([]);
-  const [viewing, setViewing] = useState<SpotRecord | null>(null);
-  // ホームのサンプル投稿を開いた読み取り専用結果（保存 UI なし）。
-  const [sampleView, setSampleView] = useState(false);
+  // 結果画面の由来（保存可否・戻り先を決める）。
+  const [resultOrigin, setResultOrigin] = useState<ResultOrigin>({ kind: 'solve' });
+
+  // --- M6 フィード/スレッド/他人公開 ---
+  const [feedState, setFeedState] = useState<FeedState>('loading');
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
+  const [thread, setThread] = useState<ThreadDetail | null>(null);
+  const [threadState, setThreadState] = useState<FeedState>('loading');
+  const [pubAuthor, setPubAuthor] = useState<FeedAuthor | null>(null);
+  const [pubPosts, setPubPosts] = useState<FeedPost[]>([]);
+  const [pubState, setPubState] = useState<FeedState>('loading');
 
   async function refreshRecords(): Promise<void> {
     try {
@@ -130,9 +164,7 @@ export function App(): JSX.Element {
     void refreshRecords();
   }, []);
 
-  // 認証セッションの監視。起動時に現在のセッションを取得し、以後の変化（ログイン/
-  // ログアウト/トークン更新）を購読する。未設定（isConfigured=false）でも getSession は
-  // 空セッションを返すので null になり、認証画面が出る。
+  // 認証セッションの監視。
   useEffect(() => {
     let active = true;
     void supabase.auth.getSession().then(({ data }) => {
@@ -140,10 +172,11 @@ export function App(): JSX.Element {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      // ログアウト/削除でセッションが切れたら画面状態を初期化（再ログイン時に home 起点）。
+      // ログアウト/削除でセッションが切れたら画面状態を初期化。
       if (!s) {
         setScreen('home');
-        setViewing(null);
+        setResultOrigin({ kind: 'solve' });
+        setThread(null);
       }
     });
     return () => {
@@ -152,16 +185,146 @@ export function App(): JSX.Element {
     };
   }, []);
 
-  /** 結果画面から現在の局面を記録する。published=ホーム公開フラグ（既定 false, 反映は M6）。 */
-  async function onSave(heroAction: HeroAction, published: boolean): Promise<void> {
-    if (!state || !result) return;
+  // ログイン後に一度フィードを読む（起点が home のため）。
+  useEffect(() => {
+    if (session) void loadFeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  /** 公開フィードを読み込む。 */
+  async function loadFeed(): Promise<void> {
+    setFeedState('loading');
+    const r = await listFeed();
+    if (r.ok) {
+      setFeedPosts(r.data);
+      setFeedState('ready');
+    } else {
+      setFeedState('error');
+    }
+  }
+
+  /** スレッド詳細を開く/再取得。 */
+  async function openThread(threadId: string): Promise<void> {
+    setScreen('thread');
+    setThreadState('loading');
+    const r = await getThread(threadId);
+    if (r.ok) {
+      setThread(r.data);
+      setThreadState('ready');
+    } else {
+      setThread(null);
+      setThreadState('error');
+    }
+  }
+
+  async function refreshThread(): Promise<void> {
+    if (!thread) return;
+    const r = await getThread(thread.thread_id);
+    if (r.ok) setThread(r.data);
+  }
+
+  /** スレッドの見出しカード → 公開結果を全結果画面で（読み取り専用）表示。 */
+  function openThreadResult(): void {
+    if (!thread) return;
+    setState(thread.result.spot);
+    setResult(thread.result.solution);
+    setMs(0);
+    setResultOrigin({ kind: 'thread', threadId: thread.thread_id });
+    setScreen('result');
+  }
+
+  /** 投稿者 → その人の公開結果一覧（userpub）。 */
+  async function openAuthor(author: FeedAuthor): Promise<void> {
+    setPubAuthor(author);
+    setPubState('loading');
+    setScreen('userpub');
+    const r = await listFeed({ authorId: author.id });
+    if (r.ok) {
+      setPubPosts(r.data);
+      setPubState('ready');
+    } else {
+      setPubState('error');
+    }
+  }
+
+  /** ♡ の切替（フィード/スレッド双方を楽観更新し、失敗時は再取得で戻す）。 */
+  async function toggleLike(threadId: string, on: boolean): Promise<void> {
+    setFeedPosts((ps) =>
+      ps.map((p) =>
+        p.thread_id === threadId
+          ? { ...p, liked_by_me: on, like_count: Math.max(0, p.like_count + (on ? 1 : -1)) }
+          : p,
+      ),
+    );
+    setThread((t) =>
+      t && t.thread_id === threadId
+        ? { ...t, liked_by_me: on, like_count: Math.max(0, t.like_count + (on ? 1 : -1)) }
+        : t,
+    );
+    const r = await setLike(threadId, on);
+    if (!r.ok) {
+      // 失敗時はサーバ状態に合わせ直す。
+      await loadFeed();
+      await refreshThread();
+    }
+  }
+
+  /** 返信（本文＋任意の画像）。画像は先に Storage へ上げて URL 化。 */
+  async function onReply(input: { body: string; imageFile: File | null }): Promise<{ ok: boolean; message?: string }> {
+    if (!thread) return { ok: false, message: 'スレッドがありません' };
+    let imageUrl: string | null = null;
+    if (input.imageFile) {
+      const up = await uploadThreadImage(input.imageFile);
+      if (!up.ok) return { ok: false, message: up.message };
+      imageUrl = up.data.url;
+    }
+    const r = await addComment(thread.thread_id, { body: input.body, imageUrl });
+    if (!r.ok) return { ok: false, message: r.message };
+    await refreshThread();
+    await loadFeed();
+    return { ok: true };
+  }
+
+  async function onEditComment(commentId: string, body: string): Promise<{ ok: boolean; message?: string }> {
+    const r = await editComment(commentId, body);
+    if (!r.ok) return { ok: false, message: r.message };
+    await refreshThread();
+    return { ok: true };
+  }
+
+  async function onDeleteComment(commentId: string): Promise<{ ok: boolean; message?: string }> {
+    const r = await deleteComment(commentId);
+    if (!r.ok) return { ok: false, message: r.message };
+    await refreshThread();
+    await loadFeed();
+    return { ok: true };
+  }
+
+  /**
+   * 結果画面から記録を保存。published=true なら IndexedDB 保存に加えクラウド公開
+   * （results is_public＋threads＋一言コメント）。成否を返す。
+   */
+  async function onSave(
+    heroAction: HeroAction,
+    published: boolean,
+    comment: string,
+  ): Promise<{ ok: boolean; message?: string }> {
+    if (!state || !result) return { ok: false, message: '状態がありません' };
     const rec = buildRecord({ state, result, ms, heroAction, published });
     try {
       await putRecord(rec);
       await refreshRecords();
     } catch {
-      /* 保存失敗は握りつぶす（オフライン PWA・容量超過等）。UI は「記録しました」を出さない。 */
+      /* ローカル保存失敗は握りつぶす（オフライン PWA・容量超過等）。 */
     }
+    if (published) {
+      const head = headlineNode(result);
+      const evLoss = head ? evLossOf(head.heroEv, heroAction) : null;
+      const pub = await publishResult({ state, result, heroAction, evLoss, comment });
+      if (!pub.ok) return { ok: false, message: pub.message };
+      await loadFeed();
+    }
+    return { ok: true };
   }
 
   async function onDeleteRecord(id: string): Promise<void> {
@@ -171,7 +334,7 @@ export function App(): JSX.Element {
 
   /** 履歴の1件を読み取り専用で結果画面に再表示。 */
   function openRecord(rec: SpotRecord): void {
-    setViewing(rec);
+    setResultOrigin({ kind: 'record', rec });
     setState(rec.state);
     setResult(rec.result);
     setMs(rec.ms);
@@ -181,7 +344,6 @@ export function App(): JSX.Element {
   /** 手入力モーダルの確定 → 条件確認へ。無効ならエラー画面。 */
   function submitManual(f: BoardForm): void {
     setManualOpen(false);
-    // 手入力からの遷移は OCR 由来の強調を持ち越さない。
     setLowConf([]);
     const built = buildBoardState(f);
     if (!built.ok || !built.state) {
@@ -194,14 +356,10 @@ export function App(): JSX.Element {
     setScreen('confirm');
   }
 
-  /**
-   * スクショ添付 → OCR プリフィル。成功なら手入力フォームを埋めて条件確認へ
-   * （SPEC §6.1: 必ず確認画面を経由し全項目修正可能）。読取失敗・対象外フレームは
-   * issues を表示して手入力継続に委ねる。
-   */
+  /** スクショ添付 → OCR プリフィル → 条件確認。 */
   async function onScreenshot(file: File): Promise<void> {
     setOcrBusy(true);
-    setErrFromPhoto(true); // この経路のエラーは「別の写真を選ぶ」を出す。
+    setErrFromPhoto(true);
     try {
       const res = await prefillFromScreenshot(file);
       if (!res.ok || !res.form) {
@@ -230,25 +388,9 @@ export function App(): JSX.Element {
     }
   }
 
-  /**
-   * ホームのサンプル投稿を開く。結果は事前計算済み（data/sampleResults.json＝公開データ相当）
-   * なので求解せず即座に表示する（読み取り専用）。M6 の公開結果もこの「解を持ち歩く」形になる。
-   */
-  function openSample(post: SamplePost): void {
-    const pre = SAMPLE_RESULTS[post.id];
-    if (!pre) return;
-    setViewing(null);
-    setSampleView(true);
-    setState(pre.state);
-    setResult(pre.result);
-    setMs(pre.ms);
-    setScreen('result');
-  }
-
   async function solve(): Promise<void> {
     if (!state) return;
-    setViewing(null); // 新規求解は読み取り専用でない
-    setSampleView(false);
+    setResultOrigin({ kind: 'solve' }); // 新規求解は保存可
     setScreen('solving');
     try {
       const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
@@ -264,10 +406,10 @@ export function App(): JSX.Element {
 
   /** 下段タブの遷移。 */
   function navTab(key: TabKey): void {
-    setViewing(null);
-    setSampleView(false);
+    setResultOrigin({ kind: 'solve' });
     switch (key) {
       case 'home':
+        void loadFeed();
         setScreen('home');
         break;
       case 'icm':
@@ -294,11 +436,16 @@ export function App(): JSX.Element {
         return () => setScreen('icm');
       case 'admin':
         return () => setScreen('settings');
+      case 'thread':
+        return () => setScreen('home');
+      case 'userpub':
+        return () => setScreen('home');
       case 'result':
         return () => {
-          if (viewing) {
-            setViewing(null);
+          if (resultOrigin.kind === 'record') {
             setScreen('history');
+          } else if (resultOrigin.kind === 'thread') {
+            setScreen('thread');
           } else {
             setScreen('icm');
           }
@@ -347,7 +494,55 @@ export function App(): JSX.Element {
         <span className="tb-sp" />
       </header>
 
-      {screen === 'home' && <Home posts={SAMPLE_POSTS} onOpen={openSample} />}
+      {screen === 'home' && (
+        <Home
+          state={feedState}
+          posts={feedPosts}
+          onOpenThread={(id) => void openThread(id)}
+          onOpenAuthor={(a) => void openAuthor(a)}
+          onToggleLike={(id, on) => void toggleLike(id, on)}
+          onRetry={() => void loadFeed()}
+        />
+      )}
+
+      {screen === 'thread' &&
+        (threadState === 'loading' ? (
+          <div className="thread">
+            <div className="panel solving">
+              <div className="spinner" />
+              <p>スレッドを読み込み中…</p>
+            </div>
+          </div>
+        ) : threadState === 'error' || !thread ? (
+          <div className="thread">
+            <div className="home-empty">
+              <p>スレッドを取得できませんでした。</p>
+              <button type="button" className="btn ghost" onClick={() => setScreen('home')}>
+                ホームに戻る
+              </button>
+            </div>
+          </div>
+        ) : (
+          <Thread
+            detail={thread}
+            onOpenResult={openThreadResult}
+            onOpenAuthor={(a) => void openAuthor(a)}
+            onToggleLike={(on) => void toggleLike(thread.thread_id, on)}
+            onReply={onReply}
+            onEditComment={onEditComment}
+            onDeleteComment={onDeleteComment}
+          />
+        ))}
+
+      {screen === 'userpub' && (
+        <UserPub
+          author={pubAuthor}
+          state={pubState}
+          posts={pubPosts}
+          onOpenThread={(id) => void openThread(id)}
+          onRetry={() => pubAuthor && void openAuthor(pubAuthor)}
+        />
+      )}
 
       {screen === 'icm' && (
         <IcmInput onScreenshot={onScreenshot} onManual={() => setManualOpen(true)} ocrBusy={ocrBusy} />
@@ -370,43 +565,32 @@ export function App(): JSX.Element {
         </div>
       )}
 
-      {screen === 'result' && state && result && (
-        sampleView ? (
+      {screen === 'result' &&
+        state &&
+        result &&
+        (resultOrigin.kind === 'thread' ? (
           <Result
             state={state}
             result={result}
             ms={ms}
             readOnly
-            backLabel="ホームに戻る"
-            onBack={() => {
-              setSampleView(false);
-              setScreen('home');
-            }}
+            backLabel="スレッドに戻る"
+            onBack={() => setScreen('thread')}
           />
-        ) : viewing ? (
+        ) : resultOrigin.kind === 'record' ? (
           <Result
             state={state}
             result={result}
             ms={ms}
             readOnly
-            savedAction={viewing.heroAction}
-            savedEvLoss={viewing.evLoss}
-            savedPublished={viewing.published}
-            onBack={() => {
-              setViewing(null);
-              setScreen('history');
-            }}
+            savedAction={resultOrigin.rec.heroAction}
+            savedEvLoss={resultOrigin.rec.evLoss}
+            savedPublished={resultOrigin.rec.published}
+            onBack={() => setScreen('history')}
           />
         ) : (
-          <Result
-            state={state}
-            result={result}
-            ms={ms}
-            onSave={onSave}
-            onBack={() => setScreen('icm')}
-          />
-        )
-      )}
+          <Result state={state} result={result} ms={ms} onSave={onSave} onBack={() => setScreen('icm')} />
+        ))}
 
       {screen === 'history' && (
         <RecordsView

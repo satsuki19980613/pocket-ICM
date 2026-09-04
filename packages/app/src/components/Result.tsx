@@ -20,8 +20,15 @@ export function Result(props: {
   result: SolveResultDto;
   onBack: () => void;
   ms: number;
-  /** 記録の保存ハンドラ（読み取り専用の再表示時は未指定）。published=ホーム公開フラグ（既定 false）。 */
-  onSave?: (heroAction: HeroAction, published: boolean) => void;
+  /**
+   * 記録の保存ハンドラ（読み取り専用の再表示時は未指定）。published=ホーム公開フラグ（既定 false）。
+   * published=true のときはクラウド公開も行うため非同期＋成否を返す（コメント=公開時の一言）。
+   */
+  onSave?: (
+    heroAction: HeroAction,
+    published: boolean,
+    comment: string,
+  ) => Promise<{ ok: boolean; message?: string }>;
   /** 履歴からの再表示（保存 UI を出さず、記録済みの情報を表示）。 */
   readOnly?: boolean;
   /** readOnly 時に表示する、記録済みの実行動と EV loss。 */
@@ -34,17 +41,29 @@ export function Result(props: {
   const { result, state } = props;
   const [action, setAction] = useState<HeroAction | null>(null);
   const [publish, setPublish] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [comment, setComment] = useState('');
+  // idle → saving → saved | error（error は再試行可）。
+  const [phase, setPhase] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [errMsg, setErrMsg] = useState('');
   const headline = headlineNode(result);
   const heroSeat = state.seats.find((s) => s.pos === result.heroPos);
 
   const canSave = !props.readOnly && !!props.onSave && !!headline;
   const evLossPreview = headline && action ? evLossOf(headline.heroEv, action) : null;
+  const saved = phase === 'saved';
+  const saving = phase === 'saving';
 
-  function save(): void {
+  async function save(): Promise<void> {
     if (!action || !props.onSave) return;
-    props.onSave(action, publish);
-    setSaved(true);
+    setPhase('saving');
+    setErrMsg('');
+    const res = await props.onSave(action, publish, comment);
+    if (res.ok) {
+      setPhase('saved');
+    } else {
+      setErrMsg(res.message ?? '保存に失敗しました');
+      setPhase('error');
+    }
   }
 
   return (
@@ -105,7 +124,7 @@ export function Result(props: {
           <div className="tog">
             <div>
               ホームで公開する
-              <small>クラブのみんなが見られ、スレッドで話せます（公開の反映は後日）</small>
+              <small>クラブのみんなが見られ、スレッドで話せます</small>
             </div>
             <button
               type="button"
@@ -114,11 +133,36 @@ export function Result(props: {
               aria-checked={publish}
               aria-label="ホームで公開する"
               onClick={() => setPublish((p) => !p)}
-              disabled={saved}
+              disabled={saved || saving}
             />
           </div>
-          <button type="button" className="btn wide" onClick={save} disabled={!action || saved}>
-            {saved ? `記録しました ✓${publish ? '（公開）' : ''}` : '記録する'}
+          {publish && (
+            <textarea
+              className="pub-comment"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="一言そえる（例: 3人残りだと思ったより広く押していい）"
+              maxLength={2000}
+              rows={2}
+              disabled={saved || saving}
+            />
+          )}
+          {phase === 'error' && <p className="auth-err">{errMsg}</p>}
+          <button
+            type="button"
+            className="btn wide"
+            onClick={() => void save()}
+            disabled={!action || saved || saving}
+          >
+            {saving
+              ? publish
+                ? '公開中…'
+                : '記録中…'
+              : saved
+                ? `記録しました ✓${publish ? '（公開）' : ''}`
+                : publish
+                  ? '記録して公開する'
+                  : '記録する'}
           </button>
         </div>
       )}

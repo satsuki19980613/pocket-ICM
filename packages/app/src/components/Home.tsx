@@ -1,72 +1,102 @@
-import type { SampleCard, SamplePost, Suit } from '../data/sampleFeed';
+import type { FeedAuthor, FeedPost } from '../supabase/feed';
+import { ResultCard } from './ResultCard';
+import { Avatar, relTime } from './feedShared';
 
-const SUIT_SYM: Record<Suit, string> = { spade: '♠', heart: '♥', diamond: '♦', club: '♣' };
+export type FeedState = 'loading' | 'error' | 'ready';
 
 /**
- * ホーム（M6 までのサンプル・フィード）。モックの公開結果フィードを参考にした投稿カード。
- * 結果カードのタップで実ソルバーが解いて本物の計算結果を表示する（App 側 onOpen）。
- * ※ 公開フィードの実データ化（投稿/返信/いいね）は M6「ホーム/スレッド」。
+ * ホーム（M6 公開フィード）。クラブの公開結果がスレッドとして新しい順に並ぶ。
+ * 投稿カードのタップ＝スレッド詳細（コメント/返信/♡）。投稿者タップ＝その人の公開結果。
  */
-export function Home(props: { posts: SamplePost[]; onOpen: (p: SamplePost) => void }): JSX.Element {
+export function Home(props: {
+  state: FeedState;
+  posts: FeedPost[];
+  onOpenThread: (threadId: string) => void;
+  onOpenAuthor: (author: FeedAuthor) => void;
+  onToggleLike: (threadId: string, on: boolean) => void;
+  onRetry: () => void;
+}): JSX.Element {
+  if (props.state === 'loading') {
+    return (
+      <div className="feed">
+        <div className="panel solving">
+          <div className="spinner" />
+          <p>フィードを読み込み中…</p>
+        </div>
+      </div>
+    );
+  }
+  if (props.state === 'error') {
+    return (
+      <div className="feed">
+        <div className="home-empty">
+          <p>フィードを取得できませんでした。</p>
+          <button type="button" className="btn ghost" onClick={props.onRetry}>
+            再読み込み
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (props.posts.length === 0) {
+    return (
+      <div className="feed">
+        <div className="home-empty">
+          <p>まだ公開された結果がありません。</p>
+          <small>計算結果の画面で「ホームで公開する」をオンにすると、ここに並びます。</small>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="feed">
-      <p className="feed-note">
-        サンプル表示です。クラブのみんなの公開結果はホーム/スレッド（準備中）で実データになります。
-        <br />
-        結果カードをタップすると、その局面を実際に計算して表示します。
-      </p>
       {props.posts.map((p) => (
-        <PostCard key={p.id} post={p} onOpen={() => props.onOpen(p)} />
+        <PostCard
+          key={p.thread_id}
+          post={p}
+          onOpenThread={() => props.onOpenThread(p.thread_id)}
+          onOpenAuthor={() => props.onOpenAuthor(p.author)}
+          onToggleLike={() => props.onToggleLike(p.thread_id, !p.liked_by_me)}
+        />
       ))}
     </div>
   );
 }
 
-function PostCard(props: { post: SamplePost; onOpen: () => void }): JSX.Element {
+function PostCard(props: {
+  post: FeedPost;
+  onOpenThread: () => void;
+  onOpenAuthor: () => void;
+  onToggleLike: () => void;
+}): JSX.Element {
   const p = props.post;
   return (
     <article className="post">
-      <div className={`av${p.avatarClass ? ` ${p.avatarClass}` : ''}`}>{p.avatar}</div>
+      <Avatar author={p.author} onClick={props.onOpenAuthor} />
       <div className="col">
         <div className="meta">
-          <b>{p.author}</b>
-          <i>@{p.handle}</i>
-          <i>・{p.time}</i>
+          <button type="button" className="meta-author" onClick={props.onOpenAuthor}>
+            <b>{p.author.display_name}</b>
+            <i>@{p.author.handle}</i>
+          </button>
+          <i>・{relTime(p.created_at)}</i>
         </div>
-        <p>{p.comment}</p>
-        <button
-          type="button"
-          className={`rescard${p.verdict === 'FOLD' ? ' fold' : ''}`}
-          onClick={props.onOpen}
-        >
-          <div className="rc-top">
-            <div className="hand">
-              <Card card={p.cards[0]} />
-              <Card card={p.cards[1]} />
-            </div>
-            <span className={`rc-verdict ${p.verdict === 'PUSH' ? 'push' : 'fold'}`}>{p.verdict}</span>
-            <span className="rc-seat">{p.posLabel}</span>
-          </div>
-          <div className="rc-bot">
-            <span>{p.form.stacks[p.form.heroPos]}bb</span>
-            <span>{p.pu}</span>
-            <span>{p.ev}</span>
-          </div>
-        </button>
+        {p.lead_comment && <p>{p.lead_comment}</p>}
+        <ResultCard result={p.result} onOpen={props.onOpenThread} />
         <div className="acts">
-          <span>💬 {p.comments}</span>
-          <span>♡ {p.likes}</span>
+          <button type="button" onClick={props.onOpenThread}>
+            💬 {p.comment_count}
+          </button>
+          <button
+            type="button"
+            className={p.liked_by_me ? 'liked' : undefined}
+            aria-pressed={p.liked_by_me}
+            onClick={props.onToggleLike}
+          >
+            {p.liked_by_me ? '♥' : '♡'} {p.like_count}
+          </button>
         </div>
       </div>
     </article>
-  );
-}
-
-function Card(props: { card: SampleCard }): JSX.Element {
-  return (
-    <span className={`fcard ${props.card.s}`}>
-      {props.card.r}
-      <em>{SUIT_SYM[props.card.s]}</em>
-    </span>
   );
 }

@@ -122,10 +122,14 @@
   - handle 変更＝**保留**（synthetic email 付け替え＝Edge Function 未実装。読取専用/準備中表示）
   - プロフ画像（avatar・Storage）＝**後続へ送り**（読取専用「準備中」）
 - [x] 管理画面 `admin` 実装（issue/revoke/setMax に配線・is_admin のみ表示・commit 271fb75）
-- [~] ~~Drill を "Coming Soon" 表示~~ → **見送り（さつき決定 2026-09-04: 2-4人で動作・検証済みの
-  working feature を隠さず残す。Coming Soon は 5-6人対応=M8/M9 NN が入る段階で再検討）**
-- **DoD**: 設定変更・削除が動き、管理画面から発行/上限変更/取消が実機で機能（**さつき is_admin
-  ログインで往復検証待ち**。Claude はログイン不可のため純ロジック単体テスト＋レイアウト確認で担保）。
+- [x] Drill を "Coming Soon" 表示（SPEC §5.6・commit dc724f3）。ComingSoon パネル＋タブ導線維持・
+  DrillView 実装は未配線で温存（※前回の「動くまま残す」はさつき再指示で撤回）。
+- [x] 下段タブの骨組み（Home/ICM/Drill/記録/設定）＋トップバー・FAB（commit 828ee28・さつき指摘対応）。
+  ホーム本体（公開フィード/スレッド）は M6。現状は仮置き＋ICM計算 CTA。
+- **DoD**: ✅ 設定/管理のレイアウト・純ロジックを担保。**さつきローカルログインのセッションで実機データ検証成功**
+  （認証成功→解錠・getMyProfile[Satsuki/@satsuki]・is_admin 管理導線・管理の Club Seats 残24/25・
+  招待一覧#boot 使用済みを RLS 越しに正読）。残＝**mutation 系の実機確認**（キー発行/取消・上限保存・
+  表示名/パスワード変更・削除・ログアウト・新規サインアップ往復）＋デプロイ。
 
 ### M8 — 5人 NN 統合 ⬜
 - [ ] `trainNwayNN`（学習）→ `validateNwayNN`（**超過損 < 0.05pt**）

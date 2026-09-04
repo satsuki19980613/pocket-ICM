@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { HANDLE_RE, validateLogin, validateSignup } from './validate';
+import {
+  HANDLE_RE,
+  validateLogin,
+  validateSignup,
+  validateDisplayName,
+  validatePassword,
+} from './validate';
+
+describe('validateDisplayName', () => {
+  it('1〜40文字は OK・空/超過はエラー', () => {
+    expect(validateDisplayName('さつき')).toBeNull();
+    expect(validateDisplayName('   ')).toBeTruthy();
+    expect(validateDisplayName('あ'.repeat(40))).toBeNull();
+    expect(validateDisplayName('あ'.repeat(41))).toBeTruthy();
+  });
+});
+
+describe('validatePassword', () => {
+  it('8文字以上は OK', () => {
+    expect(validatePassword('12345678')).toBeNull();
+    expect(validatePassword('short')).toBeTruthy();
+  });
+});
 
 describe('validateLogin', () => {
   it('空欄はエラー', () => {

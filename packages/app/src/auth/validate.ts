@@ -5,6 +5,17 @@
 
 export const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
+/** 表示名の検証（1〜40文字, trim 後）。null=OK。サーバ constraint と一致。 */
+export function validateDisplayName(v: string): string | null {
+  const dn = v.trim();
+  return dn.length < 1 || dn.length > 40 ? '表示名は1〜40文字で入力してください' : null;
+}
+
+/** パスワードの検証（8文字以上）。null=OK。サーバ signup と一致。 */
+export function validatePassword(v: string): string | null {
+  return v.length < 8 ? 'パスワードは8文字以上にしてください' : null;
+}
+
 /** ログインの入力検証。返す文字列は表示用の日本語エラー（null=OK）。 */
 export function validateLogin(input: { handle: string; password: string }): {
   handle: string | null;
@@ -29,16 +40,14 @@ export function validateSignup(input: {
   invite_code: string | null;
   ok: boolean;
 } {
-  const dn = input.display_name.trim();
-  const display_name =
-    dn.length < 1 || dn.length > 40 ? '表示名は1〜40文字で入力してください' : null;
+  const display_name = validateDisplayName(input.display_name);
 
   const h = input.handle.trim().toLowerCase();
   let handle: string | null = null;
   if (!h) handle = 'ユーザー名を入力してください';
   else if (!HANDLE_RE.test(h)) handle = 'ユーザー名は英小文字・数字・_ の3〜20文字です';
 
-  const password = input.password.length < 8 ? 'パスワードは8文字以上にしてください' : null;
+  const password = validatePassword(input.password);
 
   const invite_code = input.invite_code.trim() ? null : '招待キーを入力してください';
 

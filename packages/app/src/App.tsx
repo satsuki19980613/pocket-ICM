@@ -3,7 +3,6 @@ import type { Session } from '@supabase/supabase-js';
 import type { BoardState } from '@oshihiki/core';
 import { Auth } from './components/Auth';
 import { supabase, isConfigured } from './supabase/client';
-import { signOut } from './supabase/api';
 import { IcmInput } from './components/IcmInput';
 import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
@@ -11,6 +10,7 @@ import { Result } from './components/Result';
 import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
 import { DrillView } from './components/DrillView';
+import { Settings } from './components/Settings';
 import { buildBoardState, defaultForm, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
@@ -18,7 +18,7 @@ import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
-type Screen = 'icm' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill';
+type Screen = 'icm' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill' | 'settings';
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
@@ -81,19 +81,17 @@ export function App(): JSX.Element {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      // ログアウト/削除でセッションが切れたら画面状態を初期化（再ログイン時に icm 起点）。
+      if (!s) {
+        setScreen('icm');
+        setViewing(null);
+      }
     });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
     };
   }, []);
-
-  async function onLogout(): Promise<void> {
-    await signOut();
-    // onAuthStateChange が session=null にし、認証画面へ戻る。画面状態は初期化しておく。
-    setScreen('icm');
-    setViewing(null);
-  }
 
   /** 結果画面から現在の局面を記録する。published=ホーム公開フラグ（既定 false, 反映は M6）。 */
   async function onSave(heroAction: HeroAction, published: boolean): Promise<void> {
@@ -229,8 +227,8 @@ export function App(): JSX.Element {
           >
             記録{records.length > 0 ? ` (${records.length})` : ''}
           </button>
-          <button type="button" className="navrec" onClick={() => void onLogout()}>
-            ログアウト
+          <button type="button" className="navrec" onClick={() => setScreen('settings')}>
+            設定
           </button>
         </div>
       </header>
@@ -292,6 +290,8 @@ export function App(): JSX.Element {
       )}
 
       {screen === 'drill' && <DrillView onExit={() => setScreen('icm')} />}
+
+      {screen === 'settings' && <Settings onBack={() => setScreen('icm')} />}
 
       {screen === 'error' && (
         <ErrorView

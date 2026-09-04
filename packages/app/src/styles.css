@@ -340,6 +340,88 @@ select.inp { appearance: none; cursor: pointer; }
 }
 .auth .note.c { text-align: center; }
 
+/* ---- 設定（プロフィール） ---- */
+.note { margin: 10px 0 0; font-size: 12px; line-height: 1.7; color: var(--dim2); }
+.settings { padding-bottom: var(--s5); }
+.pad { padding: var(--s4) 14px; }
+.pad.pt0 { padding-top: 0; }
+.avpick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.avbig {
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  color: var(--yellow);
+  font-family: var(--disp);
+  font-size: 40px;
+  font-weight: 700;
+  clip-path: var(--chamfer);
+}
+.avpick .lbl {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.avpick .lbl.dim { color: var(--dim2); }
+.edit.dim { color: var(--dim2); cursor: default; }
+/* 設定の readout 行は Confirm と同じ .readout/.row を流用（境界線あり） */
+.settings .readout .row { border-bottom: 1px solid var(--line); }
+.settings .readout .row:last-child { border-bottom: 0; }
+.edit-inline { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.edit-inline .inp { font-size: 14px; }
+.edit-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.tog.tog-pad { padding: 13px 14px; margin: 0; }
+.acct-actions { display: flex; flex-direction: column; gap: 9px; }
+.del-confirm { display: flex; flex-direction: column; gap: 9px; }
+.del-confirm p {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--red);
+  padding: 9px 11px;
+  background: rgba(255, 59, 59, 0.08);
+  border: 1px solid rgba(255, 59, 59, 0.35);
+}
+.del-row { display: flex; gap: 9px; }
+.del-row .btn { flex: 1; }
+
+/* ---- Coming Soon（Drill 等） ---- */
+.soon { padding: 64px 30px; text-align: center; }
+.soon .glyph {
+  font-size: 44px;
+  margin-bottom: 16px;
+  color: var(--yellow);
+  filter: drop-shadow(0 0 18px rgba(252, 238, 10, 0.45));
+}
+.soon h3 {
+  font-family: var(--disp);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--yellow);
+  text-transform: uppercase;
+}
+.soon p { font-size: 13px; color: var(--dim); margin-top: 12px; line-height: 1.8; }
+.soon .badge {
+  display: inline-block;
+  margin-top: 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--yellow);
+  border: 1px solid rgba(252, 238, 10, 0.5);
+  padding: 5px 12px;
+}
+
 /* ---- フォーム ---- */
 .grp { margin-bottom: var(--s4); }
 .grp2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-bottom: var(--s4); }

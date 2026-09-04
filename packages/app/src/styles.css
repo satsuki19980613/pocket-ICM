@@ -616,6 +616,109 @@ button.cell { cursor: pointer; }
   outline: 1px solid rgba(252, 238, 10, 0.5);
 }
 
+/* ==== M3: 写真起点入力（icm）・手入力モーダル・確認/エラー刷新 ==== */
+
+/* 写真投入口（スキャン・ドロップゾーン = 破線 HUD 枠） */
+.shot {
+  margin: 0 0 var(--s3);
+  border: 1.5px dashed var(--line-2);
+  padding: 26px 20px;
+  text-align: center;
+  background: radial-gradient(120% 80% at 50% 0%, rgba(58, 230, 255, 0.05), transparent 60%), var(--surface);
+}
+.shot .ic { font-size: 30px; margin-bottom: 10px; filter: drop-shadow(0 0 10px rgba(58, 230, 255, 0.4)); }
+.shot b { display: block; font-family: var(--disp); font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: 0.02em; }
+.shot .sub { font-size: 12.5px; color: var(--dim); line-height: 1.7; }
+.shot .btn { margin-top: 16px; }
+
+/* 二次アクション = シアン破線（手入力） */
+.btn.line {
+  width: 100%;
+  background: transparent;
+  color: var(--cyan);
+  border: 1.5px dashed rgba(58, 230, 255, 0.5);
+  clip-path: none;
+  font-family: var(--disp);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.btn.line:hover:not(:disabled) { background: rgba(58, 230, 255, 0.06); border-style: solid; filter: none; }
+.icm-note { margin: var(--s2) 0 var(--s5); font-size: 12px; color: var(--dim2); text-align: center; }
+
+/* 読み取り条件チェックリスト（icm ガイド / エラーの原因一覧で共有） */
+.check-h { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); margin: 0 0 var(--s2); }
+.check { border: 1px solid var(--line); background: var(--surface); list-style: none; padding: 0; margin: 0; }
+.check li { padding: 12px 13px; display: flex; gap: 11px; align-items: flex-start; border-bottom: 1px solid var(--line); font-size: 13px; }
+.check li:last-child { border-bottom: 0; }
+.check .mark { flex: none; width: 19px; height: 19px; display: grid; place-items: center; font-size: 11px; font-weight: 900; margin-top: 1px; }
+.check .ok .mark { background: rgba(252, 238, 10, 0.16); color: var(--yellow); }
+.check .ng .mark { background: rgba(255, 59, 59, 0.18); color: var(--red); }
+.check .ng { background: rgba(255, 59, 59, 0.05); }
+.check small { display: block; color: var(--dim); font-size: 11.5px; margin-top: 3px; line-height: 1.6; }
+
+/* 確認画面の readout（項目別に「修正」） */
+.readout .lb { color: var(--dim); width: 104px; flex: none; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.readout .vl { flex: 1; font-variant-numeric: tabular-nums; font-weight: 500; color: var(--fg); font-family: var(--body); text-transform: none; letter-spacing: 0; }
+.readout .vl.ok { color: var(--yellow); }
+.readout .vl.warn { color: var(--red); }
+.readout .edit { background: none; border: 0; color: var(--cyan); font-family: var(--mono); font-size: 11.5px; cursor: pointer; letter-spacing: 0.04em; padding: 2px 4px; }
+.readout .edit:hover { color: #7ff0ff; }
+.readout .row.low { background: rgba(252, 238, 10, 0.07); }
+.readout .row.low .vl::after {
+  content: "CHECK";
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--yellow);
+  margin-left: 8px;
+  border: 1px solid rgba(252, 238, 10, 0.5);
+  padding: 1px 5px;
+  letter-spacing: 0.08em;
+}
+.confirm-note { margin: var(--s3) 0 0; font-size: 12px; color: var(--dim); line-height: 1.6; }
+
+/* エラー・バナー */
+.errbanner { background: rgba(255, 59, 59, 0.09); border: 1px solid rgba(255, 59, 59, 0.35); padding: 15px 14px; margin-bottom: 18px; }
+.errbanner .et { font-family: var(--disp); font-size: 17px; font-weight: 700; color: var(--red); margin-bottom: 6px; letter-spacing: 0.02em; }
+.errbanner .ed { font-size: 12.5px; color: #e8b0b0; line-height: 1.7; }
+.err-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; }
+
+/* 手入力モーダル（ボトムシート） */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(3, 4, 2, 0.72);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal {
+  width: 100%;
+  max-width: 440px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-bottom: 0;
+  animation: modal-in 220ms var(--ease);
+}
+@keyframes modal-in { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+.modal-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px var(--s4);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(252, 238, 10, 0.06), transparent 55%), var(--bg);
+}
+.modal-title { font-family: var(--disp); font-size: 17px; font-weight: 700; letter-spacing: 0.03em; }
+.modal-x { background: none; border: 0; color: var(--dim); font-size: 17px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+.modal-x:hover { color: var(--fg); }
+.modal-body { overflow-y: auto; padding: var(--s4); }
+.modal-body .grp:first-child { margin-top: 0; }
+
 /* ---- 記録（履歴） ---- */
 .navgrp { margin-left: auto; display: flex; gap: var(--s2); }
 .navrec {

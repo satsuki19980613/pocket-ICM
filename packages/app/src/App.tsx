@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
+import { IcmInput } from './components/IcmInput';
 import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
@@ -13,7 +14,7 @@ import { prefillFromScreenshot } from './ocr/screenshotPrefill';
 import { buildRecord, type HeroAction, type SpotRecord } from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 
-type Screen = 'form' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill';
+type Screen = 'icm' | 'confirm' | 'solving' | 'result' | 'error' | 'history' | 'drill';
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
@@ -35,7 +36,11 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
 }
 
 export function App(): JSX.Element {
-  const [screen, setScreen] = useState<Screen>('form');
+  const [screen, setScreen] = useState<Screen>('icm');
+  // 手入力モーダル（写真起点・確認の修正・エラーの手埋めから開く）。
+  const [manualOpen, setManualOpen] = useState(false);
+  // エラーが写真経路由来か（「別の写真を選ぶ」を出すか）。
+  const [errFromPhoto, setErrFromPhoto] = useState(false);
   const [form, setForm] = useState<BoardForm>(() => defaultForm(5));
   const [state, setState] = useState<BoardState | null>(null);
   const [result, setResult] = useState<SolveResultDto | null>(null);
@@ -86,11 +91,14 @@ export function App(): JSX.Element {
     setScreen('result');
   }
 
-  function toConfirm(f: BoardForm): void {
+  /** 手入力モーダルの確定 → 条件確認へ。無効ならエラー画面。 */
+  function submitManual(f: BoardForm): void {
+    setManualOpen(false);
     // 手入力からの遷移は OCR 由来の強調を持ち越さない。
     setLowConf([]);
     const built = buildBoardState(f);
     if (!built.ok || !built.state) {
+      setErrFromPhoto(false);
       setIssues(built.issues);
       setScreen('error');
       return;
@@ -106,6 +114,7 @@ export function App(): JSX.Element {
    */
   async function onScreenshot(file: File): Promise<void> {
     setOcrBusy(true);
+    setErrFromPhoto(true); // この経路のエラーは「別の写真を選ぶ」を出す。
     try {
       const res = await prefillFromScreenshot(file);
       if (!res.ok || !res.form) {
@@ -144,6 +153,7 @@ export function App(): JSX.Element {
       setMs(elapsed);
       setScreen('result');
     } catch (e) {
+      setErrFromPhoto(false);
       setIssues([e instanceof Error ? e.message : String(e)]);
       setScreen('error');
     }
@@ -171,21 +181,15 @@ export function App(): JSX.Element {
         </div>
       </header>
 
-      {screen === 'form' && (
-        <InputForm
-          form={form}
-          onFormChange={setForm}
-          onSubmit={toConfirm}
-          onScreenshot={onScreenshot}
-          ocrBusy={ocrBusy}
-        />
+      {screen === 'icm' && (
+        <IcmInput onScreenshot={onScreenshot} onManual={() => setManualOpen(true)} ocrBusy={ocrBusy} />
       )}
 
       {screen === 'confirm' && state && (
         <Confirm
           state={state}
           lowConfidenceFields={lowConf}
-          onEdit={() => setScreen('form')}
+          onEdit={() => setManualOpen(true)}
           onSolve={solve}
         />
       )}
@@ -218,7 +222,7 @@ export function App(): JSX.Element {
             result={result}
             ms={ms}
             onSave={onSave}
-            onBack={() => setScreen('form')}
+            onBack={() => setScreen('icm')}
           />
         )
       )}
@@ -228,14 +232,27 @@ export function App(): JSX.Element {
           records={records}
           onOpen={openRecord}
           onDelete={onDeleteRecord}
-          onBack={() => setScreen('form')}
+          onBack={() => setScreen('icm')}
         />
       )}
 
-      {screen === 'drill' && <DrillView onExit={() => setScreen('form')} />}
+      {screen === 'drill' && <DrillView onExit={() => setScreen('icm')} />}
 
       {screen === 'error' && (
-        <ErrorView issues={issues} onBack={() => setScreen('form')} />
+        <ErrorView
+          issues={issues}
+          onManual={() => setManualOpen(true)}
+          onRetry={errFromPhoto ? () => setScreen('icm') : undefined}
+        />
+      )}
+
+      {manualOpen && (
+        <InputForm
+          form={form}
+          onFormChange={setForm}
+          onSubmit={submitManual}
+          onClose={() => setManualOpen(false)}
+        />
       )}
 
       <footer className="ft">

@@ -1,46 +1,79 @@
 import type { BoardState } from '@oshihiki/core';
 import { potChecksumDelta } from '@oshihiki/core';
 
-/** 条件確認（§7.1）。組み立てた盤面の読み上げ＋ポット検算。修正 / 計算する。 */
+/**
+ * 条件確認（3-1c・M3）。読み取った内容を項目別に読み上げ、各行の「修正」で手入力
+ * モーダルを開く。OCR 低信頼フィールドは CHECK バッジで強調。ポット検算も表示。
+ */
 export function Confirm(props: {
   state: BoardState;
   /** OCR 由来の低信頼フィールド（"UTG.stack" / "UTG.bet"）。強調表示する。 */
   lowConfidenceFields?: string[];
+  /** 手入力モーダルを開く（項目別「修正」・全体「修正」共通）。 */
   onEdit: () => void;
   onSolve: () => void;
 }): JSX.Element {
   const { state } = props;
   const low = new Set(props.lowConfidenceFields ?? []);
   const hasLow = low.size > 0;
-  const anteText =
-    state.ante.scheme === 'none' ? 'なし' : `${state.ante.scheme} ${state.ante.amount}bb`;
+  const anteText = state.ante.scheme === 'none' ? 'なし' : `${state.ante.scheme} ${state.ante.amount}bb`;
   const delta = potChecksumDelta(state);
   const potOk = delta !== null && Math.abs(delta) < 1e-9;
+  // 席スタックのいずれかが低信頼なら Players 行を CHECK 強調（モックの low 行に対応）。
+  const stacksLow = state.seats.some((s) => low.has(`${s.pos}.stack`));
+
+  const Edit = (): JSX.Element => (
+    <button type="button" className="edit" onClick={props.onEdit}>
+      修正
+    </button>
+  );
 
   return (
     <div className="panel confirm">
-      <h2 className="scr-h">条件確認</h2>
+      <h2 className="scr-h">読み取った内容</h2>
 
       <div className="readout">
-        <div className="row"><span>ブラインド</span><b>{state.blinds.sb} / {state.blinds.bb}</b></div>
-        <div className="row"><span>アンティ</span><b>{anteText}</b></div>
-        <div className="row"><span>hero ハンド</span><b>{state.heroHand}</b></div>
-        <div className="row"><span>hero ポジション</span><b>{state.heroPos}</b></div>
-        <div className="row"><span>残り人数</span><b>{state.playersLeft}</b></div>
         <div className="row">
-          <span>ポット検算</span>
-          <b className={potOk ? 'ok' : 'warn'}>
+          <span className="lb">Blinds</span>
+          <span className="vl">
+            {state.blinds.sb} / {state.blinds.bb}
+            {state.ante.scheme !== 'none' && <>　ante {state.ante.amount}</>}
+          </span>
+          <Edit />
+        </div>
+        <div className="row">
+          <span className="lb">Hand</span>
+          <span className="vl">{state.heroHand}</span>
+          <Edit />
+        </div>
+        <div className="row">
+          <span className="lb">Hero</span>
+          <span className="vl">{state.heroPos}</span>
+          <Edit />
+        </div>
+        <div className={`row${stacksLow ? ' low' : ''}`}>
+          <span className="lb">Players</span>
+          <span className="vl">{state.playersLeft}</span>
+          <Edit />
+        </div>
+        <div className="row">
+          <span className="lb">Pot</span>
+          <span className={`vl ${potOk ? 'ok' : 'warn'}`}>
             {potOk ? `一致 (${state.pot}bb)` : `不一致 Δ=${delta?.toFixed(2)}`}
-          </b>
+          </span>
+          <Edit />
         </div>
       </div>
 
       {hasLow && (
         <p className="lowconf-note">
-          ⚠️ 黄色の項目は自動読取の信頼度が低めです。値をご確認ください（修正は「修正」から）。
+          ⚠️ CHECK の付いた項目は自動読取の信頼度が低めです。値をご確認ください（「修正」から直せます）。
         </p>
       )}
 
+      <h2 className="scr-h sm" style={{ marginTop: 'var(--s4)' }}>
+        Stacks
+      </h2>
       <div className="seats-ro">
         {state.seats.map((s) => (
           <div key={s.pos} className={`seatrow-ro${s.pos === state.heroPos ? ' hero' : ''}`}>
@@ -53,6 +86,8 @@ export function Confirm(props: {
           </div>
         ))}
       </div>
+
+      <p className="confirm-note">違っていたら「修正」から直せます。直した内容がそのまま計算に使われます。</p>
 
       <div className="btnrow">
         <button type="button" className="btn ghost" onClick={props.onEdit}>

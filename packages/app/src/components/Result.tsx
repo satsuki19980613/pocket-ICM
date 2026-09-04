@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
-import type { SolveNodeDto, SolveResultDto } from '../solverProtocol';
-import { RangeGrid } from './RangeGrid';
+import type { SolveResultDto } from '../solverProtocol';
+import { ActionTree } from './ActionTree';
 import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/model';
 
 const ACTION_JA: Record<string, string> = { PU: '先手プッシュ (PU)', CA: 'コール (CA)', OC: 'オーバーコール (OC)' };
@@ -20,20 +20,20 @@ export function Result(props: {
   result: SolveResultDto;
   onBack: () => void;
   ms: number;
-  /** 記録の保存ハンドラ（読み取り専用の再表示時は未指定）。 */
-  onSave?: (heroAction: HeroAction) => void;
+  /** 記録の保存ハンドラ（読み取り専用の再表示時は未指定）。published=ホーム公開フラグ（既定 false）。 */
+  onSave?: (heroAction: HeroAction, published: boolean) => void;
   /** 履歴からの再表示（保存 UI を出さず、記録済みの情報を表示）。 */
   readOnly?: boolean;
   /** readOnly 時に表示する、記録済みの実行動と EV loss。 */
   savedAction?: HeroAction;
   savedEvLoss?: number;
+  savedPublished?: boolean;
 }): JSX.Element {
   const { result, state } = props;
-  const [showAll, setShowAll] = useState(false);
   const [action, setAction] = useState<HeroAction | null>(null);
+  const [publish, setPublish] = useState(false);
   const [saved, setSaved] = useState(false);
-  const heroNodes = result.nodes.filter((n) => n.actor === result.heroPos);
-  const headline = headlineNode(result) ?? heroNodes[0];
+  const headline = headlineNode(result);
   const heroSeat = state.seats.find((s) => s.pos === result.heroPos);
 
   const canSave = !props.readOnly && !!props.onSave && !!headline;
@@ -41,21 +41,23 @@ export function Result(props: {
 
   function save(): void {
     if (!action || !props.onSave) return;
-    props.onSave(action);
+    props.onSave(action, publish);
     setSaved(true);
   }
 
   return (
     <div className="result-wrap">
       {headline ? (
-        <div className="panel vhero">
+        <div className={`panel vhero ${verdictOf(headline) === 'PUSH' ? '' : 'fold'}`}>
           <div className={`verdict ${verdictOf(headline) === 'PUSH' ? 'push' : 'fold'}`}>{verdictOf(headline)}</div>
           <div className="vmeta">
             <b className="vhand">{result.heroHand}</b>
             <span>
               {result.heroPos}・{heroSeat ? `${heroSeat.stack}bb` : ''}・{result.playersLeft} left
             </span>
-            <span className="vaction">{ACTION_JA[headline.actionType] ?? headline.actionType}</span>
+            <span className="vaction">
+              {ACTION_JA[headline.actionType] ?? headline.actionType}・レンジ {headline.pct.toFixed(1)}%
+            </span>
           </div>
           <div className="evbox">
             <span className="evlabel">EV（フォールド比, 実払い pt）</span>
@@ -64,16 +66,15 @@ export function Result(props: {
               {headline.heroEv.toFixed(3)}
             </b>
           </div>
-          <div className="freqbar">
-            <div className="freqfill" style={{ width: `${Math.min(100, headline.pct)}%` }} />
-            <span className="freqtxt">レンジ {headline.pct.toFixed(1)}%</span>
-          </div>
-          <RangeGrid hands={headline.hands} heroHand={result.heroHand} />
-          <div className="rangestr">{headline.range || '(空)'}</div>
         </div>
       ) : (
-        <div className="panel">hero の決定ノードがありません（BB のウォーク等）。下の一覧を参照。</div>
+        <div className="panel">hero の決定ノードがありません（BB のウォーク等）。下の Action tree を参照。</div>
       )}
+
+      <div className="panel">
+        <h2 className="scr-h">Action tree</h2>
+        <ActionTree result={result} />
+      </div>
 
       {/* ---- 記録（自分の実行動を選んで保存） ---- */}
       {canSave && (
@@ -99,8 +100,23 @@ export function Result(props: {
                 : 'EV loss 0（最適な選択）'}
             </p>
           )}
+          <div className="tog">
+            <div>
+              ホームで公開する
+              <small>クラブのみんなが見られ、スレッドで話せます（公開の反映は後日）</small>
+            </div>
+            <button
+              type="button"
+              className="sw"
+              role="switch"
+              aria-checked={publish}
+              aria-label="ホームで公開する"
+              onClick={() => setPublish((p) => !p)}
+              disabled={saved}
+            />
+          </div>
           <button type="button" className="btn wide" onClick={save} disabled={!action || saved}>
-            {saved ? '記録しました ✓' : '記録する'}
+            {saved ? `記録しました ✓${publish ? '（公開）' : ''}` : '記録する'}
           </button>
         </div>
       )}
@@ -119,23 +135,14 @@ export function Result(props: {
               {(props.savedEvLoss ?? 0) > 0 ? `−${(props.savedEvLoss ?? 0).toFixed(3)}` : '0'}
             </b>
           </div>
-        </div>
-      )}
-
-      {heroNodes.length > 1 && (
-        <div className="panel">
-          <div className="scr-h sm">hero の他の状況</div>
-          {heroNodes.filter((n) => n !== headline).map((n) => (
-            <div key={n.key} className="hnode">
-              <span className="ht">{ACTION_JA[n.actionType]?.split(' ')[0] ?? n.actionType}</span>
-              <span className={`hv ${verdictOf(n) === 'PUSH' ? 'push' : 'fold'}`}>{verdictOf(n)}</span>
-              <span className="hpct">{n.pct.toFixed(1)}%</span>
-              <span className={`hev ${evClass(n.heroEv)}`}>
-                {n.heroEv >= 0 ? '+' : ''}
-                {n.heroEv.toFixed(3)}
+          <div className="row">
+            <span>公開状態</span>
+            <b>
+              <span className={`tag${props.savedPublished ? ' pub' : ''}`}>
+                {props.savedPublished ? '公開中' : '非公開'}
               </span>
-            </div>
-          ))}
+            </b>
+          </div>
         </div>
       )}
 
@@ -166,23 +173,6 @@ export function Result(props: {
           <p className="convnote">
             ⚠ 収束不十分（exploitability がしきい値超）。境界ハンドの押し引きは目安として扱ってください。
           </p>
-        )}
-      </div>
-
-      <div className="panel">
-        <button type="button" className="disc" onClick={() => setShowAll((s) => !s)}>
-          全ノード（{result.nodes.length}） {showAll ? '▲' : '▼'}
-        </button>
-        {showAll && (
-          <div className="allnodes">
-            {result.nodes.map((n) => (
-              <div key={n.key} className="anode">
-                <span className="ak">{n.key}</span>
-                <span className="aa">{n.actor}/{n.actionType}</span>
-                <span className="ap">{n.pct.toFixed(1)}%</span>
-              </div>
-            ))}
-          </div>
         )}
       </div>
 

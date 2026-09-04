@@ -58,6 +58,8 @@ export interface SpotRecord {
   heroEv: number;
   /** EV loss（≥0, 実払い pt）。 */
   evLoss: number;
+  /** ホームで公開するか（既定 false）。M4 ではローカルフラグ、クラウド反映は M6。 */
+  published: boolean;
   // --- 再表示用スナップショット ---
   state: BoardState;
   result: SolveResultDto;
@@ -69,6 +71,8 @@ export interface BuildRecordInput {
   result: SolveResultDto;
   ms: number;
   heroAction: HeroAction;
+  /** ホームで公開するか（既定 false）。 */
+  published?: boolean;
   /** 省略時は createdAt から採番（テストでは固定可）。 */
   id?: string;
   /** 省略時 Date.now()。 */
@@ -94,6 +98,7 @@ export function buildRecord(input: BuildRecordInput): SpotRecord {
     heroAction,
     heroEv,
     evLoss,
+    published: input.published ?? false,
     state,
     result,
     ms,

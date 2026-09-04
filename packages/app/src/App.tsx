@@ -65,10 +65,10 @@ export function App(): JSX.Element {
     void refreshRecords();
   }, []);
 
-  /** 結果画面から現在の局面を記録する。 */
-  async function onSave(heroAction: HeroAction): Promise<void> {
+  /** 結果画面から現在の局面を記録する。published=ホーム公開フラグ（既定 false, 反映は M6）。 */
+  async function onSave(heroAction: HeroAction, published: boolean): Promise<void> {
     if (!state || !result) return;
-    const rec = buildRecord({ state, result, ms, heroAction });
+    const rec = buildRecord({ state, result, ms, heroAction, published });
     try {
       await putRecord(rec);
       await refreshRecords();
@@ -211,6 +211,7 @@ export function App(): JSX.Element {
             readOnly
             savedAction={viewing.heroAction}
             savedEvLoss={viewing.evLoss}
+            savedPublished={viewing.published}
             onBack={() => {
               setViewing(null);
               setScreen('history');

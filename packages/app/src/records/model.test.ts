@@ -119,6 +119,11 @@ describe('buildRecord', () => {
     expect(rec.evLoss).toBe(0);
   });
 
+  it('published は既定 false、指定時はその値（M4 公開フラグ）', () => {
+    expect(buildRecord({ state, result: r, ms: 0, heroAction: 'PUSH', createdAt: 1 }).published).toBe(false);
+    expect(buildRecord({ state, result: r, ms: 0, heroAction: 'PUSH', published: true, createdAt: 1 }).published).toBe(true);
+  });
+
   it('id 省略時は自動採番（createdAt を含む一意 id）', () => {
     const a = buildRecord({ state, result: r, ms: 0, heroAction: 'PUSH', createdAt: 42 });
     const b = buildRecord({ state, result: r, ms: 0, heroAction: 'PUSH', createdAt: 42 });

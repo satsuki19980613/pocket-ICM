@@ -719,6 +719,72 @@ button.cell { cursor: pointer; }
 .modal-body { overflow-y: auto; padding: var(--s4); }
 .modal-body .grp:first-child { margin-top: 0; }
 
+/* ==== M4: Action tree（全ポジ常時表示・行内トグル）＋連動レンジ ==== */
+.tree { display: flex; flex-direction: column; gap: 6px; }
+.arow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  transition: border-color 150ms var(--ease), background 150ms var(--ease);
+}
+/* 選択中の行 = 黄ロックオン */
+.arow[data-active="true"] { border-color: var(--yellow); background: rgba(252, 238, 10, 0.06); }
+/* ウォーク（no decision）= 減光ロック */
+.arow[data-locked="true"] { opacity: 0.4; }
+.arow .segs { display: flex; gap: 4px; flex: 1; justify-content: flex-end; }
+.seg {
+  font-family: var(--disp);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  color: var(--dim2);
+  cursor: pointer;
+  min-width: 58px;
+  text-transform: uppercase;
+  transition: all 150ms var(--ease);
+}
+.seg:hover { color: var(--fg); }
+.seg[aria-pressed="true"] { background: var(--surface-3); color: var(--fg); border-color: var(--line-2); }
+/* アグレッシブを選択中 = 黄（PUSH/CALL/OC の確定） */
+.seg.act[aria-pressed="true"] { background: var(--yellow); color: var(--yellow-ink); border-color: var(--yellow); }
+.arow .term { flex: 1; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--dim2); padding-right: 6px; letter-spacing: 0.04em; }
+.tree-note { margin: var(--s3) 0 var(--s4); font-size: 12px; color: var(--dim); line-height: 1.6; }
+.rangehdr { margin-bottom: var(--s2); }
+
+/* 頻度バー（取る%＝黄 / 取らない%＝グレー） */
+.freq { display: flex; height: 22px; overflow: hidden; margin-bottom: var(--s2); background: var(--cell-off); border: 1px solid var(--line); }
+.freq > div { display: grid; place-items: center; font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; white-space: nowrap; }
+.freq .fp { background: var(--yellow); color: var(--yellow-ink); }
+.freq .ff { color: var(--dim2); }
+
+.legend { display: flex; gap: 15px; margin-top: var(--s3); font-size: 11px; color: var(--dim); flex-wrap: wrap; font-family: var(--mono); }
+.legend span { display: inline-flex; align-items: center; }
+.legend i { width: 11px; height: 11px; display: inline-block; margin-right: 5px; }
+
+/* 公開トグル（既定オフ・ローカルフラグ、クラウド反映は M6） */
+.tog { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: var(--s3) 0; font-size: 13.5px; }
+.tog small { display: block; color: var(--dim); font-size: 11.5px; margin-top: 3px; line-height: 1.55; }
+.sw {
+  width: 44px; height: 26px; flex: none; position: relative; cursor: pointer;
+  background: var(--surface-3); border: 1px solid var(--line-2);
+  transition: background 160ms var(--ease), border-color 160ms var(--ease);
+}
+.sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+  background: #7c7a5e; transition: left 160ms var(--ease), background 160ms var(--ease);
+}
+.sw[aria-checked="true"] { background: rgba(252, 238, 10, 0.25); border-color: var(--yellow); }
+.sw[aria-checked="true"]::after { left: 20px; background: var(--yellow); }
+.sw:disabled { opacity: 0.5; cursor: default; }
+/* 公開タグ = シアン（情報系） */
+.tag.pub { background: rgba(58, 230, 255, 0.14); color: var(--cyan); border-color: rgba(58, 230, 255, 0.4); }
+
 /* ---- 記録（履歴） ---- */
 .navgrp { margin-left: auto; display: flex; gap: var(--s2); }
 .navrec {

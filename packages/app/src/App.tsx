@@ -9,7 +9,8 @@ import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
 import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
-import { DrillView } from './components/DrillView';
+// Drill（訓練）は SPEC §5.6 により一旦 Coming Soon。DrillView 実装はコード上温存（未配線）。
+import { ComingSoon } from './components/ComingSoon';
 import { Settings } from './components/Settings';
 import { Admin } from './components/Admin';
 import { buildBoardState, defaultForm, type BoardForm } from './formModel';
@@ -290,7 +291,18 @@ export function App(): JSX.Element {
         />
       )}
 
-      {screen === 'drill' && <DrillView onExit={() => setScreen('icm')} />}
+      {screen === 'drill' && (
+        <ComingSoon
+          title="Training"
+          body={
+            <>
+              ランダム出題でオールイン判断を鍛えるモードを準備中です。
+              <br />
+              5〜6人の即時求解ができ次第、公開します。
+            </>
+          }
+        />
+      )}
 
       {screen === 'settings' && (
         <Settings onBack={() => setScreen('icm')} onOpenAdmin={() => setScreen('admin')} />

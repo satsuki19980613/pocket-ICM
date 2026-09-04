@@ -44,7 +44,7 @@
 | **M4** | 計算結果の刷新（Action tree 全ポジ×全条件） | ✅完了 | — | A |
 | **M5** | 記録タブ（一覧/集計/削除/公開状態） | ⬜未着手 | M1 | A |
 | **M6** | ホーム/スレッド（公開/返信/画像/編集/他人公開） | ⬜未着手 | M1,M4 | A |
-| **M7** | 設定＋管理画面実装＋Drill=Coming Soon | ⬜未着手 | M1,M2.5 | A |
+| **M7** | 設定＋管理画面実装＋Drill=Coming Soon | 🟨実機検証待ち | M1,M2.5 | A |
 | **M8** | 5人 NN 統合（学習→検証→配線→出荷） | ⬜未着手 | M0完了 | B |
 | **M9** | 6人 NN（生成→学習→検証→配線） | ⬜未着手 | M8 | B |
 | **M10** | 総合・出荷（回帰/PWA/デプロイ/免責） | ⬜未着手 | 全部 | A |
@@ -116,11 +116,16 @@
 - [ ] 自分のコメント編集・他人プロフ→公開結果一覧（`userpub`）
 - **DoD**: 2アカウントでスレッド往復（投稿→返信→画像→編集）が実機で成立。
 
-### M7 — 設定＋管理画面＋Drill ⬜
-- [ ] 設定: プロフ画像/表示名/handle/パスワード変更・公開既定・アカウント削除・ログアウト
-- [ ] 管理画面 `admin` 実装（M1 の Edge Function に配線・管理者のみ表示）
-- [ ] Drill を "Coming Soon" 表示（実装は温存）
-- **DoD**: 設定変更・削除・画像反映が動き、管理画面から発行/上限変更/取消が実機で機能。
+### M7 — 設定＋管理画面＋Drill 🟨（さつき実機検証待ち）
+- [x] 認証UI（ログイン/サインアップ/ログアウト）＋全機能ログインゲート（commit bac39ad）
+- [x] 設定: 表示名/パスワード変更・公開既定・アカウント削除・ログアウト（commit 1283ffe）
+  - handle 変更＝**保留**（synthetic email 付け替え＝Edge Function 未実装。読取専用/準備中表示）
+  - プロフ画像（avatar・Storage）＝**後続へ送り**（読取専用「準備中」）
+- [x] 管理画面 `admin` 実装（issue/revoke/setMax に配線・is_admin のみ表示・commit 271fb75）
+- [~] ~~Drill を "Coming Soon" 表示~~ → **見送り（さつき決定 2026-09-04: 2-4人で動作・検証済みの
+  working feature を隠さず残す。Coming Soon は 5-6人対応=M8/M9 NN が入る段階で再検討）**
+- **DoD**: 設定変更・削除が動き、管理画面から発行/上限変更/取消が実機で機能（**さつき is_admin
+  ログインで往復検証待ち**。Claude はログイン不可のため純ロジック単体テスト＋レイアウト確認で担保）。
 
 ### M8 — 5人 NN 統合 ⬜
 - [ ] `trainNwayNN`（学習）→ `validateNwayNN`（**超過損 < 0.05pt**）
@@ -140,6 +145,17 @@
 ---
 
 ## 5. 進捗ログ（新しい順・セッション引き継ぎ）
+
+- **2026-09-04（9, M7 認証/設定/管理）**: **M7 の主要3画面を実装**（3 commit）。①認証UI `Auth.tsx`＋
+  全機能ログインゲート（`App` のセッション監視 getSession/onAuthStateChange・未ログインは Auth のみ,
+  commit bac39ad）②設定 `Settings.tsx`＋`supabase/profile.ts`（表示名/パスワード/公開既定/削除/ログアウト,
+  handle・avatar は保留, commit 1283ffe）③管理 `Admin.tsx`＋`supabase/admin.ts`＋`admin/format.ts`
+  （招待キー発行/一覧/取消・上限編集・登録状況キャップバー・expired 導出, is_admin のみ, commit 271fb75）。
+  純ロジックを単体テスト化（auth/validate 11・admin/format 5）＝**430 tests green・tsc/vite build clean**。
+  各画面をブラウザで実描画確認（認証ゲート・タブ切替・クライアント検証・実Supabase往復エラー赤バナー／
+  設定の二段階削除確認／管理のキャップバー・状態バッジ・取消可否, 一時バイパス→撤去）。
+  **Drill "Coming Soon" はさつき決定で見送り**（2-4人で動く working feature を残す）。**さつき is_admin ログインで
+  認証成功/設定更新/削除/管理往復の実機検証待ち**（Claude はログイン不可）。M2.5 モックへの admin 追加は未着手（実装先行）。
 
 - **2026-09-04（8, M1 実機稼働）**: **M1 バックエンドを Supabase 実機に適用・DoD 検証＝完了**。プロジェクト
   `bpxrbxnylgedjhvhfsvk`（Tokyo）作成 → `apply-all.sql`（0001〜0005 結合）を SQL Editor で一括適用 →

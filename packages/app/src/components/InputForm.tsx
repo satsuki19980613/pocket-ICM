@@ -46,7 +46,8 @@ export function InputForm(props: {
           <div className="grp">
             <label className="lbl">残り人数</label>
             <div className="seg">
-              {[2, 3, 4, 5, 6].map((n) => (
+              {/* 現状は 4 人まで対応（5〜6 人は NN 統合＝M8/M9 で開放）。 */}
+              {[2, 3, 4].map((n) => (
                 <button
                   key={n}
                   type="button"

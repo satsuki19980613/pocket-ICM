@@ -104,6 +104,14 @@ function tabForScreen(s: Screen): TabKey | null {
 }
 
 /**
+ * 現状サポートする最大人数。HU/3人/4人は事前計算テーブルで即時・決定的に解ける。
+ * 5〜6人は遅い MC＋NN 未統合のため一旦対象外（M8/M9 で開放）。
+ */
+const MAX_PLAYERS = 4;
+
+const OVER_SCOPE_MSG = `現在は${MAX_PLAYERS}人までの局面に対応しています（5〜6人は準備中）。`;
+
+/**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
  * 反復・サンプルを厚めに取れる。exploitability がしきい値に達すれば早期終了する。
  */
@@ -130,7 +138,7 @@ export function App(): JSX.Element {
   const [manualOpen, setManualOpen] = useState(false);
   // エラーが写真経路由来か（「別の写真を選ぶ」を出すか）。
   const [errFromPhoto, setErrFromPhoto] = useState(false);
-  const [form, setForm] = useState<BoardForm>(() => defaultForm(5));
+  const [form, setForm] = useState<BoardForm>(() => defaultForm(MAX_PLAYERS));
   const [state, setState] = useState<BoardState | null>(null);
   const [result, setResult] = useState<SolveResultDto | null>(null);
   const [ms, setMs] = useState(0);
@@ -377,6 +385,11 @@ export function App(): JSX.Element {
         setScreen('error');
         return;
       }
+      if (built.state.playersLeft > MAX_PLAYERS) {
+        setIssues([OVER_SCOPE_MSG]);
+        setScreen('error');
+        return;
+      }
       setLowConf(res.lowConfidenceFields);
       setState(built.state);
       setScreen('confirm');
@@ -390,6 +403,13 @@ export function App(): JSX.Element {
 
   async function solve(): Promise<void> {
     if (!state) return;
+    // 念のための防御（入口で弾いているが、5〜6人が届いても遅い MC を走らせない）。
+    if (state.playersLeft > MAX_PLAYERS) {
+      setErrFromPhoto(false);
+      setIssues([OVER_SCOPE_MSG]);
+      setScreen('error');
+      return;
+    }
     setResultOrigin({ kind: 'solve' }); // 新規求解は保存可
     setScreen('solving');
     try {
@@ -459,6 +479,7 @@ export function App(): JSX.Element {
   if (session === undefined) {
     return (
       <div className="app">
+        <div className="marble" aria-hidden="true" />
         <div className="panel solving">
           <div className="spinner" />
           <p>読み込み中…</p>
@@ -471,6 +492,7 @@ export function App(): JSX.Element {
   if (session === null) {
     return (
       <div className="app">
+        <div className="marble" aria-hidden="true" />
         <Auth configured={isConfigured} />
       </div>
     );
@@ -482,6 +504,7 @@ export function App(): JSX.Element {
 
   return (
     <div className={`app${showTabs ? ' has-tabs' : ''}`}>
+      <div className="marble" aria-hidden="true" />
       <header className="topbar">
         {back ? (
           <button type="button" className="tb-back" aria-label="戻る" onClick={back}>

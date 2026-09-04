@@ -27,7 +27,8 @@ const PLAYERS = Number(process.argv[2] ?? 5);
 const SAMPLES = Number(process.argv[3] ?? 40_000);
 const AXIS = process.argv[4] ?? '2,8,14,20,25';
 const CKPT = Number(process.argv[5] ?? 10);
-const PORT = Number(process.argv[6] ?? 4577);
+let PORT = Number(process.argv[6] ?? 4577);
+const PORT_TRIES = 20; // ポート使用中なら +1 しながら空きを探す（最大 20 個）
 const TAG = `nn${PLAYERS}way`;
 const CONTROL = join(OUT_DIR, `${TAG}.control.json`);
 const STATUS = join(OUT_DIR, `${TAG}.status.json`);
@@ -230,10 +231,46 @@ const server = createServer(async (req, res) => {
   res.writeHead(404); res.end('not found');
 });
 
-server.listen(PORT, () => {
+function onListening(): void {
   const url = `http://localhost:${PORT}`;
-  process.stderr.write(`\n=== 教師データ生成モニタ ===\n  ${url}\n  players=${PLAYERS} samples=${SAMPLES} axis=${AXIS}\n  ブラウザが自動で開きます。閉じてもこのウィンドウが生きていれば計算は続きます。\n\n`);
+  process.stderr.write(
+    `\n` +
+    `  ============================================================\n` +
+    `       教師データ生成モニタが起動しました\n` +
+    `  ------------------------------------------------------------\n` +
+    `       ブラウザで下のURLを開いてください（自動でも開きます）:\n\n` +
+    `         ${url}\n\n` +
+    `       players=${PLAYERS} samples=${SAMPLES} axis=${AXIS}\n` +
+    `       ※このウィンドウは開いたままにしてください。\n` +
+    `         ブラウザを閉じても、ここが生きていれば計算は続きます。\n` +
+    `  ============================================================\n\n`,
+  );
   if (existsSync(STATUS)) pushLog('前回の status を検出（レジューム可能）');
-  // ブラウザ自動起動（Windows）
-  if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+  // ブラウザ自動起動（Windows）。失敗しても上のURLを手で開けばよい。
+  if (process.platform === 'win32') {
+    try {
+      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+    } catch {
+      /* 自動起動できなくてもURLを表示済みなので致命的でない */
+    }
+  }
+}
+
+// ポートが使用中（前回のプロセスが残っている等）なら +1 しながら空きを探す。
+let portAttempt = 0;
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE' && portAttempt < PORT_TRIES) {
+    portAttempt += 1;
+    const busy = PORT;
+    PORT += 1;
+    process.stderr.write(`  ポート ${busy} は使用中でした。${PORT} で再試行します...\n`);
+    setTimeout(() => server.listen(PORT), 150);
+    return;
+  }
+  process.stderr.write(`\n  起動に失敗しました: ${err.message}\n`);
+  if (err.code === 'EADDRINUSE') {
+    process.stderr.write(`  空きポートが見つかりませんでした。既存のモニタを閉じてから再度お試しください。\n`);
+  }
+  process.exit(1);
 });
+server.listen(PORT, onListening);

@@ -22,6 +22,13 @@ import { assemblePfResult, stackTotals } from './pfResult.js';
 /** interpExplBound 未指定テーブルの既定 exploitability 上限（3人の実証値）。 */
 export const PF_DEFAULT_INTERP_EXPL_BOUND = 0.06;
 
+/**
+ * アンティ量(bb)の一致許容。実ゲームは全レベルで概ね 0.25bb だが、チップ額の丸めで
+ * レベルにより 0.25〜約0.255 とわずかに揺れる（例: 550/1100, ante280 → 280/1100=0.2545）。
+ * 押し引きレンジへの影響は無視できるため、テーブルのアンティに近ければ同一条件として扱う。
+ */
+export const PF_ANTE_TOL = 0.03;
+
 export interface PfMeta {
   kind: string;
   blinds: { sb: number; bb: number };
@@ -78,16 +85,37 @@ function totalsOf(table: PfTable, state: BoardState): number[] {
 }
 
 /** この state を事前計算テーブルで解けるか（D人・条件一致・範囲内）。 */
-export function pfInRange(table: PfTable, state: BoardState): boolean {
-  if (state.playersLeft !== table.dims) return false;
-  const { blinds, ante, axis } = table.meta;
-  if (state.blinds.sb !== blinds.sb || state.blinds.bb !== blinds.bb) return false;
-  if (state.ante.scheme !== ante.scheme || state.ante.amount !== ante.amount) return false;
+/**
+ * この state をテーブルでどう扱えるか。
+ *  - 'in'       : 補間で即時に解ける（相手が上限超でも lookup 側で 25bb にクランプ）。
+ *  - 'heroDeep' : **hero 自身が上限超**＝push/fold（AOF）が最適でない深さ → 対象外表示すべき。
+ *  - 'off'      : 人数/ブラインド/アンティ方式が不一致 → 汎用ソルバーへフォールバック。
+ *
+ * 方針（さつき決定 2026-09-04）: 相手だけが 25bb 超の深いスタックの局面は、その席を
+ * 25bb にクランプして即時に近似回答する（hero が短ければ実用上ほぼ問題ない）。
+ * hero 自身が 25bb 超なら push/fold の前提が崩れるので「対象外」とする。
+ * アンティは 0.25 近傍を許容（実ゲームのチップ丸め対策, PF_ANTE_TOL）。
+ */
+export type PfCoverage = 'in' | 'heroDeep' | 'off';
+
+export function pfCoverage(table: PfTable, state: BoardState): PfCoverage {
+  const { blinds, ante, axis, order } = table.meta;
+  if (state.playersLeft !== table.dims) return 'off';
+  if (state.blinds.sb !== blinds.sb || state.blinds.bb !== blinds.bb) return 'off';
+  if (state.ante.scheme !== ante.scheme || Math.abs(state.ante.amount - ante.amount) > PF_ANTE_TOL) {
+    return 'off';
+  }
   const hi = axis[axis.length - 1]!;
-  const totals = totalsOf(table, state);
-  // 下限はクランプ可（超短スタックは自明でテーブル最小点に丸める）。
-  // 上限超えは AOF が正しいモデルでない領域なので対象外＝フォールバックさせる。
-  return totals.every((t) => t <= hi + 1e-6);
+  const totals = totalsOf(table, state); // order 順
+  const heroIdx = order.indexOf(state.heroPos);
+  if (heroIdx >= 0 && totals[heroIdx]! > hi + 1e-6) return 'heroDeep';
+  // hero が上限以下なら 'in'。相手の上限超は lookupPf の seg() が 25bb にクランプする。
+  return 'in';
+}
+
+/** 補間で即時に解ける（下限クランプ可・相手の上限超はクランプ・hero は上限以下）。 */
+export function pfInRange(table: PfTable, state: BoardState): boolean {
+  return pfCoverage(table, state) === 'in';
 }
 
 /** axis 上の値 v の下側区間 index と比率（非等間隔対応, 範囲外はクランプ）。 */

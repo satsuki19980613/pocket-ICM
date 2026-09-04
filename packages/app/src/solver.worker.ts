@@ -9,10 +9,9 @@ import {
   solveHu,
   loadHuTableBrowser,
   loadPf3wayTableBrowser,
-  pf3wayInRange,
   lookupPf3way,
   loadPfTableBrowser,
-  pfInRange,
+  pfCoverage,
   lookupPf,
   type LoadedHuTable,
   type Pf3wayTable,
@@ -39,6 +38,11 @@ import type {
 
 // ショーダウン MC はメインスレッドの Web Worker プールで並列化する（入れ子 Worker は
 // Vite で不安定なため）。ここではメインへジョブを投げ、結果を待つ mcRunner を組む。
+// hero 自身が事前計算テーブルの上限(25bb)より深い＝push/fold(AOF)の前提が崩れる局面。
+// 遅い MC を回さず、この文言を結果画面ではなくエラー画面に出して手入力修正へ促す。
+const OUT_OF_SCOPE_MSG =
+  '自分のスタックが深すぎます（25bb超）。押し引き（オールインか降り）で最適に近づくのは概ね25bb以下です。';
+
 let mcReqId = 1;
 const mcPending = new Map<number, { resolve: (r: ShowdownMcResult[]) => void; reject: (e: Error) => void }>();
 const mcRunner: McRunner = (jobs) =>
@@ -131,26 +135,26 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
       const r = solveHu(state, { table, ...(opts?.maxIters ? { maxIters: opts.maxIters } : {}) });
       dto = toDto(r as unknown as CommonResult, 2, state.heroPos, state.heroHand);
     } else if (state.playersLeft === 3) {
-      // 3人は事前計算テーブル（GOLD精度）を補間して即時解。範囲外(実効>maxbb 等)や
-      // 条件不一致・読込失敗時は N-way ソルバーへフォールバック。
+      // 3人は事前計算テーブル（GOLD精度）を補間して即時解。相手だけが25bb超なら
+      // その席を25bbにクランプして即時。hero自身が25bb超なら対象外。条件不一致・
+      // 読込失敗時は N-way ソルバーへフォールバック。
       let r: CommonResult | null = null;
-      try {
-        const pf = await getPf3wayTable();
-        if (pf3wayInRange(pf, state)) r = lookupPf3way(pf, state) as unknown as CommonResult;
-      } catch {
-        r = null; // フォールバック
+      const pf = await getPf3wayTable().catch(() => null);
+      if (pf) {
+        const cov = pfCoverage(pf, state);
+        if (cov === 'heroDeep') throw new Error(OUT_OF_SCOPE_MSG);
+        if (cov === 'in') r = lookupPf3way(pf, state) as unknown as CommonResult;
       }
       if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
       dto = toDto(r, 3, state.heroPos, state.heroHand);
     } else if (state.playersLeft === 4) {
-      // 4人も事前計算テーブル（GOLD精度）を補間して即時解。範囲外・条件不一致・
-      // 読込失敗時は N-way ソルバーへフォールバック（3人と同型）。
+      // 4人も同型（クランプ＋hero深すぎは対象外＋フォールバック）。
       let r: CommonResult | null = null;
-      try {
-        const pf = await getPf4wayTable();
-        if (pfInRange(pf, state)) r = lookupPf(pf, state) as unknown as CommonResult;
-      } catch {
-        r = null; // フォールバック
+      const pf = await getPf4wayTable().catch(() => null);
+      if (pf) {
+        const cov = pfCoverage(pf, state);
+        if (cov === 'heroDeep') throw new Error(OUT_OF_SCOPE_MSG);
+        if (cov === 'in') r = lookupPf(pf, state) as unknown as CommonResult;
       }
       if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
       dto = toDto(r, 4, state.heroPos, state.heroHand);

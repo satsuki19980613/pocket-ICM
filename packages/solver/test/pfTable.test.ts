@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { BoardState } from '@oshihiki/core';
-import { buildPfTable, lookupPf, pfInRange, type PfMeta } from '../src/pfTable.js';
+import { buildPfTable, lookupPf, pfInRange, pfCoverage, type PfMeta } from '../src/pfTable.js';
 
 const SB = 0.5, BB = 1, ANTE = 0.25;
 const ORDER = ['CO', 'BU', 'SB', 'BB'] as const;
@@ -83,13 +83,24 @@ describe('pfTable interpolation (4-way / quadlinear)', () => {
     expect(r.nodes[0]!.freq['72o']!).toBe(0);
   });
 
-  it('範囲判定: 上限超えは対象外, 範囲内は可, 4人以外は不可', () => {
-    const t = synthTable();
-    expect(pfInRange(t, state(15, 15, 15, 15))).toBe(true);
-    expect(pfInRange(t, state(15, 15, 15, 25))).toBe(false); // BB 25 > 20
-    expect(pfInRange(t, state(5, 5, 5, 5))).toBe(true);      // 下限未満はクランプ許容
+  it('カバレッジ: hero短=in（相手の上限超はクランプ）, hero深=heroDeep, 条件不一致=off', () => {
+    const t = synthTable(); // axis [10,20] hi=20, hero=CO
+    expect(pfCoverage(t, state(15, 15, 15, 15))).toBe('in');
+    // 相手（BB）が上限超でも hero が短ければ in（相手席は lookup で 20 にクランプ）。
+    expect(pfCoverage(t, state(15, 15, 15, 25))).toBe('in');
+    // hero 自身が上限超 → heroDeep（push/fold 対象外）。
+    expect(pfCoverage(t, state(25, 15, 15, 15))).toBe('heroDeep');
+    expect(pfCoverage(t, state(5, 5, 5, 5))).toBe('in'); // 下限未満はクランプ許容
+    // アンティは 0.25 近傍を許容、乖離/別方式は off。
+    const near = state(15, 15, 15, 15); (near as { ante: unknown }).ante = { scheme: 'all', amount: 0.2545 };
+    expect(pfCoverage(t, near)).toBe('in');
+    const noAnte = state(15, 15, 15, 15); (noAnte as { ante: unknown }).ante = { scheme: 'none', amount: 0 };
+    expect(pfCoverage(t, noAnte)).toBe('off');
     const s3 = state(15, 15, 15, 15); (s3 as { playersLeft: number }).playersLeft = 3;
-    expect(pfInRange(t, s3)).toBe(false);
+    expect(pfCoverage(t, s3)).toBe('off');
+    // 後方互換: pfInRange は 'in' のみ true。
+    expect(pfInRange(t, state(15, 15, 15, 15))).toBe(true);
+    expect(pfInRange(t, state(25, 15, 15, 15))).toBe(false);
   });
 
   it('eqPre はスタックから再計算される（有限値）', () => {

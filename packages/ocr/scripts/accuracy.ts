@@ -14,6 +14,8 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
 import { extractRawReads, extractRawReadsAuto, type ExtractTemplates } from '../src/extract.js';
+import { IOS_6MAX } from '../src/frameProfileIos.js';
+import { FULL_FRAME } from '../src/contentRect.js';
 import { resampleRgba } from '../src/resize.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
 import { runOcrPipeline, type OcrValidation } from '../src/pipeline.js';
@@ -101,8 +103,13 @@ for (const [frame, gt] of Object.entries(GT.frames)) {
   if (downscaleW > 0 && rgba.w > downscaleW) {
     rgba = resampleRgba(rgba, downscaleW, Math.round((downscaleW * rgba.h) / rgba.w));
   }
+  // 本番 prefill.ts と同じプロファイル選択: iPhone クラス(幅<2400)は IOS_6MAX を full-frame
+  // canonical で、Android(2730 幅)は CHIPS_6MAX＋cr 自動検出。--auto の時のみ機種選択する。
+  const isAndroid = rgba.w >= 2400;
   const reads: RawReads = useAuto
-    ? extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads
+    ? (isAndroid
+        ? extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads
+        : extractRawReadsAuto(rgba, IOS_6MAX, templates, { betMinCh: 125, contentRect: FULL_FRAME }).reads)
     : extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
   const res: OcrValidation = runOcrPipeline(reads);
   const ms = Date.now() - t0;

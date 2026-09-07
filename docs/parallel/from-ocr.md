@@ -47,3 +47,21 @@ tsc -b clean / OCR 125→**131 tests green**（bbAmount＋prefill 回帰追加�
 **実測**: 実機 iPhone BB stack **66.7→75%**（EC7CD106 の TL 21.2 が正読に・verdict/occupancy 100% 維持＝棄却なし）。E4073E5F TL も `9`→`18.2`（先頭桁復活）。**Android は完全無回帰**（stack 98.9%・全項目維持＝通常フレームでは stripEdgeBands 恒等）。ocr 127 tests green（帯除去の回帰テスト追加）。凍結interface不変。
 
 **なお残る TR（両フレーム 27.7→17.788/26.2→16.2）は先頭 "2"→"1" 誤読＋シェブロンで、弧とは別要因**。ここと TL の詰めは実機 iPhone の追加フレームで閾値を validate すれば安定する見込み（2-3枚では過学習で片方を直すと片方が壊れることを実証済み＝だから“少数の追加”が必要）。
+
+---
+
+## [2026-09-07 大幅前進] iOS専用プロファイル＋弧ブリッジ刈り込みで実機iPhoneを解決
+
+さつき指示（Sonnetサブエージェント複数で研究→実装、指揮＝私、AI目視必須）で実施。研究2本（同色発光帯の幾何分離／グリフ分割・NCC堅牢化）→ 実装検証2本（縦ランレングス開処理系＝readBand が iOS 12/12・Android 無回帰で勝者）→ 統合、の順で進めた。**OCR 所有ファイルのみ・凍結interface不変**（App変更不要）。
+
+**実装（`packages/ocr` 所有内）**:
+- `src/bbAmount.ts`: **trimArcBridge**（アバター発光弧が数字上端に融合して幅広ブロブ化する問題を、列の縦ラン長を支持信号に弧の橋だけを断ち、認識は原マスクから行う。suspect ゲート＝w/h>1.6 等を通った成分にのみ適用＝クリーン読みは不変）。研究＋実装検証で iOS 12/12・Android 65/66（現行同一）を確認したものを移植。
+- `src/frameProfileIos.ts`（新規）: **iOS専用 FrameProfile `IOS_6MAX`**。Android CHIPS_6MAX を実測アフィン写像した土台に、stack 6席と hero card 領域を GT 駆動較正した実測値で上書き（機種差＝非アフィンを吸収）。
+- `app/src/ocr/prefill.ts`: **解像度でプロファイル選択**（幅≥2400=Android→CHIPS_6MAX＋cr自動、<2400=iPhone→IOS_6MAX を full-frame canonical）。iPhone は full-bleed なので cr 探索不要＝**約10倍高速**化も同時達成。
+- `scripts/accuracy.ts`: 本番と同じ選択を反映（検証パリティ）。
+
+**実測（私が全フィールドを独立検証）**:
+- **実機 iPhone BB**: stack **66.7→91.7%**、**heroHand 100%**、occupancy/playersLeft/heroPos/pot/blinds/ante/verdict **すべて100%**、所要 3000ms→**約200ms**。残り＝TC f1 の 111.2（conf0.13 でフラグ＝サイレントでない）・action の fold 誤検出（cardState の青メトリクスが機種依存＝別課題・root は6way復元なので構造には無影響）・BL bet 1件。
+- **Android**: stack 98.9%・verdict 100%・完全一致90% ＝ **完全無回帰**（プロファイル選択で 2730 幅は従来経路のまま）。
+
+tsc clean / ocr 127＋app ocr tests green。**push はしません**（デプロイ禁止厳守）。次の詰め（cardState機種横断・TC f1・bet較正）は実機 iPhone フレームが増えれば安定化できる。

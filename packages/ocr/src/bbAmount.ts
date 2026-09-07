@@ -66,21 +66,28 @@ function median(xs: readonly number[]): number {
 }
 
 /**
+ * 数字らしい生成分の共通フィルタ（枠線・隅ノイズ・幅広ブロブを除去）。
+ * 除去: 面積 < 15 / 高さ < 5 / 幅がストリップ幅の 0.5 超（プレート枠線）/ w:h > 1.6（横線・ブロブ）。
+ * h >= 0.9*領域高 は枠/手番グロー枠のエッジ（数字ではない）。h 下限は 4: folded/暗プレートで
+ * 小数点 "." が薄くなり高さ 4px しか残らない場合がある（71.3→713 の欠落原因）。
+ * area >= 15 で微小ノイズは除くので 4 でも安全。glyphComponents（クリーン読み）と
+ * readAmountBb の弧較正（クリーンな兄弟グリフの検出）の両方で使う共通基準。
+ */
+function digitish(comps: readonly RawComp[], maskH: number, maskW: number): RawComp[] {
+  return comps.filter(
+    (c) => c.area >= 15 && c.h >= 4 && c.h < 0.9 * maskH && c.w <= 0.5 * maskW && c.w / c.h <= 1.6,
+  );
+}
+
+/**
  * 数字＋小数点だけを残す（枠線・隅ノイズ・幅広ブロブ・背の高い飾りを除去）。
- * 除去: 面積 < 15 / 高さ < 5 / 幅がストリップ幅の 0.5 超（プレート枠線）/ w:h > 1.6（横線・ブロブ）/
- *       高さが標準グリフの 1.4 倍超（宝石・星の飾り）。標準グリフ高は tall 成分の中央値。
+ * 標準グリフ高は tall 成分の中央値。標準グリフより十分高い成分は飾り（BL の宝石/星 h42 vs 数字 h26）。
  */
 function glyphComponents(mask: Gray): RawComp[] {
-  const base = rawComponents(mask).filter(
-    // h >= 0.9*領域高 は枠/手番グロー枠のエッジ（数字ではない）。
-    // h 下限は 4: folded/暗プレートで小数点 "." が薄くなり高さ 4px しか残らない場合がある
-    // （71.3→713 の欠落原因）。area >= 15 で微小ノイズは除くので 4 でも安全。
-    (c) => c.area >= 15 && c.h >= 4 && c.h < 0.9 * mask.h && c.w <= 0.5 * mask.w && c.w / c.h <= 1.6,
-  );
+  const base = digitish(rawComponents(mask), mask.h, mask.w);
   if (base.length === 0) return base;
   const maxH = Math.max(...base.map((c) => c.h));
   const glyphH = median(base.filter((c) => c.h >= 0.5 * maxH).map((c) => c.h));
-  // 標準グリフより十分高い成分は飾り（BL の宝石/星 h42 vs 数字 h26）。
   return base.filter((c) => c.h <= 1.4 * glyphH);
 }
 
@@ -113,6 +120,47 @@ function stripEdgeBands(mask: Gray, bandFrac = 0.5, maxFrac = 0.12): Gray {
 }
 
 /**
+ * 成分を「弧ブリッジ刈り込み」する（iPhone コーナー席のアバター発光弧が先頭桁の上端に融合し
+ * 幅広ブロブ化する問題への対策。exp_band.ts の readBand で iOS 12/12・Android 65/66（現行と同一
+ * ＝回帰なし）を確認済みの手法をそのまま移植）。
+ *
+ * 列ごとに縦方向の最大連続ラン長を求め、長さ >= N を「支持あり」とする。ギャップ <= 2N は
+ * 同一クラスタへ橋渡し（グリフ内部の曲線起因の穴を跨ぐが、無関係に離れた弧の残骸までは跨がない）。
+ * 最初（最も左）のクラスタだけを採用し、そこから外の部分（弧の残り／クロップ右端付近で接線が
+ * 急峻になり列単独では「弧なのに縦ランが長い」偽陽性を起こす箇所）を切り捨てる。
+ * 画素内容は元マスク（開放前）から再取得するので、"9" の輪や "B" の腹のような細いストローク
+ * （弧の厚みと同オーダー）を千切らずに済む。クラスタが見つからなければ元の成分をそのまま返す。
+ */
+function trimArcBridge(mask: Gray, c: RawComp, N: number): RawComp {
+  const { w, h, data } = mask;
+  const y0 = Math.max(0, c.y - 1), y1 = Math.min(h, c.y + c.h + 1);
+  const supported: boolean[] = new Array(c.w).fill(false);
+  for (let xi = 0; xi < c.w; xi++) {
+    const x = c.x + xi;
+    let run = 0, maxRun = 0;
+    for (let y = y0; y < y1; y++) {
+      if (data[y * w + x]) { run++; if (run > maxRun) maxRun = run; } else run = 0;
+    }
+    supported[xi] = maxRun >= N;
+  }
+  const R = N;
+  const clusters: { x0: number; x1: number }[] = [];
+  let curStart = -1, lastTrue = -1;
+  for (let xi = 0; xi < c.w; xi++) {
+    if (supported[xi]) { if (curStart < 0) curStart = xi; lastTrue = xi; }
+    else if (curStart >= 0 && xi - lastTrue > 2 * R) { clusters.push({ x0: curStart, x1: lastTrue }); curStart = -1; }
+  }
+  if (curStart >= 0) clusters.push({ x0: curStart, x1: lastTrue });
+  if (clusters.length === 0) return c;
+  const first = clusters[0]!;
+  const nx0 = c.x + first.x0, nx1 = c.x + first.x1 + 1;
+  let ny0 = h, ny1 = 0, area = 0;
+  for (let x = nx0; x < nx1; x++) for (let y = y0; y < y1; y++) if (data[y * w + x]) { area++; if (y < ny0) ny0 = y; if (y + 1 > ny1) ny1 = y + 1; }
+  if (ny1 <= ny0) return c;
+  return { x: nx0, y: ny0, w: nx1 - nx0, h: ny1 - ny0, area };
+}
+
+/**
  * BB 表示の金額を読む（"20.2 BB" → 20.2, "13 BB" → 13）。値は表示どおり **BB**（正規化不要）。
  * templates は数字 0-9（'.' は成分の低さで判定するのでテンプレ不要）。
  * 数字が無ければ value=NaN, conf=0。
@@ -124,9 +172,14 @@ function stripEdgeBands(mask: Gray, bandFrac = 0.5, maxFrac = 0.12): Gray {
  * letters があれば最初の英字（"B"）で数値を打ち切り、以降（BB・シェブロン・名前）を捨てる。
  * letters が無い場合は従来どおり大きなギャップで数値末尾を推定する。
  *
- * さらに、先頭桁がアバターの発光リング/弧と融合して幅広ブロブ化し glyphComponents に
- * 落とされるケース（実 iPhone TL 19.2→9・BL の左端切れ）を **leadingClipped** として検出し、
- * 信頼度を強制的に下げる（＝確認画面で強調され利用者が修正できる。プリフィルの原則を維持）。
+ * さらに、先頭桁がアバターの発光リング/弧（iPhone コーナー席）に融合し幅広ブロブ化して
+ * glyphComponents 相当の w/h<=1.6 フィルタで丸ごと落とされるケース（実 iPhone TL "19.2"→"9"、
+ * "21.2"→"11.2" 相当の誤読）を **弧ブリッジ刈り込み**（trimArcBridge, exp_band.ts の readBand で
+ * iOS 12/12・Android 65/66=現行同等 を確認済みの手法）で数字として復元する。
+ * 刈り込みは「幅広ブロブ（w/h>1.6）または典型幅の 1.35 倍超」という **suspect ゲート**を通った
+ * 成分にしか適用しない（フックだけの小さな融合で比率はまだ壊れていないケースも拾うため 1.35 倍
+ * 判定も使うが、通常のクリーンな数字はどちらの条件にも掛からず刈り込み関数自体を一切通らない
+ * ＝クリーン読みは旧実装とビット互換）。
  */
 export function readAmountBb(
   img: Rgba,
@@ -139,11 +192,41 @@ export function readAmountBb(
   const maxSat = opts.maxSat ?? 80;
   const strip = grayFromRgba(img, rect);
   const mask = stripEdgeBands(whiteMask(img, rect, { minCh, maxSat }));
-  const comps = glyphComponents(mask);
-  if (comps.length === 0) return { value: NaN, conf: 0 };
-  const maxH = Math.max(...comps.map((c) => c.h));
-  const tallCut = 0.45 * maxH;
-  const tall = comps.filter((c) => c.h >= tallCut);
+  const rawAll = rawComponents(mask);
+
+  // ---- 較正: クリーンな（弧に融合していない）兄弟グリフから glyphH・normalW（"1" 以外の典型幅）を推定 ----
+  const preClean = digitish(rawAll, mask.h, mask.w);
+  let glyphH: number;
+  let normalW: number;
+  if (preClean.length > 0) {
+    const maxHc = Math.max(...preClean.map((c) => c.h));
+    const tallOnes = preClean.filter((c) => c.h >= 0.5 * maxHc);
+    glyphH = median(tallOnes.map((c) => c.h));
+    normalW = median(tallOnes.map((c) => c.w));
+  } else {
+    // クリーンな兄弟が皆無（全桁が弧に融合等）→ ストリップ高から粗く見積もる。
+    glyphH = rawAll.length > 0 ? Math.max(...rawAll.map((c) => c.h)) : Math.round(mask.h * 0.7);
+    normalW = glyphH * 0.8;
+  }
+  // N: 弧の想定厚み（実測 2-6px）より上、実数字ストローク高より下にクランプ。
+  let N = Math.round(0.35 * glyphH);
+  N = Math.max(4, Math.min(N, Math.max(4, glyphH - 3)));
+
+  // ---- 弧ブリッジ刈り込み: suspect（幅広ブロブ or 典型幅の1.35倍超）な成分だけ trimArcBridge を通す ----
+  const salvaged: RawComp[] = [];
+  for (const c of rawAll) {
+    if (c.area < 15 || c.h < 4 || c.h >= 0.9 * mask.h || c.w > 0.5 * mask.w) continue;
+    const needsTrim = c.w / c.h > 1.6 || c.w > 1.35 * normalW;
+    const use = needsTrim ? trimArcBridge(mask, c, N) : c;
+    if (use.area >= 15 && use.h >= 4 && use.w / use.h <= 1.6) salvaged.push(use);
+  }
+  salvaged.sort((a, b) => a.x - b.x);
+  const gValid = salvaged.filter((c) => c.h <= 1.4 * glyphH);
+  if (gValid.length === 0) return { value: NaN, conf: 0 };
+
+  const maxH2 = Math.max(...gValid.map((c) => c.h));
+  const tallCut = 0.45 * maxH2;
+  const tall = gValid.filter((c) => c.h >= tallCut);
   if (tall.length < 3) return { value: NaN, conf: 0 }; // 数字 1 個 ＋ "BB" 未満は読めない
 
   // 末尾 "BB" の位置を **letters NCC**（右端の隣接 "B" ペア）で特定する。席の右にある UI 装飾
@@ -161,17 +244,35 @@ export function readAmountBb(
   const firstX = numTall[0]!.x;
   const lastTall = numTall[numTall.length - 1]!;
   const lastX = lastTall.x + lastTall.w;
-  // 数値スパン内の成分（間の小数点を含む。範囲外の端ノイズ／"BB"／装飾は除外）。
-  const num = comps.filter((c) => c.x >= firstX - 2 && c.x + c.w <= lastX + 2);
+  const digitBottom = median(numTall.map((c) => c.y + c.h));
+
+  // ---- 小数点は刈り込みで消えうる（w/h<=1.6 の最終フィルタで弧の残骸ごと落ちる場合がある）ので、
+  // gValid ではなく **生マスクの小成分**（背が低い・面積小・ベースライン付近・数値スパン内）から
+  // 別途拾い、x 座標で数字列の隙間へ挿し込む。 ----
+  const dots = rawAll.filter(
+    (c) =>
+      c.h < 0.6 * glyphH &&
+      c.h >= 2 &&
+      c.area >= 4 &&
+      c.x >= firstX - 2 &&
+      c.x + c.w <= lastX + 2 &&
+      Math.abs(c.y + c.h - digitBottom) <= 0.3 * glyphH,
+  );
+
+  type Item = { readonly x: number; readonly dot: boolean; readonly comp: RawComp };
+  const items: Item[] = [
+    ...numTall.map((c) => ({ x: c.x, dot: false, comp: c })),
+    ...dots.map((c) => ({ x: c.x, dot: true, comp: c })),
+  ].sort((a, b) => a.x - b.x);
 
   let text = '';
   let minScore = 1;
-  for (const c of num) {
-    if (c.h < tallCut) {
-      text += '.'; // 小数点（背が低い成分）
+  for (const it of items) {
+    if (it.dot) {
+      text += '.'; // 小数点
       continue;
     }
-    const m = bestMatch(normGlyph(strip, c), templates);
+    const m = bestMatch(normGlyph(strip, it.comp), templates);
     text += m.label;
     const s = matchConfidence(m);
     if (s < minScore) minScore = s;
@@ -179,12 +280,12 @@ export function readAmountBb(
   const value = parseAmount(text);
   if (value === null) return { value: NaN, conf: 0 };
   let conf = Math.max(0, Math.min(1, minScore));
-  // 先頭桁がアバターの発光リング/弧と融合し「非常に幅広の tall 塊」となって左端(x<=2)に現れると、
-  // glyphComponents に落とされ先頭桁が抜ける（実 iPhone TL 19.2→9）。この時は低信頼にフラグして
-  // 確認画面で強調 → 利用者修正に回す（サイレントな高信頼誤読を防ぐ）。条件はきつめ（w/h>2.0・
-  // h>=0.7*maxH）にしてクリーン数字への誤爆を避ける。
-  const clipped = rawComponents(mask).some((c) => c.x <= 2 && c.h >= 0.7 * maxH && c.w / c.h > 2.0);
-  if (clipped) conf = Math.min(conf, 0.4);
+  // 刈り込み後もなお左端(x<=2)に幅広 tall 塊が残る＝弧が刈りきれなかった残留ブリッジ。低信頼フラグ
+  // して確認画面で強調 → 利用者修正に回す（サイレントな高信頼誤読を防ぐ）。gValid は既に
+  // w/h<=1.6 を満たす成分のみなのでこの条件（w/h>2.0）は通常発生しないが、将来の閾値変更に
+  // 対する保険として残す（exp_band.ts の readBand と同じ設計）。
+  const stillClipped = gValid.some((c) => c.x <= 2 && c.h >= 0.7 * maxH2 && c.w / c.h > 2.0);
+  if (stillClipped) conf = Math.min(conf, 0.4);
   return { value, conf };
 }
 

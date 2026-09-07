@@ -15,6 +15,8 @@ import {
   extractRawReadsAuto,
   runOcrPipeline,
   CHIPS_6MAX,
+  IOS_6MAX,
+  FULL_FRAME,
   type ExtractTemplates,
   type ExtractOptions,
   type Rgba,
@@ -49,9 +51,15 @@ export function ocrPrefillFromRgba(
   templates: ExtractTemplates,
   opts: ExtractOptions = {},
 ): OcrPrefillResult {
-  // コンテンツ矩形を自動検出→較正解像度へ拡大してから抽出（多機種対応）。
-  // Android 2730×1260 は全画面判定＝恒等で従来どおり。低解像度スマホは内寄せ/縮小を吸収。
-  const { reads } = extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts });
+  // プロファイル選択（機種差＝非アフィンなので単一プロファイルでは吸収不可・SPEC §6.2）。
+  //  - Android(2730×1260 クラス, 較正基準)は CHIPS_6MAX＋コンテンツ矩形自動検出（全画面=恒等）。
+  //  - iPhone(1792×828 クラス, より小解像度)は iOS 専用 IOS_6MAX を full-frame canonical で使う
+  //    （iPhone は full-bleed でセーフエリア無し＝内寄せ不要。iPhone 同士は解像度差のみ＝スケールで吸収）。
+  // 判定は解像度（幅）で行う: Android 実機は 2730 幅、iPhone は 1792 幅前後。閾値 2400。
+  const isAndroid = img.w >= 2400;
+  const { reads } = isAndroid
+    ? extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts })
+    : extractRawReadsAuto(img, IOS_6MAX, templates, { ...DEFAULT_OPTS, ...opts, contentRect: FULL_FRAME });
   // 取り込み条件＝BB 表示のみ（SPEC §5.2）。チップ総額表示は早期に棄却して手入力へ誘導する。
   if (reads.displayMode !== 'bb') {
     return { ok: false, issues: [CHIPS_MODE_ISSUE], lowConfidenceFields: [] };

@@ -71,6 +71,7 @@ const COMBO_COUNT: number[] = HAND_CLASS_ORDER.map(
   (label) => comboCount(parseHandClass(label)!.kind),
 );
 const FULL_RANGE = new Float64Array(N_CLASSES).fill(1);
+const ALL_CLASS_IDX = Int16Array.from({ length: N_CLASSES }, (_, i) => i);
 type F64 = Float64Array;
 
 function popcount(x: number): number {
@@ -466,31 +467,55 @@ function buildEngine(
       const s = uniformSamples ? samples : mcSamplesFor(participants.length, samples);
       let stratSpec: StratSpec | undefined;
       if (useStrat) {
-        // overcaller（参加者 idx≥2）の候補 = 「他参加者のうち最も狭い到達レンジ」に対する勝率上位 K。
-        const K = kA.get(A) ?? K0;
-        const cand: (Int16Array | undefined)[] = [];
-        const cm = new Map<number, Int16Array>();
-        for (let h = 0; h < participants.length; h++) {
-          if (h < 2) {
-            cand.push(undefined);
-            continue;
-          }
-          let tight = -1;
-          let tf = Number.POSITIVE_INFINITY;
-          for (let p = 0; p < participants.length; p++) {
-            if (p === h) continue;
-            const f = rangeFraction(ranges[p]!);
-            if (f < tf) {
-              tf = f;
-              tight = p;
+        // 到達確率（参加者の到達レンジ幅の積＝上界）。通常の 3 人以上の集合は 0.005〜0.05% で、
+        // overcaller のレンジは上端の数クラス（AA/KK/QQ）に限られる → 上位 K 候補だけ評価して
+        // 未評価クラスを候補最小値で埋める層化が有効。
+        // しかし 2〜3bb の超短スタックがいる局面では「誰でもコール」になり、3 人ショーダウンが
+        // 数%〜十数% で起き、overcaller のレンジも 60% 以上に広がる。そこで候補を上位 K に絞ると
+        // 候補外の手が「候補最小値（＝+EV）」で埋まって OC レンジが膨れ、上流まで崩れる
+        // （HRC 照合 2026-09-07: BB OC 84.6% ↔ GOLD 67.4%）。到達確率が 0.5% を超える集合は
+        // **全 169 クラス**を評価し、本数も到達確率に比例して増やす（上限 16 倍）。
+        let reach = 1;
+        for (let p = 0; p < participants.length; p++) reach *= rangeFraction(ranges[p]!);
+        if (reach <= 0.005) {
+          const K = kA.get(A) ?? K0;
+          const cand: (Int16Array | undefined)[] = [];
+          const cm = new Map<number, Int16Array>();
+          for (let h = 0; h < participants.length; h++) {
+            if (h < 2) {
+              cand.push(undefined); // pusher / caller は全クラス（各 mLow 本）
+              continue;
             }
+            // overcaller の**現在の OC レンジが広い**（> 5%）間は全クラスを各 mOc 本で評価する
+            // （候補外を候補最小値で埋めると +EV 側に膨れるため。序盤の 50% 初期値や超短スタック
+            // 局面の「誰でもコール」がこれに当たる）。注意: 各クラス mLow=3 本では少なすぎて
+            // 最適反応が「運の良かった手」に引きずられ OC が膨れる（実測で上流が崩壊）。
+            if (rangeFraction(ranges[h]!) > 0.05) {
+              cand.push(ALL_CLASS_IDX);
+              continue;
+            }
+            // overcaller（参加者 idx≥2）の候補 = 「他参加者のうち最も狭い到達レンジ」に対する勝率上位 K。
+            let tight = -1;
+            let tf = Number.POSITIVE_INFINITY;
+            for (let p = 0; p < participants.length; p++) {
+              if (p === h) continue;
+              const f = rangeFraction(ranges[p]!);
+              if (f < tf) {
+                tf = f;
+                tight = p;
+              }
+            }
+            const c = rankClassesByEquityVs(ranges[tight]!, winTie!).subarray(0, K);
+            cand.push(c);
+            cm.set(participants[h]!, c);
           }
-          const c = rankClassesByEquityVs(ranges[tight]!, winTie!).subarray(0, K);
-          cand.push(c);
-          cm.set(participants[h]!, c);
+          candA.set(A, cm);
+          stratSpec = { cand, mOc: DEFAULT_STRAT.mOc, mLow: DEFAULT_STRAT.mLow, sMarg: DEFAULT_STRAT.sMarg };
+        } else {
+          // 到達確率が高い集合（超短スタック局面・序盤の未収束時）は従来のコンボ数比例 MC
+          // （mcSamplesFor の本数）。stratSpec 無し＝従来経路。
+          candA.delete(A);
         }
-        candA.set(A, cm);
-        stratSpec = { cand, mOc: DEFAULT_STRAT.mOc, mLow: DEFAULT_STRAT.mLow, sMarg: DEFAULT_STRAT.sMarg };
       }
       jobs.push({ A, node, participants, ranges, jobSeed: mix(seed, epoch, A), samples: s, strat: stratSpec });
     }

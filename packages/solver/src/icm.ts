@@ -43,9 +43,18 @@ function popcount(x: number): number {
  * Malmuth-Harville ICM equity。部分集合 DP による厳密計算。
  * @param stacks  各プレイヤーのチップ量（正）。
  * @param payouts 着順 1..n に対する payout。長さは stacks と一致。
+ * @param tieBreak 同一ハンドで複数人が飛んだ（stack=0）ときの順位付けキー（通常はハンド開始時の
+ *                 スタック）。**大きい方が上位**（トーナメントの標準ルール。HRC も同じ）。
+ *                 省略時は均等割り（旧挙動）。同値なら均等割り。
+ *                 例: SB 2bb と CO 3bb が同時に飛ぶと CO が 5 位・SB が 6 位。均等割り（各 −0.5pt）
+ *                 では SB のコールが 0.5pt 甘くなり、HRC と大きくずれる（2026-09-07 照合で発見）。
  * @returns 各プレイヤーの期待 payout（入力順）。
  */
-export function icmEquities(stacks: readonly number[], payouts: readonly number[]): number[] {
+export function icmEquities(
+  stacks: readonly number[],
+  payouts: readonly number[],
+  tieBreak?: readonly number[],
+): number[] {
   const n = stacks.length;
   if (payouts.length !== n) {
     throw new Error(`payouts length (${payouts.length}) must equal stacks length (${n})`);
@@ -77,11 +86,18 @@ export function icmEquities(stacks: readonly number[], payouts: readonly number[
       let sum = 0;
       for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += stacks[i]!;
       if (sum <= 0) {
-        // 全員 0 スタック（通常発生しない）。均等割りで縮退させる。
+        // 残りが全員 0 スタック＝同一ハンドで同時に飛んだ集合。tieBreak（ハンド開始時スタック）
+        // が最大の者がこの着順を取る（同値は均等割り）。tieBreak 省略時は全員均等割り。
         const members: number[] = [];
         for (let i = 0; i < n; i++) if (mask & (1 << i)) members.push(i);
-        const p = 1 / members.length;
-        for (const w of members) {
+        let top = members;
+        if (tieBreak) {
+          let best = Number.NEGATIVE_INFINITY;
+          for (const m of members) if (tieBreak[m]! > best) best = tieBreak[m]!;
+          top = members.filter((m) => tieBreak[m]! === best);
+        }
+        const p = 1 / top.length;
+        for (const w of top) {
           equity[w]! += r * p * payoutForPlace;
           reach[mask & ~(1 << w)]! += r * p;
         }

@@ -113,7 +113,7 @@ function outcomeVectors(node: ShowdownNode): { v0: number[]; v1: number[]; vt: n
     const sc = new Array<number>(n).fill(0);
     sc[p0] = sc0;
     sc[p1] = sc1;
-    return icmEquities(finalStacksFromShowdown(node.preHandStacks, node.commits, eligible, sc), node.payouts);
+    return icmEquities(finalStacksFromShowdown(node.preHandStacks, node.commits, eligible, sc), node.payouts, node.preHandStacks);
   };
   return { v0: val(0, 1), v1: val(1, 0), vt: val(0, 0) };
 }

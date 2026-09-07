@@ -99,7 +99,8 @@ export class OutcomeCache {
     const nSeats = node.preHandStacks.length;
     const finalStacks = new Array<number>(nSeats);
     for (let i = 0; i < nSeats; i++) finalStacks[i] = node.preHandStacks[i]! - node.commits[i]! + won[i]!;
-    const v = icmEquities(finalStacks, node.payouts);
+    // 同時バストはハンド開始時スタックの大きい方が上位（icmEquities の tieBreak 参照）。
+    const v = icmEquities(finalStacks, node.payouts, node.preHandStacks);
     this.cache.set(sig, v);
     return v;
   }
@@ -120,7 +121,7 @@ function icmForOutcome(
   for (let i = 0; i < nSeats; i++) {
     finalStacks[i] = node.preHandStacks[i]! - node.commits[i]! + won[i]!;
   }
-  return icmEquities(finalStacks, node.payouts);
+  return icmEquities(finalStacks, node.payouts, node.preHandStacks);
 }
 
 /** 参加者レンジからコンボを引く累積重みテーブル（クラス頻度 × クラス内等重み）。 */

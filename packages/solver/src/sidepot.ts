@@ -152,7 +152,8 @@ export function expectedShowdownIcm(
     const scParts = decodeSignature(sig, k);
     for (let j = 0; j < k; j++) strongerCount[participants[j]!] = scParts[j]!;
     const finalStacks = finalStacksFromShowdown(preHandStacks, commits, eligible, strongerCount);
-    const eq = icmEquities(finalStacks, payouts);
+    // 同時バストはハンド開始時スタックの大きい方が上位（icmEquities の tieBreak 参照）。
+    const eq = icmEquities(finalStacks, payouts, preHandStacks);
     for (let i = 0; i < n; i++) equity[i]! += prob * eq[i]!;
     totalProb += prob;
   }

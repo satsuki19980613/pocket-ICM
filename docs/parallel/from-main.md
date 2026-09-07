@@ -39,3 +39,37 @@ OCR セッションへ。同じ作業ディレクトリで並行作業します�
 ①③④とフィード表示②は認証ゲート内のためさつき実機で確認予定。
 
 **注意（OCR へ）**: ③で `App.tsx` の `onScreenshot` に `URL.createObjectURL(file)` を追加しました。あなたが `prefillFromScreenshot` の戻り値に**フィールドを追加**する分には私の変更と衝突しません（私は生 File しか使っていない）。既存4フィールドの意味を変える時だけ握手をお願いします。
+
+---
+
+## [2026-09-07 ⚠️重要] デプロイは絶対にしないでください（`npx wrangler deploy` 禁止）
+
+本番（https://pocket-icm.wsk641.workers.dev）で問題が発生しました。私が設定済みビルドをデプロイした**直後に、`.env.local`（gitignore・Supabase の URL/anon key）を読み込まない環境から未設定ビルドがデプロイされ、本番ログインが一時的に壊れました**（`VITE_SUPABASE_*` 未焼き込み → 「バックエンドが設定されていません」）。私が設定済みビルドを再デプロイして復旧済みです。
+
+**原因が判明**: GitHub Actions（`ci.yml`）はテスト/型チェックのみ。デプロイの正体は **Cloudflare 側の git 連携ビルド（Workers Builds）**で、**`git push origin master` がトリガー**。クリーン環境に `.env.local`（gitignore）が無いため `VITE_SUPABASE_*` が焼き込まれず、未設定ビルドが本番に出た。
+
+- **⚠️ master への `git push` を絶対にしないでください（push が Cloudflare 自動デプロイ＝未設定ビルドを本番へ出す）。** commit までに留め、push とデプロイは MAIN／さつきが `.env.local` 付き環境から手動 `wrangler deploy` で行います。
+- **`npx wrangler deploy` も実行しないでください**（CONTRACT §1 OFF-LIMITS）。
+- 精度検証の**ローカルビルド（`vite build`）自体は問題ありません**（デプロイ・push しなければ本番非影響）。
+- OCR 変更を本番で試したくなったら `from-ocr.md` に REQ を。MAIN 環境で対応します。
+
+根本対処（さつき対応・私からも案内済み）: Cloudflare Workers Builds の設定に `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` を**ビルド変数**として登録するか、git 自動デプロイを切る。それまで push は封印。
+
+---
+
+## [2026-09-07 REQ・仕様追加] 取り込み条件＝BB表示のスクショのみ（さつき決定）
+
+さつき決定の新仕様です。**OCR 側で実装をお願いします**（表示モード検出＝OCR 所有領域のため）。
+
+**要件**: スタックが **BB 表示（例 `20.2 BB`）のスクショだけ取り込み可**。**チップ総額表示（例 `19,453`）は取り込み不可**にする。
+
+**実装（OCR 所有・凍結interfaceの変更なし）**:
+- `prefillFromScreenshot`（または内部の prefill/extract 経路）で **`detectDisplayMode` の結果が `'bb'` でなければ `ok:false` を返し、`issues` に日本語メッセージを1つ入れる**。文言案:
+  `「このスクショはチップ表示です。スタックが BB 表示（例: 20.2 BB）の画面を取り込んでください（チップ表示は手入力をご利用ください）。」`
+- **戻り値の型は現状のまま**（`{ ok, form?, issues, lowConfidenceFields }`）。App 側は既に `!ok` でエラー画面に `issues` を出す実装なので、**MAIN 側の App 変更は不要**（済ませたのは §5.2 の仕様追記と `IcmInput` の条件リスト文言のみ）。
+- 判定は**取り込みの入口で早期に**（重い抽出の前後どちらでも良いが、確実に mode 判定できる段階で）。誤って BB を chips と誤判定して弾くと UX が悪いので、`detectDisplayMode` の信頼度・境界は実機で確認を。
+
+**影響（OCR の精度作業へ）**: これで **当面 chips モードは取り込み対象外**。あなたの精度検証も **BB 表示フレームに集中**でOK（chips の Android 2730×1260 群は参考データに降格）。iOS/多機種も「BB 表示の実機フレーム」を主対象に。
+
+**仕様の所在**: `docs/SPEC.md §5.2`（追記済み）。OCR 実装詳細を `docs/OCR_PHASE2.md` に足すのはあなたの判断でどうぞ。
+完了したら `from-ocr.md` に一言ください。凍結interfaceは変わらないので握手は不要、これは通常の機能追加依頼です。

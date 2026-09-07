@@ -4,6 +4,8 @@ import { positionsForPlayersLeft, isCanonicalKey } from '@oshihiki/core';
 import { solveMultiway, evaluateMultiwayStrategy, type McRunner } from '../src/nwaySolver.js';
 import { solveThreeWay } from '../src/multiwaySolver.js';
 import { computeShowdownMc } from '../src/showdownJob.js';
+import { computeShowdown3Exact, computeShowdown3ExactDenseChunk } from '../src/showdownExact.js';
+import { winTie3ArtifactExists, loadWinTie3Table } from '../src/wintie3Loader.js';
 
 /** 等スタック N-way（アンティ無し）を作る。 */
 function equalStacks(n: number, stack: number, sb = 0.5, bb = 1.0): BoardState {
@@ -295,4 +297,114 @@ describe('solveMultiway — 入力検証', () => {
     await expect(solveMultiway({ ...equalStacks(3, 10), playersLeft: 2 } as BoardState)).rejects.toThrow();
     await expect(solveMultiway({ ...equalStacks(6, 10), playersLeft: 7 } as BoardState)).rejects.toThrow();
   });
+});
+
+describe('solveMultiway — exact3（3人ショーダウン厳密計算）の並列ディスパッチ（item 2, 実テーブル）', () => {
+  const artifactOk = winTie3ArtifactExists();
+  const itIf = artifactOk ? it : it.skip;
+
+  itIf(
+    'mcRunner 注入時、exact3:true ジョブを含めて内蔵単一スレッド経路と bit 一致',
+    async () => {
+      const winTie3 = loadWinTie3Table();
+      const state = equalStacks(4, 10);
+      const CFG = { maxIters: 30, refreshEvery: 15, samples: 4000, seed: 9, winTie3 } as const;
+      // 注入ランナーは exact3:true のジョブを computeShowdown3Exact に、それ以外を
+      // computeShowdownMc に振り分けるだけ（順序保存）。並列プール実装のミニマム契約。
+      const runner: McRunner = async (jobs) =>
+        jobs.map((j) =>
+          j.exact3 ? computeShowdown3Exact(j.node, j.ranges, winTie3) : computeShowdownMc(j.node, j.ranges, j.samples, j.seed, j.strat),
+        );
+      const base = await solveMultiway(state, CFG);
+      const injected = await solveMultiway(state, { ...CFG, mcRunner: runner });
+      expect([...injected.strategies.keys()].sort()).toEqual([...base.strategies.keys()].sort());
+      for (const [key, arr] of base.strategies) {
+        expect(Array.from(injected.strategies.get(key)!)).toEqual(Array.from(arr));
+      }
+      expect(injected.exploitabilityPt).toBe(base.exploitabilityPt);
+    },
+    TIMEOUT,
+  );
+
+  itIf(
+    '実 worker_threads プール（workers:2）は単一スレッド経路と一致する（exact3 は決定的なので bit 一致）',
+    async () => {
+      const winTie3 = loadWinTie3Table();
+      const state = equalStacks(4, 10);
+      const CFG = { maxIters: 30, refreshEvery: 15, samples: 4000, seed: 9, winTie3 } as const;
+      const base = await solveMultiway(state, CFG);
+      const parallel = await solveMultiway(state, { ...CFG, workers: 2 });
+      expect([...parallel.strategies.keys()].sort()).toEqual([...base.strategies.keys()].sort());
+      for (const [key, arr] of base.strategies) {
+        expect(Array.from(parallel.strategies.get(key)!)).toEqual(Array.from(arr));
+      }
+      expect(parallel.exploitabilityPt).toBe(base.exploitabilityPt);
+    },
+    TIMEOUT,
+  );
+});
+
+describe('solveMultiway — mcRunner の exact3 dense チャンク分割（mcRunnerParallelism, ブラウザ経路の速度構造）', () => {
+  const artifactOk = winTie3ArtifactExists();
+  const itIf = artifactOk ? it : it.skip;
+
+  itIf(
+    'mcRunnerParallelism>1 で exact3Chunk ジョブに分割しても workers:0 と一致（5-player, 実テーブル）',
+    async () => {
+      const winTie3 = loadWinTie3Table();
+      const state = equalStacks(5, 10);
+      const CFG = { maxIters: 20, refreshEvery: 10, samples: 4000, seed: 9, winTie3 } as const;
+      // 注入ランナーは exact3Chunk ジョブ（dense 判定された集合の 'a' 範囲部分和）を
+      // computeShowdown3ExactDenseChunk に、exact3:true の全体ジョブを computeShowdown3Exact に、
+      // それ以外を computeShowdownMc に振り分ける（nwaySolver.refresh が merge を担当するため、
+      // ランナー側は chunk をそのまま返すだけでよい）。
+      const runner: McRunner = async (jobs) =>
+        jobs.map((j) => {
+          if (j.exact3Chunk) {
+            return computeShowdown3ExactDenseChunk(j.node, j.ranges, winTie3, j.exact3Chunk.lo, j.exact3Chunk.hi);
+          }
+          return j.exact3
+            ? computeShowdown3Exact(j.node, j.ranges, winTie3)
+            : computeShowdownMc(j.node, j.ranges, j.samples, j.seed, j.strat);
+        });
+      const base = await solveMultiway(state, CFG);
+      const injected = await solveMultiway(state, { ...CFG, mcRunner: runner, mcRunnerParallelism: 4 });
+      expect([...injected.strategies.keys()].sort()).toEqual([...base.strategies.keys()].sort());
+      for (const [key, arr] of base.strategies) {
+        expect(Array.from(injected.strategies.get(key)!)).toEqual(Array.from(arr));
+      }
+      expect(injected.exploitabilityPt).toBe(base.exploitabilityPt);
+    },
+    TIMEOUT,
+  );
+});
+
+describe('solveMultiway — refreshSchedule（item 3）', () => {
+  it(
+    "既定 'fixed' は refreshSchedule を明示しない場合と同一結果（後方互換）",
+    async () => {
+      const state = equalStacks(4, 10);
+      const CFG = { maxIters: 60, refreshEvery: 20, samples: 4000, seed: 3 } as const;
+      const a = await solveMultiway(state, CFG);
+      const b = await solveMultiway(state, { ...CFG, refreshSchedule: 'fixed' });
+      expect(a.iterations).toBe(b.iterations);
+      expect(a.exploitabilityPt).toBe(b.exploitabilityPt);
+      for (const [key, arr] of a.strategies) {
+        expect(Array.from(b.strategies.get(key)!)).toEqual(Array.from(arr));
+      }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "'geometric' は最大反復まで正常に完走し、有限の exploitability を返す",
+    async () => {
+      const state = equalStacks(4, 10);
+      const res = await solveMultiway(state, { maxIters: 60, refreshEvery: 10, samples: 3000, seed: 11, refreshSchedule: 'geometric' });
+      expect(res.iterations).toBeGreaterThan(0);
+      expect(Number.isFinite(res.exploitabilityPt)).toBe(true);
+      expect(res.exploitabilityPt).toBeGreaterThanOrEqual(0);
+    },
+    TIMEOUT,
+  );
 });

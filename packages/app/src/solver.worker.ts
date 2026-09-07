@@ -9,17 +9,22 @@ import {
   solveHu,
   loadHuTableBrowser,
   loadHuWinTieTableBrowser,
+  loadWinTie3TableBrowser,
   loadPf3wayTableBrowser,
   lookupPf3way,
   loadPfTableBrowser,
   pfCoverage,
   lookupPf,
+  maxWorkerCap,
   type LoadedHuTable,
   type WinTieTable,
+  type WinTie3Table,
   type Pf3wayTable,
   type PfTable,
   type McRunner,
   type ShowdownMcResult,
+  type Exact3DenseChunk,
+  type MultiwayNSolveOptions,
 } from '@oshihiki/solver';
 // HU equity テーブルは静的アセットとして同梱（?url でハッシュ付き URL に解決）。
 import huBinUrl from '../../solver/artifacts/hu-equity-169.f32.bin?url';
@@ -27,6 +32,9 @@ import huMetaUrl from '../../solver/artifacts/hu-equity-169.meta.json?url';
 // HU 勝ち/引き分け厳密テーブル（3〜6人の2人ショーダウンを厳密化するため, 同上の静的アセット）。
 import wtBinUrl from '../../solver/artifacts/hu-wintie-169.f32.bin?url';
 import wtMetaUrl from '../../solver/artifacts/hu-wintie-169.meta.json?url';
+// 3-way オールイン結果テーブル（3人ショーダウンを厳密化するため, 約21MB・同上の静的アセット）。
+import wt3BinUrl from '../../solver/artifacts/wintie3-169.u16.bin?url';
+import wt3MetaUrl from '../../solver/artifacts/wintie3-169.meta.json?url';
 // 3人 push or fold / AOF 事前計算テーブル（同上の静的アセット）。
 import pf3wayBinUrl from '../../solver/artifacts/pf3way.f32.bin?url';
 import pf3wayMetaUrl from '../../solver/artifacts/pf3way.meta.json?url';
@@ -48,10 +56,18 @@ import type {
 const OUT_OF_SCOPE_MSG =
   '自分のスタックが深すぎます（25bb超）。押し引き（オールインか降り）で最適に近づくのは概ね25bb以下です。';
 
+// mcPool.ts の `getMcRunner(size = maxWorkerCap())` と同じ既定値（CPU 60%, 最低 1）を
+// ここでも計算する。Web Worker グローバルスコープでも navigator は利用可なので、
+// SolveRequest 経由でプールサイズを渡さずに独立算出できる（両者は同じ純関数を呼ぶだけ）。
+const MC_RUNNER_PARALLELISM = maxWorkerCap();
+
 let mcReqId = 1;
-const mcPending = new Map<number, { resolve: (r: ShowdownMcResult[]) => void; reject: (e: Error) => void }>();
+const mcPending = new Map<
+  number,
+  { resolve: (r: (ShowdownMcResult | Exact3DenseChunk)[]) => void; reject: (e: Error) => void }
+>();
 const mcRunner: McRunner = (jobs) =>
-  new Promise<ShowdownMcResult[]>((resolve, reject) => {
+  new Promise<(ShowdownMcResult | Exact3DenseChunk)[]>((resolve, reject) => {
     const reqId = mcReqId++;
     mcPending.set(reqId, { resolve, reject });
     const msg: McRequest = { kind: 'mc', reqId, jobs };
@@ -77,6 +93,22 @@ function getWinTie(): Promise<WinTieTable | undefined> {
     return undefined;
   });
   return winTiePromise;
+}
+
+// 4〜6人求解内の3人ショーダウンを厳密化する3-way オールイン結果テーブル（約21MB）。
+// 初回の求解でのみ fetch（以後キャッシュ）。読込失敗時は undefined を返し（層化 MC への
+// フォールバック）、一度だけ警告を出す（getWinTie と同じパターン）。
+let winTie3Promise: Promise<WinTie3Table | undefined> | null = null;
+let winTie3Warned = false;
+function getWinTie3(): Promise<WinTie3Table | undefined> {
+  winTie3Promise ??= loadWinTie3TableBrowser({ meta: wt3MetaUrl, bin: wt3BinUrl }).catch((err: unknown) => {
+    if (!winTie3Warned) {
+      winTie3Warned = true;
+      console.warn('wintie3 table load failed; falling back to MC for 3-player showdowns', err);
+    }
+    return undefined;
+  });
+  return winTie3Promise;
 }
 
 let pf3wayPromise: Promise<Pf3wayTable> | null = null;
@@ -168,8 +200,11 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
         if (cov === 'in') r = lookupPf3way(pf, state) as unknown as CommonResult;
       }
       if (!r) {
-        const winTie = await getWinTie();
-        r = (await solveMultiway(state, { workers: 0, mcRunner, winTie, ...opts })) as unknown as CommonResult;
+        const [winTie, winTie3] = await Promise.all([getWinTie(), getWinTie3()]);
+        r = (await solveMultiway(state, {
+          workers: 0, mcRunner, winTie, winTie3, avgPower: 1, refreshSchedule: 'geometric',
+          mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
+        })) as unknown as CommonResult;
       }
       dto = toDto(r, 3, state.heroPos, state.heroHand);
     } else if (state.playersLeft === 4) {
@@ -181,13 +216,19 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
         if (cov === 'in') r = lookupPf(pf, state) as unknown as CommonResult;
       }
       if (!r) {
-        const winTie = await getWinTie();
-        r = (await solveMultiway(state, { workers: 0, mcRunner, winTie, ...opts })) as unknown as CommonResult;
+        const [winTie, winTie3] = await Promise.all([getWinTie(), getWinTie3()]);
+        r = (await solveMultiway(state, {
+          workers: 0, mcRunner, winTie, winTie3, avgPower: 1, refreshSchedule: 'geometric',
+          mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
+        })) as unknown as CommonResult;
       }
       dto = toDto(r, 4, state.heroPos, state.heroHand);
     } else {
-      const winTie = await getWinTie();
-      const r = await solveMultiway(state, { workers: 0, mcRunner, winTie, ...opts });
+      const [winTie, winTie3] = await Promise.all([getWinTie(), getWinTie3()]);
+      const r = await solveMultiway(state, {
+        workers: 0, mcRunner, winTie, winTie3, avgPower: 1, refreshSchedule: 'geometric',
+        mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
+      });
       dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);
     }
     const res: SolveResponse = { id, ok: true, result: dto, ms: performance.now() - t0 };

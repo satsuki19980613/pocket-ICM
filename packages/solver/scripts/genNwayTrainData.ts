@@ -22,6 +22,7 @@ import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HAND_CLASS_ORDER } from '../src/huEquity.js';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
 import { loadHuWinTieTable } from '../src/huWinTieLoader.js';
+import { loadWinTie3Table } from '../src/wintie3Loader.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -77,7 +78,7 @@ async function main(): Promise<void> {
   const GOLD_ITERS = 8000;
   const gold: MultiwayNSolveOptions = {
     samples: S, maxIters: GOLD_ITERS, refreshEvery: 100, workers, commonRandom: true,
-    targetExploitabilityPt: 0, winTie: loadHuWinTieTable(),
+    targetExploitabilityPt: 0, winTie: loadHuWinTieTable(), winTie3: loadWinTie3Table(), avgPower: 1,
   };
   const total = G ** D;
   log(`# ${N}人 NN 学習データ生成: 各軸 ${AXIS.join('/')}bb (${G}点/軸, ${total}点), samples=${S}, workers=${workers}`);
@@ -131,7 +132,10 @@ async function main(): Promise<void> {
     nodeKeys, nodeActors, nodeTypes, classOrder: HAND_CLASS_ORDER,
     inDim: D, outDim, rowStride, floatsPerNode: FLOATS_PER_NODE,
     rows: total, samples: S,
-    solver: { maxIters: GOLD_ITERS, earlyStop: false, winTie: true, stratifiedMc: true, maxActive: 3, commonRandom: true },
+    solver: {
+      maxIters: GOLD_ITERS, earlyStop: false, winTie: true, winTie3: true, stratifiedMc: true,
+      maxActive: 3, commonRandom: true, avgPower: 1,
+    },
     layout: '[rows] each: [D input stacks(bb)][nNodes*169 evDiff][D eqPost(order)]',
   });
 

@@ -118,17 +118,21 @@ const OVER_SCOPE_MSG = `現在は${MAX_PLAYERS}人までの局面に対応して
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
  * 反復・サンプルを厚めに取れる。3人以上の同時オールインは層化 MC のため反復を厚く
  * 取れる（exploitability がしきい値に達すれば早期終了する）。
+ * solver.worker.ts が 2人・3人ショーダウンを厳密化する win/tie テーブルに加え、
+ * 3人ショーダウンも wintie3 テーブル（約21MB）で厳密化するため、早期停止しきい値は
+ * MC ノイズ床を前提にした従来値より自動的に狭まる（nwaySolver.ts の targetExploitabilityPt
+ * 既定式: winTie3 指定時は poolPt×0.0002、未指定時は poolPt×0.0015）。
  */
 function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
   switch (n) {
     case 2:
       return {};
     case 3:
-      return { maxIters: 600, samples: 50_000 };
+      return { maxIters: 1500, samples: 50_000 };
     case 4:
-      return { maxIters: 600, samples: 40_000 };
+      return { maxIters: 2000, samples: 40_000 };
     case 5:
-      return { maxIters: 4000, samples: 32_000 };
+      return { maxIters: 3000, samples: 32_000 };
     default:
       return { maxIters: 3000, samples: 24_000 };
   }
@@ -606,7 +610,7 @@ export function App(): JSX.Element {
             </>
           ) : solvingNote === 'many' ? (
             <>
-              <p>正確に計算中…（5〜6人のため）</p>
+              <p>正確に計算中…（5〜6人のため。初回は約21MBの表を取得します）</p>
               <p className="sub">同時オールインの組み合わせが多いので、数秒〜十数秒かかることがあります。</p>
             </>
           ) : (

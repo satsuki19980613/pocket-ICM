@@ -4,7 +4,7 @@
  */
 
 import type { BoardState } from '@oshihiki/core';
-import type { ShowdownMcJob, ShowdownMcResult } from '@oshihiki/solver';
+import type { Exact3DenseChunk, ShowdownMcJob, ShowdownMcResult } from '@oshihiki/solver';
 
 export interface SolveOpts {
   maxIters?: number;
@@ -62,10 +62,14 @@ export interface McRequest {
   reqId: number;
   jobs: ShowdownMcJob[];
 }
-/** メイン → 求解 Worker: MC 実行結果（入力順）。 */
+/**
+ * メイン → 求解 Worker: MC 実行結果（入力順）。
+ * `exact3Chunk` ジョブの結果は `Exact3DenseChunk`（3人ショーダウン dense sweep の部分和）、
+ * それ以外（通常 MC / exact3 全体）は `ShowdownMcResult`（nwaySolver.McRunner と同じ union）。
+ */
 export interface McResultMsg {
   kind: 'mcResult';
   reqId: number;
-  results?: ShowdownMcResult[];
+  results?: (ShowdownMcResult | Exact3DenseChunk)[];
   error?: string;
 }

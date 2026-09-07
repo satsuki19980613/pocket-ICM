@@ -33,16 +33,26 @@ export default defineConfig({
         // 新デプロイ時に旧バージョンの precache を確実に破棄する（旧UIが居座らないように）。
         // registerType:'autoUpdate' は skipWaiting/clientsClaim を有効化＝新SWが即座に支配。
         cleanupOutdatedCaches: true,
-        // 4人テーブル(f16, ~11MB)は precache しない（インストールを重くしない）。
-        // 初回の4人求解で fetch → runtimeCaching(CacheFirst)でキャッシュ＝以後オフライン可。
+        // 4人テーブル(f16, ~11MB)・3-wayオールイン結果テーブル(u16, ~21MB)は precache しない
+        // （インストールを重くしない）。初回の4人求解／5〜6人求解で fetch →
+        // runtimeCaching(CacheFirst)でキャッシュ＝以後オフライン可。
         // 3人(1.33MB)/HU は従来どおり precache（インストール時からオフライン）。
-        globIgnores: ['**/pf4way.f16-*.bin'],
+        globIgnores: ['**/pf4way.f16-*.bin', '**/wintie3-169.u16-*.bin'],
         runtimeCaching: [
           {
             urlPattern: /pf4way\.f16-.*\.bin$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'pf4way-table',
+              expiration: { maxEntries: 2 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /wintie3-169\.u16-.*\.bin$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'wintie3-table',
               expiration: { maxEntries: 2 },
               cacheableResponse: { statuses: [0, 200] },
             },

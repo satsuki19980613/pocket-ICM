@@ -53,7 +53,19 @@ import type { ShowdownNode } from './showdownMc.js';
 import { MC_SEED, NODE_MC_SAMPLES } from './mcConfig.js';
 import { monotonizePush } from './monotonize.js';
 import { computeShowdownMc, DEFAULT_STRAT, type ShowdownMcResult, type StratSpec } from './showdownJob.js';
-import { computeShowdown2Exact, rankClassesByEquityVs, type WinTieTable } from './showdownExact.js';
+import {
+  computeShowdown2Exact,
+  computeShowdown3Exact,
+  computeShowdown3ExactDenseChunk,
+  mergeShowdown3ExactDenseChunks,
+  rankClassesByEquityVs,
+  exact3LookupCost,
+  DENSE_SWEEP_THRESHOLD,
+  EPS_ARRIVAL,
+  type WinTieTable,
+  type Exact3DenseChunk,
+} from './showdownExact.js';
+import type { WinTie3Table } from './wintie3Table.js';
 import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
 
 /**
@@ -61,7 +73,20 @@ import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
  * ブラウザバンドルに混入させないため型リンクは張らず、動的 import で読む（下記 ensurePool）。
  */
 interface WorkerPoolLike {
-  run(input: { node: ShowdownNode; ranges: F64[]; samples: number; seed: number; strat?: StratSpec }): Promise<ShowdownMcResult>;
+  run(input: {
+    node: ShowdownNode;
+    ranges: F64[];
+    samples: number;
+    seed: number;
+    strat?: StratSpec;
+    /** true なら MC ではなく `computeShowdown3Exact`（worker 側で loadWinTie3Table() を遅延ロード）。 */
+    exact3?: boolean;
+  }): Promise<ShowdownMcResult>;
+  /**
+   * item1: 1 つの exact3 dense 集合を 'a'（hero0 のクラス）範囲 [lo,hi) だけ計算させる
+   * （critical path 短縮のため 1 集合を worker 台数ぶんに割って並列化する）。
+   */
+  runExact3Chunk?(input: { node: ShowdownNode; ranges: F64[]; lo: number; hi: number }): Promise<Exact3DenseChunk>;
   dispose(): Promise<void>;
 }
 
@@ -95,6 +120,28 @@ function nonEmpty(freq: F64): F64 {
   let w = 0;
   for (let i = 0; i < N_CLASSES; i++) w += freq[i]!;
   return w > 1e-9 ? freq : FULL_RANGE;
+}
+
+/**
+ * `computeShowdown3Exact` の ε-pruning（showdownExact.EPS_ARRIVAL, 既定 1e-3）と**同じ
+ * しきい値**でクラス数を数える（part C の予算見積り用）。しきい値がずれると見積りが
+ * 実コストと食い違うので、必ず showdownExact.EPS_ARRIVAL を import して使うこと。
+ */
+function nzCountEps(freq: F64): number {
+  const r = nonEmpty(freq);
+  let n = 0;
+  for (let i = 0; i < N_CLASSES; i++) if (r[i]! >= EPS_ARRIVAL) n++;
+  return n;
+}
+
+/**
+ * 3 人ショーダウン集合 1 個を `computeShowdown3Exact` で解くコストの見積り（テーブル
+ * 参照回数）。hero パス 3 回（各 169 × 他2人の ε-pruning 後クラス数の積）＋
+ * seatMarginal 1 回（3 人とも ε-pruning 後クラス数の直積）。part C の予算判定に使う。
+ * 式そのものは showdownExact.ts の `exact3LookupCost`（dense/sparse 切替判定と共用）。
+ */
+function exact3LookupEstimate(ranges: readonly F64[]): number {
+  return exact3LookupCost(nzCountEps(ranges[0]!), nzCountEps(ranges[1]!), nzCountEps(ranges[2]!));
 }
 
 function antePaid(state: BoardState, pos: Position): number {
@@ -133,14 +180,35 @@ export interface ShowdownMcJob {
   seed: number;
   /** 層化 MC の指定（3 人以上・winTie あり・stratifiedMc 時）。省略で従来経路。 */
   strat?: StratSpec;
+  /**
+   * true なら MC ではなく `computeShowdown3Exact`（3 人ショーダウンの厳密計算）をこの
+   * ジョブとして実行する（part C の予算内で winTie3 が与えられているとき）。このとき
+   * `samples`/`seed`/`strat` は無視される（node/ranges だけを使う）。
+   * ランナー（Node の worker_threads プール・ブラウザの Web Worker プール）は
+   * `loadWinTie3Table()` 等でテーブルを自前で用意し、このフラグを見て
+   * `computeShowdown3Exact` に切り替える必要がある（未対応のランナーに投げると壊れるため、
+   * `mcRunner` 注入時は winTie3 と併用する場合に呼び出し側が対応すること）。
+   */
+  exact3?: boolean;
+  /**
+   * 指定時は「dense sweep の 'a'（hero0 のクラス）範囲 [lo,hi) だけの部分和」
+   * （`computeShowdown3ExactDenseChunk` が返す `Exact3DenseChunk`）を計算して返すジョブ
+   * であることを示す（node/ranges と併用し、exact3/samples/seed/strat は無視する）。
+   * 1 つの exact3 集合を `mcRunnerParallelism`（または Node の worker 台数）ぶんに割って
+   * 並列化するために使う（nwaySolver.ts の refresh・nwayWorker.ts と同じ契約）。
+   */
+  exact3Chunk?: { lo: number; hi: number };
 }
 
 /**
  * ショーダウン MC の並列ランナー（依存性注入）。渡された全ジョブを（並列に）解いて
  * 入力順の結果配列を返す。ブラウザは Web Worker プールで、Node は既定の worker_threads
  * プールで実装できる。指定時は `workers` より優先される。
+ *
+ * 結果は入力ジョブと同じ並びの union: `exact3Chunk` ジョブには `Exact3DenseChunk`
+ * （部分和ペイロード）を、それ以外（通常 MC / 全体 exact3）には `ShowdownMcResult` を返す。
  */
-export type McRunner = (jobs: ShowdownMcJob[]) => Promise<ShowdownMcResult[]>;
+export type McRunner = (jobs: ShowdownMcJob[]) => Promise<(ShowdownMcResult | Exact3DenseChunk)[]>;
 
 /** N-way 求解の共通オプション。 */
 export interface MultiwayNSolveOptions {
@@ -149,6 +217,21 @@ export interface MultiwayNSolveOptions {
   targetExploitabilityPt?: number;
   /** MC equity を再サンプルする反復間隔（epoch 長）。 */
   refreshEvery?: number;
+  /**
+   * refresh の間隔スケジュール。**既定 'fixed'**（従来どおり `refreshEvery` の倍数で refresh、
+   * bit 互換）。'geometric' にすると `t<=1000` は `refreshEvery` 間隔、`1000<t<=3000` は
+   * `2×refreshEvery`、`t>3000` は `4×refreshEvery` と後半ほど疎に refresh する。
+   * fictitious play の平均戦略は 1 反復あたり O(1/t) しか動かないため、後半の refresh を
+   * 間引いても平均戦略への影響は小さい一方、MC/exact3 の再計算コストは大きく減る。
+   * 最終の full refresh（収束後の最終評価）は本オプションの対象外で常に実行される。
+   */
+  refreshSchedule?: 'fixed' | 'geometric';
+  /**
+   * FP 平均戦略の重み指数 p（既定 0 = 一様平均 w_t = 1/(t+1)）。p=1 で線形重み（w_t = 2/(t+2),
+   * 反復 t の最適反応を t に比例して重く見る＝初期 0.5 戦略の残滓を早く消す）、p=2 で二乗重み。
+   * 超短スタック局面では一様平均が 3000 反復で収束しない（BU PU 64% ↔ 8000 反復 78%）ため実験用。
+   */
+  avgPower?: number;
   /**
    * ショーダウン MC のサンプル数。省略時は人数に応じた既定（下記）。
    * 3 人以上の集合には `mcSamplesFor` により**到達確率比例で減らして**配る。
@@ -185,6 +268,16 @@ export interface MultiwayNSolveOptions {
    */
   mcRunner?: McRunner;
   /**
+   * `mcRunner` 注入時、dense 判定される exact3 集合を分割するチャンク数の基準
+   * （既定 1 = 分割なし）。内部 worker プール（Node, `workers` オプション）と同じ考え方で、
+   * `Math.min(mcRunnerParallelism, 8)` 個の 'a'（hero0 のクラス）範囲チャンクに割って
+   * `mcRunner` へ渡し、`mergeShowdown3ExactDenseChunks` で合算する。ブラウザは自前の
+   * Web Worker プールのサイズ（`mcPool` の worker 数）をここに渡すことで、Node の
+   * worker_threads プールと同じ速度構造になる（1 集合の壁時計コストが
+   * ~1/mcRunnerParallelism に縮む）。`mcRunner` 未注入時は無視される。
+   */
+  mcRunnerParallelism?: number;
+  /**
    * 共通乱数（Common Random Numbers）。**既定 false**。true にすると、反復（epoch）を
    * またいで MC のサンプル列を固定し、equity 見積りを「レンジ変化だけ」の滑らかな関数にする。
    * epoch ごとの再サンプリング・ノイズが消えるため exploitability が単調に落ち、収束判定
@@ -217,6 +310,12 @@ export interface MultiwayNSolveOptions {
    */
   winTie?: WinTieTable;
   /**
+   * 3-way オールイン結果テーブル（`loadWinTie3Table()`）。与えると**3 人ショーダウンを
+   * 厳密計算**に切り替える（MC ノイズ 0）。2 人は `winTie` が別途担当し、4 人以上の同時
+   * オールインは従来どおり MC。省略時は 3 人以上は全て MC（従来動作、既定動作は不変）。
+   */
+  winTie3?: WinTie3Table;
+  /**
    * 同時オールインの上限人数。**既定 3**（HRC の Math エンジン・ICMIZER と同じゲーム定義:
    * 3 人がオールインした時点で残りは自動フォールド。docs/BATON_OC.md §9）。
    * 3 人以上の同時オールインは到達確率が桁で小さく（4 人集合 0.0003%）、実測で解は
@@ -243,6 +342,34 @@ export interface MultiwayNSolveOptions {
    * いずれも差は |EV| < 0.01pt の無差別ハンドの数え方で、EV 上の損は無い。実験用に残す。
    */
   displayMode?: 'avg' | 'lateAvg' | 'evSign';
+  /**
+   * 3 人ショーダウン集合 1 個あたりの `computeShowdown3Exact` 呼び出しコスト上限
+   * （テーブル参照回数の見積り, 既定 6,000,000）。`winTie3` があっても、この見積りを
+   * 超える集合はその refresh に限り従来の MC 経路にフォールバックする（part C）。
+   *
+   * ## なぜ要るか
+   * FP の平均戦略は厳密に 0 にならない（ε-pruning しても 1/t の減衰途中は広い）ため、
+   * 序盤の refresh や病的に広い到達レンジを持つ集合では、ε-pruning 後もなお
+   * 169×|nz1|×|nz2|（hero パス×3）＋|nz0|×|nz1|×|nz2|（seatMarginal）が数百万〜億に
+   * 達しうる。この予算は「exact が MC より速いか」の目安ではない
+   * （目的は**厳密解**そのものであり、MC はそもそもノイズを持つ近似）。dense パス
+   * （single-sweep, `computeShowdown3Exact` 内部で自動選択）導入後は、到達レンジが
+   * 169³ 分すべて広くても 1 回の refresh を現実的な時間で厳密計算できるため、この予算は
+   * もはや「exact が遅いから MC に逃がす」チューニングではなく、**病的に広い到達レンジを
+   * 持つ序盤の全集合が同時に dense 評価される**（FP 初期値 0.5 由来で最初の数 refresh は
+   * ほぼ全集合が dense 判定になりうる）ときの合計時間を頭打ちにするための安全弁でしかない。
+   * 既定 6,000,000 は「1 集合が dense 判定される sparse 換算コスト上限」を緩めに設定した
+   * もの（169³ ≈ 483 万をわずかに超える程度）で、実運用ではほぼ全ての refresh で
+   * exact 判定される（`_bench3exact.ts` 参照）。
+   */
+  exact3Budget?: number;
+  /**
+   * ベンチマーク・デバッグ専用: refresh 1 回ごとに、3 人ショーダウン集合のうち
+   * `computeShowdown3Exact`（exact）と MC フォールバック（part C）にそれぞれ何個
+   * 振り分けたかを通知する。求解結果には一切影響しない（副作用なしのオプショナル
+   * コールバック）。
+   */
+  onExact3Stats?: (info: { epoch: number; exact: number; mc: number; total: number }) => void;
 }
 
 export interface MultiwayNSolveResult {
@@ -293,6 +420,30 @@ export function mcSamplesFor(k: number, base: number): number {
   return Math.max(Math.round(base / 16), Math.round(base / 8 ** (k - 2)));
 }
 
+/**
+ * refresh（MC / exact3 の再サンプル・再計算）を実行する反復 t の集合を決める判定関数を作る。
+ *
+ * - 'fixed'（既定）: t が `refreshEvery` の倍数（従来どおり, bit 互換）。
+ * - 'geometric': fictitious play の平均戦略は反復ごとに重み `w=1/(t+1)` でしか動かない
+ *   （= 1 反復あたりの変化は O(1/t)）ため、反復が進むほど MC/exact3 の再サンプル間隔を
+ *   疎にしても平均戦略への影響は小さい。`t<=1000` は `refreshEvery` 間隔、
+ *   `1000<t<=3000` は `2×refreshEvery` 間隔、`t>3000` は `4×refreshEvery` 間隔で refresh する
+ *   （最終の full refresh は本関数の対象外・従来どおり不変）。
+ *
+ * 呼び出しは `t=1,2,...,maxIters` の**昇順**を前提とする（'geometric' は内部状態を持つ
+ * クロージャで、各 t につき厳密に 1 回だけ呼ぶこと）。
+ */
+function makeRefreshSchedule(refreshEvery: number, mode: 'fixed' | 'geometric'): (t: number) => boolean {
+  if (mode === 'fixed') return (t: number) => t % refreshEvery === 0;
+  let next = refreshEvery;
+  return (t: number): boolean => {
+    if (t < next) return false;
+    const step = next < 1000 ? refreshEvery : next < 3000 ? refreshEvery * 2 : refreshEvery * 4;
+    next += step;
+    return true;
+  };
+}
+
 /** 人数ごとの既定サンプル数（コストは Σ_A(|A|+1)|A| に比例。人数増で漸減）。 */
 function defaultSamples(n: number): number {
   switch (n) {
@@ -318,10 +469,14 @@ function buildEngine(
   workers: number,
   mcRunner?: McRunner,
   winTie?: WinTieTable,
+  winTie3?: WinTie3Table,
   uniformSamples = false,
   maxActive = 3,
   stratified = true,
   K0: number = DEFAULT_STRAT.K,
+  exact3Budget = 6_000_000,
+  mcRunnerParallelism = 1,
+  onExact3Stats?: (info: { epoch: number; exact: number; mc: number; total: number }) => void,
 ) {
   const n = state.playersLeft;
   const order = positionsForPlayersLeft(n);
@@ -440,6 +595,26 @@ function buildEngine(
     return pool;
   };
 
+  // item1: 1 つの exact3 dense 集合を worker プールへ割る分割数の上限（169 クラスを
+  // 1 クラス未満に割っても意味が無い・IPC オーバーヘッドがチャンクあたりの計算量を
+  // 上回らない程度、実測で 8 分割あたりが妥当）。実際の分割数は下の EXACT3_CHUNKS_PER_SET
+  // 参照（worker プールのタスクキューが自然に負荷分散するため、同時に dense 判定される
+  // 集合数によらず一律この上限で割る）。
+  const EXACT3_MAX_CHUNKS_PER_SET = 8;
+
+  /** [0,total) をほぼ均等な k 個の [lo,hi) に分割する（item1: dense sweep の 'a' 範囲分割）。 */
+  function chunkBounds(total: number, k: number): { lo: number; hi: number }[] {
+    const n = Math.max(1, Math.min(k, total));
+    const out: { lo: number; hi: number }[] = [];
+    let lo = 0;
+    for (let i = 0; i < n; i++) {
+      const hi = Math.round(((i + 1) * total) / n);
+      if (hi > lo) out.push({ lo, hi });
+      lo = hi;
+    }
+    return out;
+  }
+
   const refresh = async (strat: Map<number, F64>, epoch: number, full = false): Promise<void> => {
     const store = (A: number, participants: number[], res: ShowdownMcResult): void => {
       const m = new Map<number, F64>();
@@ -456,13 +631,53 @@ function buildEngine(
     const jobs: {
       A: number; node: ShowdownNode; participants: number[]; ranges: F64[]; jobSeed: number; samples: number;
       strat?: StratSpec;
+      exact3?: boolean;
     }[] = [];
+    // item1: dense 判定される exact3 集合（内部 worker プール限定, mcRunner 注入時は対象外）。
+    // ループを抜けてから一括で EXACT3_CHUNKS_PER_SET 個ずつに割る（下記参照）。
+    const denseCandidates: { A: number; node: ShowdownNode; participants: number[]; ranges: F64[] }[] = [];
+    // item1: chunkPlan は「実際にチャンク分割すると決まった」集合だけが入る（各要素は
+    // 確定した nchunks を保持）。EXACT3_CHUNKS_PER_SET<=1（workers<=1 相当）なら
+    // denseCandidates は全て通常の exact3 単発ジョブとして jobs に合流し、chunkPlan は空のまま。
+    const chunkPlan: { A: number; node: ShowdownNode; participants: number[]; ranges: F64[]; nchunks: number }[] = [];
+    // part C: 予算内なら computeShowdown3Exact（exact）、超えたら今回の refresh 限り MC に
+    // フォールバックする集合数（ベンチマーク・onExact3Stats 通知用）。
+    let exact3Count = 0;
+    let mc3Count = 0;
+    // 並列実行の見込み（mcRunner 注入 or workers>1 のプール）があるかどうか。
+    // ここでは ensurePool() をまだ呼んでいない（呼ぶのは全ジョブ組み立て後）ため poolDisabled は
+    // 「workers<=1 で最初から単一スレッド確定」のときだけ true。pool 初期化が後で失敗した場合は
+    // 下の「wp が取れなかった」フォールバックが exact3 ジョブも inline で処理する（安全網）。
+    const parallelLikely = mcRunner !== undefined || !poolDisabled;
     for (const A of full ? allSets : showdownSets) {
       const { node, participants } = makeShowdownNode(A);
       const ranges = arrivalRanges(A, participants, strat);
       if (winTie && participants.length === 2) {
         store(A, participants, computeShowdown2Exact(node, ranges, winTie));
         continue;
+      }
+      if (winTie3 && participants.length === 3) {
+        const cost = exact3LookupEstimate(ranges);
+        if (cost <= exact3Budget) {
+          exact3Count++;
+          if (parallelLikely) {
+            // dense 判定される集合はチャンク分割の候補にする（実際に分割するかはループ後、
+            // 並列度（mcRunner 注入時は mcRunnerParallelism、内部 worker プールは workers）を
+            // 見てから決める）。mcRunner 注入時も内部 worker プールと同じ考え方でチャンク分割
+            // する（item1 の速度構造をブラウザ側にも適用）。
+            if (cost > DENSE_SWEEP_THRESHOLD) {
+              denseCandidates.push({ A, node, participants, ranges });
+            } else {
+              jobs.push({ A, node, participants, ranges, jobSeed: mix(seed, epoch, A), samples: 0, exact3: true });
+            }
+          } else {
+            // 単一スレッドはそのまま inline 計算（従来どおり）。
+            store(A, participants, computeShowdown3Exact(node, ranges, winTie3));
+          }
+          continue;
+        }
+        mc3Count++;
+        // 予算超過: この refresh 限り従来の MC 経路にフォールバック（下の共通ジョブ組み立てに合流）。
       }
       const s = uniformSamples ? samples : mcSamplesFor(participants.length, samples);
       let stratSpec: StratSpec | undefined;
@@ -519,31 +734,97 @@ function buildEngine(
       }
       jobs.push({ A, node, participants, ranges, jobSeed: mix(seed, epoch, A), samples: s, strat: stratSpec });
     }
-    if (jobs.length === 0) return;
+
+    // item1: denseCandidates（dense 判定された exact3 集合）を worker プールへ割る分割数。
+    // ワーカープールはタスクキュー（drain）で自然に負荷分散するため、集合数が worker 台数
+    // 以上でも「大きな塊のジョブを少数」より「小さなジョブを多数」の方がテール待ち
+    // （最後に残ったジョブが大きいほど idle worker が発生する）が減って有利なことを実測
+    // （6-player 局面, dense 集合 15〜20 個の場面で「無分割」と「8 分割」は同等〜8 分割が
+    // やや優位）。よって集合数によらず一律 min(並列度, 8) 分割にする。並列度は mcRunner
+    // 注入時は mcRunnerParallelism（ブラウザ Web Worker プールのサイズ）、それ以外は
+    // workers（Node の worker_threads プール台数）。
+    const chunkParallelism = mcRunner ? mcRunnerParallelism : workers;
+    const EXACT3_CHUNKS_PER_SET = Math.max(1, Math.min(EXACT3_MAX_CHUNKS_PER_SET, chunkParallelism));
+    if (EXACT3_CHUNKS_PER_SET <= 1) {
+      for (const dc of denseCandidates) {
+        jobs.push({ A: dc.A, node: dc.node, participants: dc.participants, ranges: dc.ranges, jobSeed: mix(seed, epoch, dc.A), samples: 0, exact3: true });
+      }
+    } else {
+      for (const dc of denseCandidates) chunkPlan.push({ ...dc, nchunks: EXACT3_CHUNKS_PER_SET });
+    }
+
+    if (onExact3Stats && (exact3Count > 0 || mc3Count > 0)) {
+      onExact3Stats({ epoch, exact: exact3Count, mc: mc3Count, total: exact3Count + mc3Count });
+    }
+    if (jobs.length === 0 && chunkPlan.length === 0) return;
 
     // 注入された並列ランナー（ブラウザ Web Worker プール等）があれば最優先で使う。
+    // exact3:true のジョブを含む場合、mcRunner 実装側がそのフラグに対応している必要がある
+    // （ShowdownMcJob のドキュメント参照）。chunkPlan（dense 判定された集合）も
+    // 内部 worker プールと同じ考え方でチャンク化して mcRunner に渡す
+    // （EXACT3_CHUNKS_PER_SET 参照, mcRunnerParallelism<=1 なら chunkPlan は空のまま）。
     if (mcRunner) {
-      const results = await mcRunner(
-        jobs.map((j) => ({ node: j.node, ranges: j.ranges, samples: j.samples, seed: j.jobSeed, strat: j.strat })),
-      );
-      for (let i = 0; i < jobs.length; i++) store(jobs[i]!.A, jobs[i]!.participants, results[i]!);
+      const mcJobs: ShowdownMcJob[] = jobs.map((j) => ({
+        node: j.node, ranges: j.ranges, samples: j.samples, seed: j.jobSeed, strat: j.strat, exact3: j.exact3,
+      }));
+      const chunkBoundsPerSet = chunkPlan.map((cp) => chunkBounds(N_CLASSES, cp.nchunks));
+      const chunkJobs: ShowdownMcJob[] = [];
+      for (let ci = 0; ci < chunkPlan.length; ci++) {
+        const cp = chunkPlan[ci]!;
+        for (const b of chunkBoundsPerSet[ci]!) {
+          chunkJobs.push({ node: cp.node, ranges: cp.ranges, samples: 0, seed: 0, exact3Chunk: b });
+        }
+      }
+      const allResults = await mcRunner([...mcJobs, ...chunkJobs]);
+      for (let i = 0; i < jobs.length; i++) store(jobs[i]!.A, jobs[i]!.participants, allResults[i] as ShowdownMcResult);
+      let idx = jobs.length;
+      for (let ci = 0; ci < chunkPlan.length; ci++) {
+        const cp = chunkPlan[ci]!;
+        const n = chunkBoundsPerSet[ci]!.length;
+        const chunks = allResults.slice(idx, idx + n) as Exact3DenseChunk[];
+        idx += n;
+        store(cp.A, cp.participants, mergeShowdown3ExactDenseChunks(cp.node, chunks));
+      }
       return;
     }
 
     const wp = await ensurePool();
     if (!wp) {
+      // pool が使えない（workers<=1、または初期化失敗）: 単一スレッドで inline 計算。
+      // exact3 ジョブはここでは通常発生しない（parallelLikely が false なら上で inline 済み）が、
+      // ensurePool() が「今回だけ」失敗した場合（poolDisabled が今まさに true になった）に備え、
+      // exact3 ジョブも正しく computeShowdown3Exact で処理する安全網。chunkPlan の集合も
+      // ここでは分割せず、そのまま computeShowdown3Exact の whole-set 呼び出しに落とす
+      // （item1 冒頭コメント: 単一スレッド経路は常に inline whole-set call）。
       for (const j of jobs) {
-        const res = computeShowdownMc(j.node, j.ranges, j.samples, j.jobSeed, j.strat);
+        const res = j.exact3 ? computeShowdown3Exact(j.node, j.ranges, winTie3!) : computeShowdownMc(j.node, j.ranges, j.samples, j.jobSeed, j.strat);
         store(j.A, j.participants, res);
+      }
+      for (const cp of chunkPlan) {
+        store(cp.A, cp.participants, computeShowdown3Exact(cp.node, cp.ranges, winTie3!));
       }
       return;
     }
-    await Promise.all(
-      jobs.map(async (j) => {
-        const res = await wp.run({ node: j.node, ranges: j.ranges, samples: j.samples, seed: j.jobSeed, strat: j.strat });
-        store(j.A, j.participants, res);
-      }),
-    );
+    const normalP = jobs.map(async (j) => {
+      const res = await wp.run({ node: j.node, ranges: j.ranges, samples: j.samples, seed: j.jobSeed, strat: j.strat, exact3: j.exact3 });
+      store(j.A, j.participants, res);
+    });
+    // item1: dense 集合 1 個を cp.nchunks 個の 'a' 範囲ジョブに割って worker プールへ投げ、
+    // 全チャンクが揃ってから merge して store する（1 集合の壁時計コストが最大
+    // 1/nchunks 近くまで縮む。nchunks は同時に dense 判定された集合数から決まっている）。
+    const chunkP = chunkPlan.map(async (cp) => {
+      const runChunk = wp.runExact3Chunk;
+      if (!runChunk) {
+        // 型上は WorkerPool が常に実装するが、安全網として通常の exact3 ジョブにフォールバック。
+        const res = await wp.run({ node: cp.node, ranges: cp.ranges, samples: 0, seed: 0, exact3: true });
+        store(cp.A, cp.participants, res);
+        return;
+      }
+      const bounds = chunkBounds(N_CLASSES, cp.nchunks);
+      const chunks = await Promise.all(bounds.map((b) => runChunk.call(wp, { node: cp.node, ranges: cp.ranges, lo: b.lo, hi: b.hi })));
+      store(cp.A, cp.participants, mergeShowdown3ExactDenseChunks(cp.node, chunks));
+    });
+    await Promise.all([...normalP, ...chunkP]);
   };
 
   const dispose = (): void => {
@@ -622,6 +903,7 @@ function buildEngine(
   return {
     maxActive,
     exactTwoWay: winTie !== undefined,
+    exactThreeWay: winTie3 !== undefined,
     adaptCandidates,
     n,
     order,
@@ -886,20 +1168,33 @@ export async function solveMultiway(
   const samples = opts.samples ?? defaultSamples(n);
   const maxIters = opts.maxIters ?? 1000;
   const refreshEvery = opts.refreshEvery ?? 100;
+  const schedule = makeRefreshSchedule(refreshEvery, opts.refreshSchedule ?? 'fixed');
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
   const cardRemoval = opts.cardRemoval ?? false;
   const commonRandom = opts.commonRandom ?? false;
   const initIters = opts.initIterations ?? 0;
+  const avgPower = opts.avgPower ?? 0;
   const plateauFrac = opts.plateauStopFrac;
   const eng = buildEngine(
-    state, samples, seed, workers, opts.mcRunner, opts.winTie, opts.uniformSamples,
+    state, samples, seed, workers, opts.mcRunner, opts.winTie, opts.winTie3, opts.uniformSamples,
     opts.maxActive ?? 3, opts.stratifiedMc ?? true, opts.ocCandidates ?? DEFAULT_STRAT.K,
+    opts.exact3Budget ?? 6_000_000, opts.mcRunnerParallelism ?? 1, opts.onExact3Stats,
   );
   const poolPt = eng.payouts.reduce((a, b) => a + b, 0);
   // ノードレベル MC の推定量バイアス + アクション確率のカードリムーバル近似で
   // 均衡でも ~プール比 0.1% の床を持つ（M3 申し送り）。しきい値は床の上に置く。
-  const targetExpl = opts.targetExploitabilityPt ?? poolPt * 0.0015;
+  //
+  // ただし winTie3（3人ショーダウンも厳密）を渡していて、かつ呼び出し側が
+  // targetExploitabilityPt を明示していない場合は、しきい値を約 7.5 倍狭める
+  // （poolPt×0.0002, 旧既定 poolPt×0.0015 の 1/7.5）。旧しきい値 0.0015 は
+  // 「MC ノイズ床の上に置く」という前提で決めた値で、2人・3人ショーダウンが厳密になった今は
+  // その根拠（ノイズ）が消えている。flat-EV ノード（複数選択肢の EV 差がほぼ 0 の無差別帯）は
+  // regret への寄与が小さいため、緩い閾値のままだと「収束十分」と誤判定されて未収束のまま
+  // 停止する（実測: 6-player UTG23/HJ11/CO3/BU43/SB2/BB22 で 900 反復停止・BU push 76.8%
+  // ↔ 収束後 78.6%）。exact2/exact3 が入っている前提なら閾値を厳しくしても MC ノイズに
+  // 阻まれず到達できるため、狭めても安全に収束する。
+  const targetExpl = opts.targetExploitabilityPt ?? poolPt * (opts.winTie3 !== undefined ? 0.0002 : 0.0015);
   // CRN 時は反復間で同一シードを使い回す（epoch を固定）。非 CRN は従来どおり epoch で再サンプル。
   const iterEpoch = (t: number): number => (commonRandom ? 0 : Math.floor(t / refreshEvery));
 
@@ -919,10 +1214,11 @@ export async function solveMultiway(
 
     for (let t = 1; t <= maxIters; t++) {
       iterations = t;
-      if (t > 1 && t % refreshEvery === 0) await eng.refresh(strat, iterEpoch(t));
+      const isRefreshPoint = schedule(t);
+      if (t > 1 && isRefreshPoint) await eng.refresh(strat, iterEpoch(t));
       const ev = computeEVs(eng, strat, cardRemoval);
-      if (t % refreshEvery === 0) eng.adaptCandidates(ev);
-      const w = 1 / (t + initIters + 1);
+      if (isRefreshPoint) eng.adaptCandidates(ev);
+      const w = (avgPower + 1) / (t + initIters + avgPower + 1);
       const accLate = displayMode === 'lateAvg' && t >= lateStart;
       if (accLate) lateCount++;
       for (const nd of eng.nodes) {
@@ -941,7 +1237,7 @@ export async function solveMultiway(
           if (la) la[c]! += (br - la[c]!) / lateCount;
         }
       }
-      if (t % refreshEvery === 0 || t === maxIters) {
+      if (isRefreshPoint || t === maxIters) {
         exploitabilityPt = exploitability(eng, strat, computeEVs(eng, strat, cardRemoval));
         if (exploitabilityPt <= targetExpl) {
           converged = true;
@@ -1006,8 +1302,9 @@ export async function evaluateMultiwayStrategy(
   const workers = resolveWorkers(opts.workers);
   const cardRemoval = opts.cardRemoval ?? false;
   const eng = buildEngine(
-    state, samples, seed, workers, opts.mcRunner, opts.winTie, opts.uniformSamples,
+    state, samples, seed, workers, opts.mcRunner, opts.winTie, opts.winTie3, opts.uniformSamples,
     opts.maxActive ?? 3, opts.stratifiedMc ?? true, opts.ocCandidates ?? DEFAULT_STRAT.K,
+    opts.exact3Budget ?? 6_000_000, opts.mcRunnerParallelism ?? 1, opts.onExact3Stats,
   );
   try {
     const strat = new Map<number, F64>();

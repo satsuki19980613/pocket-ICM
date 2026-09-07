@@ -17,7 +17,7 @@ import { UserPub } from './components/UserPub';
 import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
 import { Admin } from './components/Admin';
-import { buildBoardState, defaultForm, type BoardForm } from './formModel';
+import { buildBoardState, defaultForm, reconcilePositions, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
 import { prefillFromScreenshot } from './ocr/screenshotPrefill';
@@ -617,6 +617,15 @@ export function App(): JSX.Element {
           lowConfidenceFields={lowConf}
           imageUrl={ocrImageUrl}
           onEdit={() => setManualOpen(true)}
+          onFixPlayers={(n) => {
+            // 安全網: 写真取り込みで席を1つ取りこぼす（スタック未読=空席扱い）と人数が
+            // 少なく出る。確認画面で人数を選び直すと reconcilePositions が席を補い、
+            // 誤った人数のまま黙って解くのを防ぐ（補った席のスタックは下で要確認）。
+            const nf = reconcilePositions({ ...form, playersLeft: n });
+            setForm(nf);
+            const built = buildBoardState(nf);
+            if (built.ok && built.state) setState(built.state);
+          }}
           onSolve={solve}
         />
       )}

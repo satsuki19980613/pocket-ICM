@@ -27,7 +27,7 @@ import { readBlinds } from './blinds.js';
 import { readStreetFromBoard } from './street.js';
 import { detectButtonSeat } from './button.js';
 import { isActiveHand } from './cardState.js';
-import { detectSeatPresence } from './seatPresence.js';
+import { detectSeatPresence, detectYellowName } from './seatPresence.js';
 import { recognizeAction } from './actionTag.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { grayFromRgba } from './numberField.js';
@@ -152,12 +152,20 @@ export function extractRawReads(
     const stack = readTable(px(img, s.stack), s.stackMinCh, BB_SCORE_FLOOR);
     // 占有は「スタックが読めたか」だけで決めない。降りて暗く沈んだ席のスタックが NaN でも
     // 席は実在する（従来はここで empty 化し 6-max を 5-max として黙って誤解 = 本バグ）。
-    // スタックのパースとは**独立**な陽の占有信号（スタック矩形のエッジ密度＝前景ストローク量,
-    // seatPresence 参照）を OR で足す。hero も同じ検出を通す（空フレームでは empty のまま＝
-    // derivePositions が「hero 不在」で安全に棄却する。実局面では hero スタックが読めて occupied）。
+    // 占有信号は 2 系統を **OR** で足す（「実在席を絶対に落とさない」が最優先の要件）:
+    //   (1) 黄色名（detectYellowName）: ディレクタ設計＋AI 目視で検証した**意味的な主信号**。
+    //       非 hero occupied 席はスタック直下に黄色のプレイヤー名を必ず出す（empty は黄色 0）。
+    //       実測（GT 22枚）で occupied 80/80・empty 30/30・折れ暗名/1文字名も検出（seatPresence 参照）。
+    //   (2) エッジ密度（detectSeatPresence）: 既存の頑健な保険信号（empty max 0.002 vs
+    //       occupied min 0.089 の 40 倍マージン）。黄色名が未知機種でプロファイルずれ等により
+    //       名前帯を外しても、こちらが席を拾う。
+    // OR なので黄色名の追加は「席を落とす方向」には決して働かず（empty は両信号とも 0）、
+    // 未知環境での取りこぼしを減らす純増の信号になる。hero も同じ検出を通す（空フレームでは
+    // empty のまま＝derivePositions が「hero 不在」で安全に棄却。実局面では hero スタックが読める）。
     const stackParsed = Number.isFinite(stack.value);
+    const yellowName = detectYellowName(img, px(img, s.stack)).present;
     const presence = detectSeatPresence(img, px(img, s.stack), px(img, s.actionZone)).present;
-    const occupied = stackParsed || presence;
+    const occupied = stackParsed || yellowName || presence;
     // 占有だが数字が読めない（presence のみ）席は低信頼にして確認画面で state を強調させる
     // （confidence.aggregateConfidence が occupancy.conf<threshold で `${pos}.state` を、
     //  stack.conf(=0)<threshold で `${pos}.stack` を lowConfidenceFields に載せる）。

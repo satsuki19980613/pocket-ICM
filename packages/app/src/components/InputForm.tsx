@@ -2,21 +2,26 @@ import { useState } from 'react';
 import type { Position } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HandPicker } from './HandPicker';
+import { ImageModal } from './ImageModal';
 import { buildBoardState, reconcilePositions, type AnteScheme, type BoardForm } from '../formModel';
 
 /**
  * 手入力モーダル（3-1b・M3）。写真起点（icm）や確認画面の「修正」から開く。妥当なら
  * onSubmit(form) を呼んで確認画面へ。無効なら issues を表示。閉じると呼び出し元へ戻る。
+ * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合しながら直せる。
  */
 export function InputForm(props: {
   form: BoardForm;
   onFormChange: (f: BoardForm) => void;
   onSubmit: (form: BoardForm) => void;
+  /** OCR で読み取った元画像（objectURL）。あれば「元画像を確認」ボタンを出す。 */
+  imageUrl?: string | null;
   /** モーダルを閉じる（背景クリック / ✕ / Esc）。 */
   onClose: () => void;
 }): JSX.Element {
   const { form, onFormChange } = props;
   const [showGrid, setShowGrid] = useState(false);
+  const [showImage, setShowImage] = useState(false);
   const positions = positionsForPlayersLeft(form.playersLeft);
 
   const set = (patch: Partial<BoardForm>): void => onFormChange({ ...form, ...patch });
@@ -37,6 +42,11 @@ export function InputForm(props: {
       <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="手入力">
         <div className="modal-head">
           <span className="modal-title">手入力</span>
+          {props.imageUrl && (
+            <button type="button" className="btn line img-check sm" onClick={() => setShowImage(true)}>
+              🖼 元画像を確認
+            </button>
+          )}
           <button type="button" className="modal-x" aria-label="閉じる" onClick={props.onClose}>
             ✕
           </button>
@@ -152,6 +162,8 @@ export function InputForm(props: {
           </button>
         </div>
       </div>
+
+      {showImage && props.imageUrl && <ImageModal src={props.imageUrl} onClose={() => setShowImage(false)} />}
     </div>
   );
 }

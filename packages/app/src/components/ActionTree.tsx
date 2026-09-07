@@ -17,8 +17,8 @@ import {
  * レンジ表・頻度・記法を連動表示する。hero の行では自分の手札を強調。BB のウォーク
  * （上流に push 無し）は「no decision」でロック。
  */
-export function ActionTree(props: { result: SolveResultDto }): JSX.Element {
-  const { result } = props;
+export function ActionTree(props: { result: SolveResultDto; stacks?: Record<string, number> }): JSX.Element {
+  const { result, stacks } = props;
   const [state, setState] = useState<TreeState>(() => defaultState(result));
 
   // 新しい求解に切り替わったら初期状態へ（見出しノードを active に）。
@@ -48,6 +48,7 @@ export function ActionTree(props: { result: SolveResultDto }): JSX.Element {
         {rows.map((row) => (
           <div key={row.pos} className="arow" data-active={String(state.active === row.seatIdx)} data-locked={String(row.walk)}>
             <span className={`posbadge sm pos-${row.pos}`}>{row.pos}</span>
+            <span className="arow-stack">{stacks && stacks[row.pos] != null ? `${stacks[row.pos]}bb` : ''}</span>
             {row.walk ? (
               <span className="term">no decision</span>
             ) : (

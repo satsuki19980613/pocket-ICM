@@ -16,10 +16,9 @@ export function Auth(props: {
   const [mode, setMode] = useState<Mode>('login');
   const [busy, setBusy] = useState(false);
 
-  // 入力値
+  // 入力値（表示名は廃止＝識別子は handle 一本化）
   const [handle, setHandle] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [invite, setInvite] = useState('');
 
   // 表示エラー（フィールド別＋送信全体）
@@ -52,13 +51,11 @@ export function Auth(props: {
     e.preventDefault();
     setFormErr(null);
     const v = validateSignup({
-      display_name: displayName,
       handle,
       password,
       invite_code: invite,
     });
     setFieldErr({
-      display_name: v.display_name,
       handle: v.handle,
       password: v.password,
       invite_code: v.invite_code,
@@ -66,9 +63,11 @@ export function Auth(props: {
     if (!v.ok) return;
     setBusy(true);
     try {
+      const normHandle = handle.trim().toLowerCase();
       const r = await signUpWithInvite({
-        display_name: displayName.trim(),
-        handle: handle.trim().toLowerCase(),
+        // 表示名は廃止したのでサーバ規則（1〜40文字必須）は handle で満たす。
+        display_name: normHandle,
+        handle: normHandle,
         password,
         invite_code: invite.trim(),
       });
@@ -135,15 +134,6 @@ export function Auth(props: {
         </form>
       ) : (
         <form className="form" onSubmit={onSignup} noValidate>
-          <Field label="表示名" err={fieldErr.display_name}>
-            <input
-              className="inp"
-              type="text"
-              placeholder="クラブでの表示名"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-          </Field>
           <Field label="ユーザー名" err={fieldErr.handle}>
             <input
               className="inp"

@@ -17,8 +17,7 @@ export function UserPub(props: {
         <div className="userpub-head">
           <Avatar author={props.author} />
           <div className="col">
-            <b>{props.author.display_name}</b>
-            <i>@{props.author.handle}</i>
+            <b>@{props.author.handle}</b>
           </div>
         </div>
       )}

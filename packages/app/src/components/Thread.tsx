@@ -26,8 +26,7 @@ export function Thread(props: {
         <div className="col">
           <div className="meta">
             <button type="button" className="meta-author" onClick={() => props.onOpenAuthor(d.author)}>
-              <b>{d.author.display_name}</b>
-              <i>@{d.author.handle}</i>
+              <b>@{d.author.handle}</b>
             </button>
             <i>・{relTime(d.created_at)}</i>
           </div>
@@ -100,8 +99,7 @@ function CommentRow(props: {
       <div className="col">
         <div className="meta">
           <button type="button" className="meta-author" onClick={props.onOpenAuthor}>
-            <b>{c.author.display_name}</b>
-            <i>@{c.author.handle}</i>
+            <b>@{c.author.handle}</b>
           </button>
           <i>・{relTime(c.created_at)}</i>
           {c.updated_at && <i>（編集済み）</i>}

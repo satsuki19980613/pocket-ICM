@@ -55,17 +55,12 @@ describe('HANDLE_RE（サーバ規則ミラー）', () => {
 
 describe('validateSignup', () => {
   const base = {
-    display_name: 'さつき',
     handle: 'satsuki',
     password: 'password1',
     invite_code: 'POCKET-ABCD-EFGH',
   };
   it('全て妥当なら OK', () => {
     expect(validateSignup(base).ok).toBe(true);
-  });
-  it('表示名は1〜40文字', () => {
-    expect(validateSignup({ ...base, display_name: '' }).display_name).toBeTruthy();
-    expect(validateSignup({ ...base, display_name: 'あ'.repeat(41) }).display_name).toBeTruthy();
   });
   it('handle はサーバ規則で弾く（大文字→エラー）', () => {
     const r = validateSignup({ ...base, handle: 'Satsuki' });

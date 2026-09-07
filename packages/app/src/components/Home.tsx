@@ -76,8 +76,7 @@ function PostCard(props: {
       <div className="col">
         <div className="meta">
           <button type="button" className="meta-author" onClick={props.onOpenAuthor}>
-            <b>{p.author.display_name}</b>
-            <i>@{p.author.handle}</i>
+            <b>@{p.author.handle}</b>
           </button>
           <i>・{relTime(p.created_at)}</i>
         </div>

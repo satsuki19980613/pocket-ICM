@@ -27,21 +27,21 @@ export function validateLogin(input: { handle: string; password: string }): {
   return { handle, password, ok: !handle && !password };
 }
 
-/** サインアップの入力検証。サーバ規則に一致。 */
+/**
+ * サインアップの入力検証。サーバ規則に一致。
+ * 表示名は廃止し識別子は handle 一本化（表示名はサーバ側で handle と同値にする）ため、
+ * ここでは検証しない。
+ */
 export function validateSignup(input: {
-  display_name: string;
   handle: string;
   password: string;
   invite_code: string;
 }): {
-  display_name: string | null;
   handle: string | null;
   password: string | null;
   invite_code: string | null;
   ok: boolean;
 } {
-  const display_name = validateDisplayName(input.display_name);
-
   const h = input.handle.trim().toLowerCase();
   let handle: string | null = null;
   if (!h) handle = 'ユーザー名を入力してください';
@@ -52,10 +52,9 @@ export function validateSignup(input: {
   const invite_code = input.invite_code.trim() ? null : '招待キーを入力してください';
 
   return {
-    display_name,
     handle,
     password,
     invite_code,
-    ok: !display_name && !handle && !password && !invite_code,
+    ok: !handle && !password && !invite_code,
   };
 }

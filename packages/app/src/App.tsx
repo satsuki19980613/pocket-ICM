@@ -154,6 +154,9 @@ export function App(): JSX.Element {
   // OCR プリフィルの低信頼フィールド（"UTG.stack" 等）。確認画面で強調する。
   const [lowConf, setLowConf] = useState<string[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
+  // OCR で読み取った元画像（objectURL）。写真経由のときだけ保持し、確認/修正画面で
+  // 「元画像を確認」から原寸照合できるようにする。手入力・リセットで破棄。
+  const [ocrImageUrl, setOcrImageUrl] = useState<string | null>(null);
   // 計算中の待機文言のバリエーション。深い局面（25bb超の席あり）は厳密 MC、
   // 5〜6人は層化 MC の反復が厚いため、それぞれ通常より時間がかかる旨を出す。
   const [solvingNote, setSolvingNote] = useState<'deep' | 'many' | null>(null);
@@ -375,10 +378,19 @@ export function App(): JSX.Element {
     setScreen('confirm');
   }
 
+  /** OCR 元画像を差し替え（前のは revoke）。null で破棄。 */
+  function setOcrImage(url: string | null): void {
+    setOcrImageUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+  }
+
   /** スクショ添付 → OCR プリフィル → 条件確認。 */
   async function onScreenshot(file: File): Promise<void> {
     setOcrBusy(true);
     setErrFromPhoto(true);
+    setOcrImage(URL.createObjectURL(file));
     try {
       const res = await prefillFromScreenshot(file);
       if (!res.ok || !res.form) {
@@ -588,13 +600,21 @@ export function App(): JSX.Element {
       )}
 
       {screen === 'icm' && (
-        <IcmInput onScreenshot={onScreenshot} onManual={() => setManualOpen(true)} ocrBusy={ocrBusy} />
+        <IcmInput
+          onScreenshot={onScreenshot}
+          onManual={() => {
+            setOcrImage(null);
+            setManualOpen(true);
+          }}
+          ocrBusy={ocrBusy}
+        />
       )}
 
       {screen === 'confirm' && state && (
         <Confirm
           state={state}
           lowConfidenceFields={lowConf}
+          imageUrl={ocrImageUrl}
           onEdit={() => setManualOpen(true)}
           onSolve={solve}
         />
@@ -684,6 +704,7 @@ export function App(): JSX.Element {
           form={form}
           onFormChange={setForm}
           onSubmit={submitManual}
+          imageUrl={ocrImageUrl}
           onClose={() => setManualOpen(false)}
         />
       )}

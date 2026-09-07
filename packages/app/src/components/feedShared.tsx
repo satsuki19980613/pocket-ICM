@@ -16,9 +16,9 @@ export function relTime(iso: string, now: number = Date.now()): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-/** アバター（画像 URL があれば画像、無ければ表示名の頭文字）。 */
+/** アバター（画像 URL があれば画像、無ければ handle の頭文字）。 */
 export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX.Element {
-  const initial = props.author.display_name.trim().charAt(0) || '?';
+  const initial = props.author.handle.trim().charAt(0).toUpperCase() || '?';
   const inner = props.author.avatar_url ? (
     <img src={props.author.avatar_url} alt="" />
   ) : (
@@ -26,7 +26,7 @@ export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX
   );
   if (props.onClick) {
     return (
-      <button type="button" className="av av-btn" onClick={props.onClick} aria-label={`${props.author.display_name} の公開結果`}>
+      <button type="button" className="av av-btn" onClick={props.onClick} aria-label={`@${props.author.handle} の公開結果`}>
         {inner}
       </button>
     );

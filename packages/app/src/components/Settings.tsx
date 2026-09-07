@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   getMyProfile,
-  updateDisplayName,
   updateDefaultPublic,
   changePassword,
   type MyProfile,
 } from '../supabase/profile';
 import { signOut, deleteAccount } from '../supabase/api';
-import { validateDisplayName, validatePassword } from '../auth/validate';
+import { validatePassword } from '../auth/validate';
 
 /**
  * 設定画面（M7・モック s-profile 準拠）。表示名／パスワード変更・公開既定トグル・
@@ -32,12 +31,6 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
     };
   }, []);
 
-  // 表示名編集
-  const [editName, setEditName] = useState(false);
-  const [nameVal, setNameVal] = useState('');
-  const [nameErr, setNameErr] = useState<string | null>(null);
-  const [nameBusy, setNameBusy] = useState(false);
-
   // パスワード変更
   const [editPw, setEditPw] = useState(false);
   const [pw1, setPw1] = useState('');
@@ -53,30 +46,6 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
-
-  function startEditName(): void {
-    setNameVal(profile?.display_name ?? '');
-    setNameErr(null);
-    setEditName(true);
-  }
-
-  async function saveName(): Promise<void> {
-    const err = validateDisplayName(nameVal);
-    setNameErr(err);
-    if (err) return;
-    setNameBusy(true);
-    try {
-      const r = await updateDisplayName(nameVal);
-      if (!r.ok) {
-        setNameErr(r.message);
-        return;
-      }
-      setProfile((p) => (p ? { ...p, display_name: r.data.display_name } : p));
-      setEditName(false);
-    } finally {
-      setNameBusy(false);
-    }
-  }
 
   async function savePassword(): Promise<void> {
     setPwDone(false);
@@ -140,7 +109,7 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
     }
   }
 
-  const initial = (profile?.display_name ?? '·').trim().charAt(0) || '·';
+  const initial = (profile?.handle ?? '·').trim().charAt(0).toUpperCase() || '·';
 
   return (
     <div className="settings">
@@ -153,40 +122,7 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
 
       <div className="pad">
         <div className="readout">
-          {/* 表示名 */}
-          <div className="row">
-            <span className="lb">表示名</span>
-            {editName ? (
-              <span className="vl edit-inline">
-                <input
-                  className="inp"
-                  type="text"
-                  value={nameVal}
-                  maxLength={40}
-                  autoFocus
-                  onChange={(e) => setNameVal(e.target.value)}
-                />
-                {nameErr && <em className="afield-err">{nameErr}</em>}
-                <span className="edit-actions">
-                  <button type="button" className="edit" disabled={nameBusy} onClick={() => void saveName()}>
-                    {nameBusy ? '保存中…' : '保存'}
-                  </button>
-                  <button type="button" className="edit dim" onClick={() => setEditName(false)}>
-                    取消
-                  </button>
-                </span>
-              </span>
-            ) : (
-              <>
-                <span className="vl">{profile?.display_name ?? '—'}</span>
-                <button type="button" className="edit" disabled={!profile} onClick={startEditName}>
-                  変更
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* ユーザー名（変更は準備中＝Edge Function 要） */}
+          {/* ユーザー名（＝識別子。変更は準備中＝Edge Function 要） */}
           <div className="row">
             <span className="lb">ユーザー名</span>
             <span className="vl">@{profile?.handle ?? '—'}</span>

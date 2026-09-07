@@ -1245,6 +1245,34 @@ button.cell { cursor: pointer; }
 .modal-body { overflow-y: auto; padding: var(--s4); }
 .modal-body .grp:first-child { margin-top: 0; }
 
+/* 「元画像を確認」ボタン（確認画面ヘッダ / 手入力モーダルヘッダ） */
+.confirm-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s3); }
+.confirm-head .scr-h { margin: 0; }
+.btn.line.img-check { width: auto; margin: 0; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.btn.line.img-check.sm { padding: 5px 10px; font-size: 11.5px; }
+.modal-head .modal-title { margin-right: auto; }
+.modal-head .img-check { flex: none; margin-right: 8px; }
+
+/* 元画像モーダル（読取値の照合・タップで原寸/全体） */
+.imgmodal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(3, 4, 2, 0.9);
+  display: flex; align-items: center; justify-content: center; padding: 12px;
+}
+.imgmodal {
+  width: 100%; max-width: 760px; max-height: 92dvh;
+  display: flex; flex-direction: column;
+  background: var(--bg); border: 1px solid var(--line-2);
+}
+.imgmodal-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px var(--s4); border-bottom: 1px solid var(--line);
+}
+.imgmodal-title { font-family: var(--mono); font-size: 12px; letter-spacing: 0.03em; color: var(--dim); }
+.imgmodal-body { overflow: auto; -webkit-overflow-scrolling: touch; background: #000; }
+.imgmodal-body img { display: block; width: 100%; height: auto; cursor: zoom-in; }
+.imgmodal-body.zoom img { width: auto; max-width: none; cursor: zoom-out; }
+
 /* ==== M4: Action tree（全ポジ常時表示・行内トグル）＋連動レンジ ==== */
 .tree { display: flex; flex-direction: column; gap: 6px; }
 .arow {
@@ -1260,6 +1288,16 @@ button.cell { cursor: pointer; }
 .arow[data-active="true"] { border-color: var(--yellow); background: rgba(252, 238, 10, 0.06); }
 /* ウォーク（no decision）= 減光ロック */
 .arow[data-locked="true"] { opacity: 0.4; }
+/* 各席のスタック（ポジションバッジと選択肢の間・赤枠位置） */
+.arow-stack {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+  letter-spacing: 0.02em;
+  min-width: 54px;
+}
+.arow[data-active="true"] .arow-stack { color: var(--fg); }
 .arow .segs { display: flex; gap: 4px; flex: 1; justify-content: flex-end; }
 .seg {
   font-family: var(--disp);
@@ -1625,7 +1663,7 @@ button.cell { cursor: pointer; }
 .cmt .col { flex: 1; min-width: 0; }
 .cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; }
 .cmt-img { display: block; margin-top: 8px; max-width: 240px; }
-.cmt-img img { border: 1px solid var(--line); display: block; }
+.cmt-img img { border: 1px solid var(--line); display: block; max-width: 100%; height: auto; }
 .cmt-own-acts { display: flex; gap: 16px; margin-top: 8px; }
 .cmt-own-acts button {
   border: 0; background: none; padding: 0; cursor: pointer;

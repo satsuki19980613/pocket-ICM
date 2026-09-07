@@ -94,7 +94,7 @@ export function Result(props: {
 
       <div className="panel">
         <h2 className="scr-h">Action tree</h2>
-        <ActionTree result={result} />
+        <ActionTree result={result} stacks={Object.fromEntries(state.seats.map((s) => [s.pos, s.stack]))} />
       </div>
 
       {/* ---- 記録（自分の実行動を選んで保存） ---- */}

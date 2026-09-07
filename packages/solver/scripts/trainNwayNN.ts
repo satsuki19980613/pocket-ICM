@@ -6,8 +6,10 @@
  *
  * 出力: artifacts/nn{N}way.model.{meta.json,bin}
  *   bin = [標準化 f32 セクション][重み f16 セクション]（norm は精度維持で f32, 重みは容量半減で f16）
- * 実行: node --import tsx scripts/trainNwayNN.ts <players> [epochs] [hiddenCsv] [lr] [batch]
- *   例: trainNwayNN.ts 5 400 256,256 0.01 64
+ * 実行: node --import tsx scripts/trainNwayNN.ts <players> [epochs] [hiddenCsv] [lr] [batch] [weightDecay]
+ *   例: trainNwayNN.ts 5 400 256,256 0.01 64 0
+ *   ※ 3125点の粗い格子（軸5点）に対し大容量MLP＋正則化ゼロは過学習する（val 発散）。
+ *      小型ネット（例 64,64）＋ weightDecay（例 5e-4）＋控えめ epochs で汎化させる。
  */
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +35,7 @@ async function main(): Promise<void> {
   const hidden = (process.argv[4] ?? '256,256').split(',').map(Number);
   const lr = Number(process.argv[5] ?? 0.01);
   const batch = Number(process.argv[6] ?? 64);
+  const weightDecay = Number(process.argv[7] ?? 0);
   const TAG = `nn${N}way`;
 
   const trainMetaPath = join(OUT_DIR, `${TAG}.train.meta.json`);
@@ -57,13 +60,13 @@ async function main(): Promise<void> {
     for (let i = 0; i < inDim; i++) X[r * inDim + i] = flat[b + i]!;
     for (let o = 0; o < outDim; o++) Y[r * outDim + o] = flat[b + inDim + o]!;
   }
-  log(`# ${N}人 NN 学習: rows=${useRows}, inDim=${inDim}, outDim=${outDim}, hidden=[${hidden}], epochs=${epochs}, lr=${lr}, batch=${batch}`);
+  log(`# ${N}人 NN 学習: rows=${useRows}, inDim=${inDim}, outDim=${outDim}, hidden=[${hidden}], epochs=${epochs}, lr=${lr}, batch=${batch}, weightDecay=${weightDecay}`);
 
   const t0 = Date.now();
   const model: MlpModel = trainMlp(X, Y, useRows, inDim, outDim, {
-    hidden, epochs, batchSize: batch, lr, seed: 1234, valFraction: 0.1,
+    hidden, epochs, batchSize: batch, lr, weightDecay, seed: 1234, valFraction: 0.1,
     onEpoch: (e, tl, vl) => {
-      if (e === 1 || e % 25 === 0 || e === epochs) {
+      if (e === 1 || e % 10 === 0 || e === epochs) {
         log(`  epoch ${e}/${epochs}  train=${tl.toExponential(3)}  val=${vl !== undefined ? vl.toExponential(3) : 'n/a'}`);
       }
     },

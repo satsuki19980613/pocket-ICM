@@ -435,10 +435,11 @@ export function App(): JSX.Element {
     }
     setResultOrigin({ kind: 'solve' }); // 新規求解は保存可
     // 25bb超の席があるとテーブルを使えず厳密 MC＝時間がかかる（HRC一致優先）。
-    // 5〜6人は事前計算テーブルがなく層化 MC の反復も厚いため、同様に時間がかかる旨を出す。
+    // 6人は事前計算テーブルがなく層化 MC の反復も厚いため、同様に時間がかかる旨を出す。
+    // （5人は蒸留 NN で即時解＝標準構成なら待ち文言は不要。深いスタックは上の 'deep' で拾う。）
     if (state.seats.some((s) => s.stack + s.bet > 25)) {
       setSolvingNote('deep');
-    } else if (state.playersLeft >= 5) {
+    } else if (state.playersLeft === 6) {
       setSolvingNote('many');
     } else {
       setSolvingNote(null);
@@ -630,7 +631,7 @@ export function App(): JSX.Element {
             </>
           ) : solvingNote === 'many' ? (
             <>
-              <p>正確に計算中…（5〜6人のため。初回は約21MBの表を取得します）</p>
+              <p>正確に計算中…（6人のため。初回は約21MBの表を取得します）</p>
               <p className="sub">同時オールインの組み合わせが多いので、数秒〜十数秒かかることがあります。</p>
             </>
           ) : (

@@ -73,3 +73,9 @@ OCR セッションへ。同じ作業ディレクトリで並行作業します�
 
 **仕様の所在**: `docs/SPEC.md §5.2`（追記済み）。OCR 実装詳細を `docs/OCR_PHASE2.md` に足すのはあなたの判断でどうぞ。
 完了したら `from-ocr.md` に一言ください。凍結interfaceは変わらないので握手は不要、これは通常の機能追加依頼です。
+
+---
+
+## [2026-09-07 連絡] MAIN が NN/solver トラックも担当します（`packages/solver/**` を編集）
+
+さつき指示で、MAIN が **NN 蒸留の学習→検証→アプリ配線**（5人）を進めます。編集範囲は `packages/solver/**`（第3トラック）と app の求解経路（`App.tsx` / 求解 worker＝MAIN 所有）。**あなたの所有（`packages/ocr/**`・`app/src/ocr/**`・`ocrPrefill.ts`）とは重なりません**ので影響はありません。念のため共有まで。`packages/solver/artifacts/` に `nn5way.model.*` を生成します。

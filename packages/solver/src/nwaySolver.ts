@@ -380,8 +380,16 @@ function buildEngine(
   // --- ショーダウン集合 A（|A|≥2）の MC 見積りを保持 ---
   // pcEqA[A].get(seat) = 参加者 seat のクラス別 all-in equity（169, hero=full 条件）
   // smA[A][seat] = 全席の周辺 ICM equity（到達レンジで平均）
+  // 求解中は同時オールイン ≤ maxActive の集合だけを見積もる。最終パス（full）では上限超えの
+  // 集合も 1 回だけ見積もり、打ち切りノード（4 人目以降の OC）の最適反応を表示用に評価する
+  // （到達確率 0 なので他ノードには影響しない。「どんな状況でも AA は残る」を表示で保証）。
   const showdownSets: number[] = [];
-  for (let A = 1; A < 1 << n; A++) if (popcount(A) >= 2 && popcount(A) <= maxActive) showdownSets.push(A);
+  const allSets: number[] = [];
+  for (let A = 1; A < 1 << n; A++) {
+    if (popcount(A) < 2) continue;
+    allSets.push(A);
+    if (popcount(A) <= maxActive) showdownSets.push(A);
+  }
   // 層化 MC: 集合 A ごとの overcaller 候補数（適応 K）と、直近 refresh で渡した候補列。
   const kA = new Map<number, number>();
   const candA = new Map<number, Map<number, Int16Array>>();
@@ -431,7 +439,7 @@ function buildEngine(
     return pool;
   };
 
-  const refresh = async (strat: Map<number, F64>, epoch: number): Promise<void> => {
+  const refresh = async (strat: Map<number, F64>, epoch: number, full = false): Promise<void> => {
     const store = (A: number, participants: number[], res: ShowdownMcResult): void => {
       const m = new Map<number, F64>();
       for (let p = 0; p < participants.length; p++) m.set(participants[p]!, res.pcEq[p]!);
@@ -448,7 +456,7 @@ function buildEngine(
       A: number; node: ShowdownNode; participants: number[]; ranges: F64[]; jobSeed: number; samples: number;
       strat?: StratSpec;
     }[] = [];
-    for (const A of showdownSets) {
+    for (const A of full ? allSets : showdownSets) {
       const { node, participants } = makeShowdownNode(A);
       const ranges = arrivalRanges(A, participants, strat);
       if (winTie && participants.length === 2) {
@@ -618,7 +626,7 @@ interface EVBundle {
 }
 
 /** 現在戦略から全ノードの EV / 到達確率 / 終局分布を計算する。 */
-function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean): EVBundle {
+function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean, full = false): EVBundle {
   const aggrProb = new Map<number, number>();
   for (const nd of eng.nodes) aggrProb.set(nd.id, nd.truncated ? 0 : rangeFraction(strat.get(nd.id)!));
 
@@ -649,8 +657,8 @@ function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean):
   const foldEV = new Map<number, number>();
   for (const nd of eng.nodes) {
     const { i, S } = nd;
-    if (popcount(S) > eng.maxActive) {
-      // 上限超えの前方集合＝到達不能（上流で打ち切り済み）。評価しない。
+    if (!full && popcount(S) > eng.maxActive) {
+      // 上限超えの前方集合＝到達不能（上流で打ち切り済み）。求解中は評価しない。
       foldEV.set(nd.id, 0);
       aggrEV.set(nd.id, new Float64Array(N_CLASSES));
       continue;
@@ -664,8 +672,9 @@ function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean):
 
     // アグレッシブ EV（クラス別）
     const aev = new Float64Array(N_CLASSES);
-    if (nd.truncated) {
-      // 同時オールイン上限: 決定なし（強制フォールド）。EV差 0 で表示し、FP 更新は行わない。
+    if (nd.truncated && !full) {
+      // 同時オールイン上限: 求解中は決定なし（強制フォールド）。最終パス（full）でのみ
+      // 上限超えの集合を使って最適反応を評価する（表示用）。
       aev.fill(fev);
       aggrEV.set(nd.id, aev);
       continue;
@@ -676,7 +685,7 @@ function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean):
       const heroAggrDfs = (j: number, G: number, out: F64, depth: number): void => {
         if (j === eng.n) {
           if (popcount(G) === 1) out.fill(eng.V_win[i]![i]!); // A={i}: 不戦勝
-          else if (popcount(G) > eng.maxActive) out.fill(0); // 上限超え（重み 0 の枝）
+          else if (!full && popcount(G) > eng.maxActive) out.fill(0); // 上限超え（重み 0 の枝）
           else out.set(eng.getPcEq(G, i)); // ショーダウン: クラス別 all-in equity
           return;
         }
@@ -793,12 +802,10 @@ function buildResult(
     const fev = finalEv.foldEV.get(nd.id)!;
     // 表示レンジ（支配関係で単調化して市松穴を除去, EV中立）。既定は FP 平均頻度 ≥ 0.5
     // （displayMode 'avg'）。'evSign' / 'lateAvg' は実験用（MultiwayNSolveOptions.displayMode 参照）。
-    // 打ち切りノード（同時オールイン上限）は決定なし＝全て降り。
+    // 打ち切りノード（同時オールイン上限, 4 人目以降の OC）は最終パスの最適反応（EV 符号）。
     let pushBool: boolean[];
     const late = lateAvg?.get(nd.id);
-    if (nd.truncated) {
-      pushBool = new Array<boolean>(N_CLASSES).fill(false);
-    } else if (displayMode === 'evSign') {
+    if (nd.truncated || displayMode === 'evSign') {
       const evDiff = new Float64Array(N_CLASSES);
       for (let c = 0; c < N_CLASSES; c++) evDiff[c] = aev[c]! - fev;
       pushBool = monotonizePush({ classOrder: HAND_CLASS_ORDER, values: evDiff, combos: COMBO_COUNT, threshold: 0 });
@@ -926,8 +933,16 @@ export async function solveMultiway(
 
     // 最終見積りで EV / exploitability / EQPost を確定。
     // CRN 時は学習に使った固定シードと別の独立シードで引き直し、サンプルへの過適合を避ける。
-    await eng.refresh(strat, commonRandom ? 1 : 0x7fffffff);
-    const finalEv = computeEVs(eng, strat, cardRemoval);
+    await eng.refresh(strat, commonRandom ? 1 : 0x7fffffff, true);
+    const finalEv = computeEVs(eng, strat, cardRemoval, true);
+    // 打ち切りノード（4 人目以降の OC）は最終パスの最適反応を戦略として確定（表示・ウォーム用）。
+    for (const nd of eng.nodes) {
+      if (!nd.truncated) continue;
+      const aev = finalEv.aggrEV.get(nd.id)!;
+      const fev = finalEv.foldEV.get(nd.id)!;
+      const arr = strat.get(nd.id)!;
+      for (let c = 0; c < N_CLASSES; c++) arr[c] = aev[c]! >= fev ? 1 : 0;
+    }
     exploitabilityPt = exploitability(eng, strat, finalEv);
     converged = exploitabilityPt <= targetExpl;
 
@@ -976,8 +991,8 @@ export async function evaluateMultiwayStrategy(
       if (arr.length !== N_CLASSES) throw new Error(`produce(${nd.key}) must return length ${N_CLASSES}`);
       strat.set(nd.id, arr);
     }
-    await eng.refresh(strat, 0x7fffffff);
-    const ev = computeEVs(eng, strat, cardRemoval);
+    await eng.refresh(strat, 0x7fffffff, true);
+    const ev = computeEVs(eng, strat, cardRemoval, true);
     const exploitabilityPt = exploitability(eng, strat, ev);
     const eqPre = icmEquities(eng.T, eng.payouts);
     const post = eqPost(eng, ev);

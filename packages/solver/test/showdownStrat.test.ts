@@ -170,15 +170,18 @@ describe('solveMultiway — maxActive（同時オールイン上限）opt-in', (
   }
 
   it(
-    '既定 maxActive=3: 前方3人以上オールインのノードは pct=0 / hands=[]（ICM 保存も確認）',
+    '既定 maxActive=3: 前方3人以上オールインのノード（打ち切り）は最終パスの最適反応＝AA を含む狭いレンジ（ICM 保存も確認）',
     async () => {
       const res = await solveMultiway(state, BASE);
       let sawTruncated = false;
       for (const nd of res.nodes) {
         if (aggrBefore(order, nd.key, nd.actor) >= 3) {
           sawTruncated = true;
-          expect(nd.pct).toBe(0);
-          expect(nd.hands.length).toBe(0);
+          // 求解中は決定なし（到達確率 0）だが、表示は最終パスで評価した最適反応。
+          // 「どんな状況でも AA は残る」（さつき指摘 2026-09-07）。4 人目のコールなので狭い。
+          expect(nd.hands).toContain('AA');
+          expect(nd.pct).toBeGreaterThan(0);
+          expect(nd.pct).toBeLessThan(15);
         }
       }
       expect(sawTruncated).toBe(true);

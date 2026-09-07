@@ -104,6 +104,34 @@ export function classEquityCanonical(heroClass: string, villainClass: string): n
   return sum / totalValid;
 }
 
+/**
+ * クラス vs クラスの厳密な「勝ち率・引き分け率」（hero 視点）。suit 正規化で削減。
+ *
+ * `classEquityCanonical` は equity=(win+tie/2) の1値しか返さないが、ICM では
+ * 「勝ち／引き分け（スプリット）／負け」で**最終スタックが別物**になるため、
+ * 3通りを分離する必要がある（引き分けは両者にほぼ返金＝ICM は凹なので価値が異なる）。
+ * 盤面全列挙は `exactEquityVsHands` が既に win/tie/lose を数えているので追加コストは無い。
+ *
+ * @returns win/tie は確率（0..1）。lose = 1 - win - tie。
+ *          validCombos = hero の代表コンボと衝突しない villain コンボ数（カードリムーバル重み）。
+ */
+export function classWinTieCanonical(
+  heroClass: string,
+  villainClass: string,
+): { win: number; tie: number; validCombos: number } {
+  const hero = canonicalHeroCombo(heroClass);
+  const { groups, totalValid } = villainGroups(hero, villainClass);
+  if (totalValid === 0) return { win: NaN, tie: NaN, validCombos: 0 };
+  let w = 0;
+  let t = 0;
+  for (const g of groups) {
+    const r = exactEquityVsHands(hero, g.rep);
+    w += (r.win / r.total) * g.weight;
+    t += (r.tie / r.total) * g.weight;
+  }
+  return { win: w / totalValid, tie: t / totalValid, validCombos: totalValid };
+}
+
 export interface HuTableProgress {
   (done: number, total: number, label: string): void;
 }

@@ -42,6 +42,7 @@ import {
 import { icmEquities, payoutsForPlayers } from './icm.js';
 import { finalStacksFromShowdown } from './sidepot.js';
 import { HAND_CLASS_ORDER } from './huEquity.js';
+import { monotonizePush } from './monotonize.js';
 import { estimateNodeEquities, type ShowdownNode } from './showdownMc.js';
 import { DeterministicRng } from './placement.js';
 import { MC_SEED, NODE_MC_SAMPLES } from './mcConfig.js';
@@ -368,16 +369,19 @@ export function solveThreeWay(state: BoardState, opts: MultiwaySolveOptions = {}
     strat: F64,
     nodeEv: NodeEV,
   ): SolutionNode => {
+    // 表示レンジは FP 平均頻度を支配関係で単調化して 0.5 で線引き（市松穴を除去, EV中立）。
+    const pushBool = monotonizePush({ classOrder: HAND_CLASS_ORDER, values: strat, combos: COMBO_COUNT, threshold: 0.5 });
     const freq: Record<string, number> = {};
     const ev: Record<string, number> = {};
     const hands: string[] = [];
     let weighted = 0;
     for (let i = 0; i < N; i++) {
       const label = HAND_CLASS_ORDER[i]!;
-      freq[label] = strat[i]!;
+      const push = pushBool[i]! ? 1 : 0;
+      freq[label] = push;
       ev[label] = nodeEv.aggr[i]! - nodeEv.fold[i]!;
-      if (strat[i]! >= 0.5) hands.push(label);
-      weighted += COMBO_COUNT[i]! * strat[i]!;
+      if (push) hands.push(label);
+      weighted += COMBO_COUNT[i]! * push;
     }
     return {
       key: normalizeKey(3, actions),

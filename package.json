@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --pretty && tsc -p packages/solver/tsconfig.scripts.json",
-    "gen:hu-equity": "tsx packages/solver/scripts/genHuEquityTable.ts"
+    "gen:hu-equity": "tsx packages/solver/scripts/genHuEquityTable.ts",
+    "gen:hu-wintie": "tsx packages/solver/scripts/genHuWinTieTable.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

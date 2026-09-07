@@ -12,6 +12,7 @@
 import type { BoardState, Position, SolutionNode } from '@oshihiki/core';
 import { formatRange } from '@oshihiki/core';
 import { icmEquities } from './icm.js';
+import { monotonizePush } from './monotonize.js';
 import type { MultiwayNSolveResult } from './nwaySolver.js';
 
 const TOTAL_COMBOS = 1326;
@@ -78,6 +79,8 @@ export function assemblePfResult(input: PfResultInput): MultiwayNSolveResult {
   const nodes: SolutionNode[] = [];
   for (let n = 0; n < nNodes; n++) {
     const evDiff = evDiffByNode[n]!;
+    // ゼロ交差 → 純戦略。ただし支配関係で単調化してから線引き（MCノイズの市松穴を除去, EV中立）。
+    const pushBool = monotonizePush({ classOrder, values: evDiff, combos, threshold: 0 });
     const freqArr = new Float64Array(NC);
     const freq: Record<string, number> = {};
     const ev: Record<string, number> = {};
@@ -85,7 +88,7 @@ export function assemblePfResult(input: PfResultInput): MultiwayNSolveResult {
     let weighted = 0;
     for (let c = 0; c < NC; c++) {
       const label = classOrder[c]!;
-      const push = evDiff[c]! >= 0 ? 1 : 0; // ゼロ交差 → 純戦略
+      const push = pushBool[c]! ? 1 : 0;
       freqArr[c] = push;
       freq[label] = push;
       ev[label] = evDiff[c]!;

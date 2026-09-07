@@ -60,7 +60,8 @@ describe('lookupNn', () => {
 
   // 重み 0・バイアスに出力値を直書きした線形1層（前進 = バイアス）。標準化は恒等。
   // 出力並び: [node0 evDiff(3)][node1 evDiff(3)][eqPost(3)]
-  const outVals = [1, -1, 1, /*node1*/ -1, 1, -1, /*eqPost*/ 2.0, 3.0, 1.5];
+  // evDiff は支配関係（AA≽KK≽QQ）に整合＝単調にしておく（monotonizePush は素通り）。
+  const outVals = [1, 1, -1, /*node1*/ 1, -1, -1, /*eqPost*/ 2.0, 3.0, 1.5];
   const model: MlpModel = {
     layers: [{ inDim, outDim, weight: new Float32Array(outDim * inDim), bias: Float32Array.from(outVals), activation: 'linear' }],
     inputNorm: { mean: new Float32Array(inDim), std: Float32Array.from([1, 1, 1]) },
@@ -100,12 +101,12 @@ describe('lookupNn', () => {
   it('ゼロ交差で純戦略レンジ化し eqPost を order にマップする', () => {
     const res = lookupNn(table, stateOf([15, 12, 10]));
     expect(res.nodes).toHaveLength(2);
-    // node0 evDiff=[+,-,+] → AA,QQ をプッシュ
-    expect(new Set(res.nodes[0]!.hands)).toEqual(new Set(['AA', 'QQ']));
+    // node0 evDiff=[+,+,-] → AA,KK をプッシュ
+    expect(new Set(res.nodes[0]!.hands)).toEqual(new Set(['AA', 'KK']));
     expect(res.nodes[0]!.freq['AA']).toBe(1);
-    expect(res.nodes[0]!.freq['KK']).toBe(0);
-    // node1 evDiff=[-,+,-] → KK のみ
-    expect(res.nodes[1]!.hands).toEqual(['KK']);
+    expect(res.nodes[0]!.freq['QQ']).toBe(0);
+    // node1 evDiff=[+,-,-] → AA のみ
+    expect(res.nodes[1]!.hands).toEqual(['AA']);
     // eqPost が order 順にマップされる
     expect(res.equity[order[0]!]!.post).toBeCloseTo(2.0, 2);
     expect(res.equity[order[1]!]!.post).toBeCloseTo(3.0, 2);

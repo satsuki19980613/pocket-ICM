@@ -21,6 +21,7 @@ import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HAND_CLASS_ORDER } from '../src/huEquity.js';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
+import { loadHuWinTieTable } from '../src/huWinTieLoader.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -70,8 +71,13 @@ async function main(): Promise<void> {
   if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
   const workers = maxWorkerCap();
   const S = Number(process.argv[3] ?? 40_000);
+  // 教師は「2人厳密（winTie）＋3人以上は層化 MC＋同時オールイン最大3人」の新エンジンで、
+  // 早期停止なしの 8000 反復（1点 約1.6s/16並列）。旧設定（800反復・plateau 停止）は収束不足の
+  // 点が混ざることを実測（同一局面で BU 23%↔54%）したため廃止。docs/BATON_OC.md §10。
+  const GOLD_ITERS = 8000;
   const gold: MultiwayNSolveOptions = {
-    samples: S, maxIters: 800, refreshEvery: 60, workers, commonRandom: true, plateauStopFrac: 0.02,
+    samples: S, maxIters: GOLD_ITERS, refreshEvery: 100, workers, commonRandom: true,
+    targetExploitabilityPt: 0, winTie: loadHuWinTieTable(),
   };
   const total = G ** D;
   log(`# ${N}人 NN 学習データ生成: 各軸 ${AXIS.join('/')}bb (${G}点/軸, ${total}点), samples=${S}, workers=${workers}`);
@@ -125,6 +131,7 @@ async function main(): Promise<void> {
     nodeKeys, nodeActors, nodeTypes, classOrder: HAND_CLASS_ORDER,
     inDim: D, outDim, rowStride, floatsPerNode: FLOATS_PER_NODE,
     rows: total, samples: S,
+    solver: { maxIters: GOLD_ITERS, earlyStop: false, winTie: true, stratifiedMc: true, maxActive: 3, commonRandom: true },
     layout: '[rows] each: [D input stacks(bb)][nNodes*169 evDiff][D eqPost(order)]',
   });
 

@@ -6,7 +6,7 @@ export const READ_CONDITIONS: { title: string; hint: string }[] = [
   { title: '自分の手番が回ってきた状態', hint: 'アクション前・後の画面は状況が確定しません' },
   { title: '全画面のまま', hint: '切り抜くとスタックやポジションが読めません' },
   { title: 'BB表示', hint: 'チップ総額表示でも動きますが、BB表示が確実です' },
-  { title: '4人までの局面', hint: '5〜6人はただいま準備中です' },
+  { title: '6人までの局面', hint: '2〜6人のプリフロップに対応しています' },
 ];
 
 /**

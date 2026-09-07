@@ -14,7 +14,7 @@ interface Req {
 self.onmessage = (e: MessageEvent<Req>): void => {
   const { job } = e.data;
   try {
-    const res: ShowdownMcResult = computeShowdownMc(job.node, job.ranges, job.samples, job.seed);
+    const res: ShowdownMcResult = computeShowdownMc(job.node, job.ranges, job.samples, job.seed, job.strat);
     self.postMessage({ ok: true, res });
   } catch (err) {
     self.postMessage({ ok: false, error: err instanceof Error ? err.message : String(err) });

@@ -105,15 +105,19 @@ function tabForScreen(s: Screen): TabKey | null {
 
 /**
  * 現状サポートする最大人数。HU/3人/4人は事前計算テーブルで即時・決定的に解ける。
- * 5〜6人は遅い MC＋NN 未統合のため一旦対象外（M8/M9 で開放）。
+ * 5〜6人も直接求解で対応（数秒〜十数秒）。
  */
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 6;
 
-const OVER_SCOPE_MSG = `現在は${MAX_PLAYERS}人までの局面に対応しています（5〜6人は準備中）。`;
+/** 手入力フォームの既定人数（さつき決定：既定は4人のまま据え置き。アンティ all 0.25 標準）。 */
+const DEFAULT_PLAYERS = 4;
+
+const OVER_SCOPE_MSG = `現在は${MAX_PLAYERS}人までの局面に対応しています。`;
 
 /**
  * 人数に応じた求解パラメータ。ショーダウン MC は Web Worker 並列（mcPool）なので
- * 反復・サンプルを厚めに取れる。exploitability がしきい値に達すれば早期終了する。
+ * 反復・サンプルを厚めに取れる。3人以上の同時オールインは層化 MC のため反復を厚く
+ * 取れる（exploitability がしきい値に達すれば早期終了する）。
  */
 function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
   switch (n) {
@@ -124,9 +128,9 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
     case 4:
       return { maxIters: 600, samples: 40_000 };
     case 5:
-      return { maxIters: 600, samples: 32_000 };
+      return { maxIters: 4000, samples: 32_000 };
     default:
-      return { maxIters: 500, samples: 24_000 };
+      return { maxIters: 3000, samples: 24_000 };
   }
 }
 
@@ -138,7 +142,7 @@ export function App(): JSX.Element {
   const [manualOpen, setManualOpen] = useState(false);
   // エラーが写真経路由来か（「別の写真を選ぶ」を出すか）。
   const [errFromPhoto, setErrFromPhoto] = useState(false);
-  const [form, setForm] = useState<BoardForm>(() => defaultForm(MAX_PLAYERS));
+  const [form, setForm] = useState<BoardForm>(() => defaultForm(DEFAULT_PLAYERS));
   const [state, setState] = useState<BoardState | null>(null);
   const [result, setResult] = useState<SolveResultDto | null>(null);
   const [ms, setMs] = useState(0);
@@ -146,8 +150,9 @@ export function App(): JSX.Element {
   // OCR プリフィルの低信頼フィールド（"UTG.stack" 等）。確認画面で強調する。
   const [lowConf, setLowConf] = useState<string[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
-  // 深い局面（25bb超の席あり）は厳密 MC で解くため時間がかかる → 計算中の文言を変える。
-  const [solvingDeep, setSolvingDeep] = useState(false);
+  // 計算中の待機文言のバリエーション。深い局面（25bb超の席あり）は厳密 MC、
+  // 5〜6人は層化 MC の反復が厚いため、それぞれ通常より時間がかかる旨を出す。
+  const [solvingNote, setSolvingNote] = useState<'deep' | 'many' | null>(null);
   // 記録（履歴）: IndexedDB から読み込み。
   const [records, setRecords] = useState<SpotRecord[]>([]);
   // 結果画面の由来（保存可否・戻り先を決める）。
@@ -405,7 +410,7 @@ export function App(): JSX.Element {
 
   async function solve(): Promise<void> {
     if (!state) return;
-    // 念のための防御（入口で弾いているが、5〜6人が届いても遅い MC を走らせない）。
+    // 念のための防御（入口で弾いているが、7人以上が届いても求解しない）。
     if (state.playersLeft > MAX_PLAYERS) {
       setErrFromPhoto(false);
       setIssues([OVER_SCOPE_MSG]);
@@ -414,7 +419,14 @@ export function App(): JSX.Element {
     }
     setResultOrigin({ kind: 'solve' }); // 新規求解は保存可
     // 25bb超の席があるとテーブルを使えず厳密 MC＝時間がかかる（HRC一致優先）。
-    setSolvingDeep(state.seats.some((s) => s.stack + s.bet > 25));
+    // 5〜6人は事前計算テーブルがなく層化 MC の反復も厚いため、同様に時間がかかる旨を出す。
+    if (state.seats.some((s) => s.stack + s.bet > 25)) {
+      setSolvingNote('deep');
+    } else if (state.playersLeft >= 5) {
+      setSolvingNote('many');
+    } else {
+      setSolvingNote(null);
+    }
     setScreen('solving');
     try {
       const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
@@ -587,10 +599,15 @@ export function App(): JSX.Element {
       {screen === 'solving' && (
         <div className="panel solving">
           <div className="spinner" />
-          {solvingDeep ? (
+          {solvingNote === 'deep' ? (
             <>
               <p>正確に計算中…（深いスタックのため）</p>
               <p className="sub">25bb超の席があるので、丸めず厳密に解いています（数十秒かかることがあります）。</p>
+            </>
+          ) : solvingNote === 'many' ? (
+            <>
+              <p>正確に計算中…（5〜6人のため）</p>
+              <p className="sub">同時オールインの組み合わせが多いので、数秒〜十数秒かかることがあります。</p>
             </>
           ) : (
             <>
@@ -640,13 +657,7 @@ export function App(): JSX.Element {
       {screen === 'drill' && (
         <ComingSoon
           title="Training"
-          body={
-            <>
-              ランダム出題でオールイン判断を鍛えるモードを準備中です。
-              <br />
-              5〜6人の即時求解ができ次第、公開します。
-            </>
-          }
+          body="ランダム出題でオールイン判断を鍛えるモードを準備中です。"
         />
       )}
 

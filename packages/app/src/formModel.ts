@@ -30,7 +30,8 @@ export interface BoardForm {
 /**
  * 指定人数の既定フォーム（等スタック 15bb, blinds 0.5/1, **全員アンティ 0.25**）。
  * アンティ all 0.25 はこのゲームの標準であり、事前計算テーブル（HU/3人/4人）と同条件。
- * これにより既定のまま計算すると 4 人まで即時・決定的に解ける（範囲外の遅い MC を避ける）。
+ * 呼び出し側（App.tsx）の既定人数は 4 人のまま据え置く（さつき決定）。5〜6 人は
+ * 手入力で人数を切り替えれば直接求解の対象になる。
  */
 export function defaultForm(playersLeft = 4): BoardForm {
   const positions = positionsForPlayersLeft(playersLeft);

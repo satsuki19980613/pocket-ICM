@@ -8,12 +8,14 @@ import {
   solveMultiway,
   solveHu,
   loadHuTableBrowser,
+  loadHuWinTieTableBrowser,
   loadPf3wayTableBrowser,
   lookupPf3way,
   loadPfTableBrowser,
   pfCoverage,
   lookupPf,
   type LoadedHuTable,
+  type WinTieTable,
   type Pf3wayTable,
   type PfTable,
   type McRunner,
@@ -22,6 +24,9 @@ import {
 // HU equity テーブルは静的アセットとして同梱（?url でハッシュ付き URL に解決）。
 import huBinUrl from '../../solver/artifacts/hu-equity-169.f32.bin?url';
 import huMetaUrl from '../../solver/artifacts/hu-equity-169.meta.json?url';
+// HU 勝ち/引き分け厳密テーブル（3〜6人の2人ショーダウンを厳密化するため, 同上の静的アセット）。
+import wtBinUrl from '../../solver/artifacts/hu-wintie-169.f32.bin?url';
+import wtMetaUrl from '../../solver/artifacts/hu-wintie-169.meta.json?url';
 // 3人 push or fold / AOF 事前計算テーブル（同上の静的アセット）。
 import pf3wayBinUrl from '../../solver/artifacts/pf3way.f32.bin?url';
 import pf3wayMetaUrl from '../../solver/artifacts/pf3way.meta.json?url';
@@ -57,6 +62,21 @@ let tablePromise: Promise<LoadedHuTable> | null = null;
 function getHuTable(): Promise<LoadedHuTable> {
   tablePromise ??= loadHuTableBrowser({ meta: huMetaUrl, bin: huBinUrl });
   return tablePromise;
+}
+
+// 3〜6人求解内の2人ショーダウンを厳密化する win/tie テーブル。読込失敗時は undefined を
+// 返し（MC フォールバック）、一度だけ警告を出す。
+let winTiePromise: Promise<WinTieTable | undefined> | null = null;
+let winTieWarned = false;
+function getWinTie(): Promise<WinTieTable | undefined> {
+  winTiePromise ??= loadHuWinTieTableBrowser({ meta: wtMetaUrl, bin: wtBinUrl }).catch((err: unknown) => {
+    if (!winTieWarned) {
+      winTieWarned = true;
+      console.warn('hu-wintie table load failed; falling back to MC for 2-player showdowns', err);
+    }
+    return undefined;
+  });
+  return winTiePromise;
 }
 
 let pf3wayPromise: Promise<Pf3wayTable> | null = null;
@@ -147,7 +167,10 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
         if (cov === 'heroDeep') throw new Error(OUT_OF_SCOPE_MSG);
         if (cov === 'in') r = lookupPf3way(pf, state) as unknown as CommonResult;
       }
-      if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
+      if (!r) {
+        const winTie = await getWinTie();
+        r = (await solveMultiway(state, { workers: 0, mcRunner, winTie, ...opts })) as unknown as CommonResult;
+      }
       dto = toDto(r, 3, state.heroPos, state.heroHand);
     } else if (state.playersLeft === 4) {
       let r: CommonResult | null = null;
@@ -157,10 +180,14 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
         if (cov === 'heroDeep') throw new Error(OUT_OF_SCOPE_MSG);
         if (cov === 'in') r = lookupPf(pf, state) as unknown as CommonResult;
       }
-      if (!r) r = (await solveMultiway(state, { workers: 0, mcRunner, ...opts })) as unknown as CommonResult;
+      if (!r) {
+        const winTie = await getWinTie();
+        r = (await solveMultiway(state, { workers: 0, mcRunner, winTie, ...opts })) as unknown as CommonResult;
+      }
       dto = toDto(r, 4, state.heroPos, state.heroHand);
     } else {
-      const r = await solveMultiway(state, { workers: 0, mcRunner, ...opts });
+      const winTie = await getWinTie();
+      const r = await solveMultiway(state, { workers: 0, mcRunner, winTie, ...opts });
       dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);
     }
     const res: SolveResponse = { id, ok: true, result: dto, ms: performance.now() - t0 };

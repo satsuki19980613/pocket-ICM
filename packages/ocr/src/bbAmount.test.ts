@@ -75,6 +75,15 @@ describe('readAmountBb', () => {
     expect(Number.isNaN(r.value)).toBe(true);
     expect(r.conf).toBe(0);
   });
+
+  it('BB の右に装飾 tall（手番シェブロン等）があっても letters アンカーで正読（実 iPhone TR 回帰防止）', () => {
+    // "20.2 BB" の右に装飾の tall 成分（ZERO で代用）。旧「末尾 tall 2 個＝BB」だと装飾を
+    // 落として BB を数字 "0" として採用し誤読した。letters を渡すと右端の B ペアを BB と判定し、
+    // それ以降（装飾）を数値スパンから除外できる。
+    const img = render([TWO, ZERO, DOT, TWO, BEE, BEE, ZERO]);
+    const withLetters = readAmountBb(img, full(img), digits, { minCh: 100 }, letters);
+    expect(withLetters.value).toBeCloseTo(20.2, 5);
+  });
 });
 
 describe('stackEndsWithBb / detectDisplayMode', () => {

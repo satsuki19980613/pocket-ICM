@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ExtractTemplates, Rgba } from '@oshihiki/ocr';
-import { ocrPrefillFromRgba } from './prefill';
+import { ocrPrefillFromRgba, CHIPS_MODE_ISSUE } from './prefill';
 
 /** bestMatch は空テンプレで throw するので、各種 1 グリフだけ与える。 */
 const glyph = (label: string) => ({ label, img: { w: 1, h: 1, data: Uint8Array.from([255]) } });
@@ -31,5 +31,13 @@ describe('ocrPrefillFromRgba', () => {
     expect(res).toHaveProperty('ok');
     expect(res.issues).toBeInstanceOf(Array);
     expect(res.lowConfidenceFields).toBeInstanceOf(Array);
+  });
+
+  it('BB 表示でない（chips 判定）フレームは取り込み拒否＝ok=false・チップ表示 issue（SPEC §5.2）', () => {
+    // 黒一色は数字が読めず detectDisplayMode が chips 既定にフォールバックする＝chips 扱い。
+    const res = ocrPrefillFromRgba(blackRgba(800, 370), templates);
+    expect(res.ok).toBe(false);
+    expect(res.issues).toContain(CHIPS_MODE_ISSUE);
+    expect(res.form).toBeUndefined();
   });
 });

@@ -95,36 +95,58 @@ function normGlyph(strip: Gray, r: Rect): Gray {
  * BB 表示の金額を読む（"20.2 BB" → 20.2, "13 BB" → 13）。値は表示どおり **BB**（正規化不要）。
  * templates は数字 0-9（'.' は成分の低さで判定するのでテンプレ不要）。
  * 数字が無ければ value=NaN, conf=0。
+ *
+ * 接尾辞 "BB" の切り離しは **NCC アンカー**（`letters` に "B" テンプレを渡す）で行う。
+ * 旧実装は「末尾 tall 2 個＝BB」と位置決め打ちだったため、席の右にある UI 装飾
+ * （手番シェブロン ▼ 等）が余分な tall 成分を作ると BB でなく装飾を切ってしまい、
+ * "BB" を数字 "88" として採用する誤読が起きた（実 iPhone TR 27.7→17.788）。
+ * letters があれば最初の英字（"B"）で数値を打ち切り、以降（BB・シェブロン・名前）を捨てる。
+ * letters が無い場合は従来どおり大きなギャップで数値末尾を推定する。
+ *
+ * さらに、先頭桁がアバターの発光リング/弧と融合して幅広ブロブ化し glyphComponents に
+ * 落とされるケース（実 iPhone TL 19.2→9・BL の左端切れ）を **leadingClipped** として検出し、
+ * 信頼度を強制的に下げる（＝確認画面で強調され利用者が修正できる。プリフィルの原則を維持）。
  */
 export function readAmountBb(
   img: Rgba,
   rect: Rect,
   templates: readonly Template[],
   opts: BbAmountOptions = {},
+  letters?: readonly Template[],
 ): Read<number> {
   const minCh = opts.minCh ?? 120;
   const maxSat = opts.maxSat ?? 80;
   const strip = grayFromRgba(img, rect);
-  const comps = glyphComponents(whiteMask(img, rect, { minCh, maxSat }));
+  const mask = whiteMask(img, rect, { minCh, maxSat });
+  const comps = glyphComponents(mask);
   if (comps.length === 0) return { value: NaN, conf: 0 };
   const maxH = Math.max(...comps.map((c) => c.h));
-
-  // 末尾 "BB" ＝ 背の高い成分ちょうど 2 個（BB 表示は必ずこの接尾辞で終わる）。
-  // ギャップ閾値は narrow な "1" で不安定なので使わず、tall の末尾 2 個（BB）を除外し、
-  // 数値スパン（先頭桁〜最終桁の x 範囲）内の成分だけを取る（端ノイズ・"Pot :" 等を除去）。
-  const tall = comps.filter((c) => c.h >= 0.45 * maxH);
+  const tallCut = 0.45 * maxH;
+  const tall = comps.filter((c) => c.h >= tallCut);
   if (tall.length < 3) return { value: NaN, conf: 0 }; // 数字 1 個 ＋ "BB" 未満は読めない
-  const numTall = tall.slice(0, tall.length - 2); // BB を除いた数字（tall）
+
+  // 末尾 "BB" の位置を **letters NCC**（右端の隣接 "B" ペア）で特定する。席の右にある UI 装飾
+  // （手番シェブロン ▼ 等）が BB の右に余分な tall 成分を作っても、BB ペア以降を数値スパンから
+  // 外せる。旧実装の「末尾 tall 2 個＝BB」決め打ちは、その装飾を BB と誤って落とし、本物の BB を
+  // 数字 "88" として採用していた（実 iPhone TR 27.7→17.788 の主因）。B ペアが見つからない場合
+  // （B の誤読・ベット帯で B が数字化する等）は **旧来どおり末尾 tall 2 個を BB** とみなす
+  // ＝クリーンなフレームでは挙動不変（回帰なし）。
+  const isB = (c: RawComp): boolean =>
+    letters !== undefined && bestMatch(normGlyph(strip, c), [...templates, ...letters]).label === 'B';
+  let suffixStart = -1;
+  if (letters) for (let i = tall.length - 1; i >= 1; i--) if (isB(tall[i]!) && isB(tall[i - 1]!)) { suffixStart = i - 1; break; }
+  const numTall = suffixStart >= 0 ? tall.slice(0, suffixStart) : tall.slice(0, tall.length - 2);
+  if (numTall.length === 0) return { value: NaN, conf: 0 };
   const firstX = numTall[0]!.x;
   const lastTall = numTall[numTall.length - 1]!;
   const lastX = lastTall.x + lastTall.w;
-  // 数値スパン内の成分（間の小数点を含む。範囲外の端ノイズ／"BB"は除外）。
+  // 数値スパン内の成分（間の小数点を含む。範囲外の端ノイズ／"BB"／装飾は除外）。
   const num = comps.filter((c) => c.x >= firstX - 2 && c.x + c.w <= lastX + 2);
 
   let text = '';
   let minScore = 1;
   for (const c of num) {
-    if (c.h < 0.45 * maxH) {
+    if (c.h < tallCut) {
       text += '.'; // 小数点（背が低い成分）
       continue;
     }
@@ -135,7 +157,14 @@ export function readAmountBb(
   }
   const value = parseAmount(text);
   if (value === null) return { value: NaN, conf: 0 };
-  return { value, conf: Math.max(0, Math.min(1, minScore)) };
+  let conf = Math.max(0, Math.min(1, minScore));
+  // 先頭桁がアバターの発光リング/弧と融合し「非常に幅広の tall 塊」となって左端(x<=2)に現れると、
+  // glyphComponents に落とされ先頭桁が抜ける（実 iPhone TL 19.2→9）。この時は低信頼にフラグして
+  // 確認画面で強調 → 利用者修正に回す（サイレントな高信頼誤読を防ぐ）。条件はきつめ（w/h>2.0・
+  // h>=0.7*maxH）にしてクリーン数字への誤爆を避ける。
+  const clipped = rawComponents(mask).some((c) => c.x <= 2 && c.h >= 0.7 * maxH && c.w / c.h > 2.0);
+  if (clipped) conf = Math.min(conf, 0.4);
+  return { value, conf };
 }
 
 /**

@@ -112,7 +112,7 @@ export function extractRawReads(
   //  - bb: readAmountBb（"20.2 BB"→20.2, 既に BB）→ 正規化しない。
   const readTable = (rect: Rect, minCh?: number): Read<number> =>
     mode === 'bb'
-      ? readAmountBb(img, rect, templates.digits, minCh !== undefined ? { minCh } : {})
+      ? readAmountBb(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}, templates.letters)
       : norm(recognizeAmount(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}), bbChips);
 
   // ante は常に chips ヘッダ → recognizeAmount＋正規化。
@@ -206,7 +206,9 @@ export function extractRawReadsAuto(
 ): { reads: RawReads; contentRect: ContentRect } {
   const canonW = 2730;
   const canonH = Math.round(canonW / profile.aspect);
-  const contentRect = opts.contentRect ?? detectContentRect(img, profile, templates.digits);
+  // hero 手札を cr 整列アンカーに使う（ranks を渡す）。数字だけのスコアが位置ズレ cr を
+  // 選ぶのを防ぐ（contentRect.scoreCr 参照）。
+  const contentRect = opts.contentRect ?? detectContentRect(img, profile, templates.digits, {}, templates.ranks);
   const normalized = normalizeToCanonical(img, contentRect, canonW, canonH);
   const reads = extractRawReads(normalized, profile, templates, { ...opts, contentRect: undefined });
   return { reads, contentRect };

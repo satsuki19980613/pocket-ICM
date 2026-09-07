@@ -76,6 +76,17 @@ describe('readAmountBb', () => {
     expect(r.conf).toBe(0);
   });
 
+  it('上端に幅広の白帯（発光弧）が被っても数値を正読（実 iPhone コーナー席の回帰防止）', () => {
+    // "20.2 BB" の上端 3 行に、幅いっぱいの白帯（弧）を描いて数字の上端と連結させる。
+    // stripEdgeBands が無いと帯＋数字が幅広ブロブ化して落とされ誤読/NaN になる。
+    const img = render([TWO, ZERO, DOT, TWO, BEE, BEE]);
+    for (let y = 0; y < 3; y++) for (let x = 0; x < img.w; x++) {
+      const s = (y * img.w + x) * 4; img.data[s] = 255; img.data[s + 1] = 255; img.data[s + 2] = 255;
+    }
+    const r = readAmountBb(img, full(img), digits, { minCh: 100 });
+    expect(r.value).toBeCloseTo(20.2, 5);
+  });
+
   it('BB の右に装飾 tall（手番シェブロン等）があっても letters アンカーで正読（実 iPhone TR 回帰防止）', () => {
     // "20.2 BB" の右に装飾の tall 成分（ZERO で代用）。旧「末尾 tall 2 個＝BB」だと装飾を
     // 落として BB を数字 "0" として採用し誤読した。letters を渡すと右端の B ペアを BB と判定し、

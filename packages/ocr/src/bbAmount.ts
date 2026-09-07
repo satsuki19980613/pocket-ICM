@@ -92,6 +92,27 @@ function normGlyph(strip: Gray, r: Rect): Gray {
 }
 
 /**
+ * 端に接する「幅広の白い横帯」（アバター発光弧・プレート下線）を薄く剥がす。弧も数字も白なので
+ * 色では分離できないが、弧は端に接する高 fill の薄い帯（数字の上下端行は疎）なので幾何で剥がせる。
+ * 端から連続して fill > bandFrac×幅 の行のみ黒化。各端は領域高の maxFrac（弧の想定厚み）までに
+ * 厳しく制限し数字本体を食わない。帯が無ければ恒等（通常フレームは不変＝回帰なし）。
+ */
+function stripEdgeBands(mask: Gray, bandFrac = 0.5, maxFrac = 0.12): Gray {
+  const { w, h, data } = mask;
+  if (h < 8) return mask;
+  const thr = bandFrac * w;
+  const cap = Math.max(1, Math.floor(h * maxFrac));
+  const rowFill = (y: number): number => { let c = 0; const row = y * w; for (let x = 0; x < w; x++) if (data[row + x]) c++; return c; };
+  let top = 0; while (top < cap && rowFill(top) > thr) top++;
+  let bot = 0; while (bot < cap && rowFill(h - 1 - bot) > thr) bot++;
+  if (top === 0 && bot === 0) return mask;
+  const out = new Uint8Array(data);
+  for (let y = 0; y < top; y++) out.fill(0, y * w, y * w + w);
+  for (let y = 0; y < bot; y++) out.fill(0, (h - 1 - y) * w, (h - 1 - y) * w + w);
+  return { w, h, data: out };
+}
+
+/**
  * BB 表示の金額を読む（"20.2 BB" → 20.2, "13 BB" → 13）。値は表示どおり **BB**（正規化不要）。
  * templates は数字 0-9（'.' は成分の低さで判定するのでテンプレ不要）。
  * 数字が無ければ value=NaN, conf=0。
@@ -117,7 +138,7 @@ export function readAmountBb(
   const minCh = opts.minCh ?? 120;
   const maxSat = opts.maxSat ?? 80;
   const strip = grayFromRgba(img, rect);
-  const mask = whiteMask(img, rect, { minCh, maxSat });
+  const mask = stripEdgeBands(whiteMask(img, rect, { minCh, maxSat }));
   const comps = glyphComponents(mask);
   if (comps.length === 0) return { value: NaN, conf: 0 };
   const maxH = Math.max(...comps.map((c) => c.h));

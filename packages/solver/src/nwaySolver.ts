@@ -51,7 +51,9 @@ import { finalStacksFromShowdown } from './sidepot.js';
 import { HAND_CLASS_ORDER } from './huEquity.js';
 import type { ShowdownNode } from './showdownMc.js';
 import { MC_SEED, NODE_MC_SAMPLES } from './mcConfig.js';
-import { computeShowdownMc, type ShowdownMcResult } from './showdownJob.js';
+import { monotonizePush } from './monotonize.js';
+import { computeShowdownMc, DEFAULT_STRAT, type ShowdownMcResult, type StratSpec } from './showdownJob.js';
+import { computeShowdown2Exact, rankClassesByEquityVs, type WinTieTable } from './showdownExact.js';
 import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
 
 /**
@@ -59,7 +61,7 @@ import { weightAndUses, conditionalAggrProb } from './cardRemoval.js';
  * ブラウザバンドルに混入させないため型リンクは張らず、動的 import で読む（下記 ensurePool）。
  */
 interface WorkerPoolLike {
-  run(input: { node: ShowdownNode; ranges: F64[]; samples: number; seed: number }): Promise<ShowdownMcResult>;
+  run(input: { node: ShowdownNode; ranges: F64[]; samples: number; seed: number; strat?: StratSpec }): Promise<ShowdownMcResult>;
   dispose(): Promise<void>;
 }
 
@@ -118,6 +120,8 @@ interface NodeDesc {
   actor: Position;
   actionType: 'PU' | 'CA' | 'OC';
   key: string;
+  /** 同時オールイン上限（maxActive）到達で「決定なし＝強制フォールド」のノード。 */
+  truncated: boolean;
 }
 
 /** 1 ショーダウン MC ジョブの入力（環境非依存）。 */
@@ -126,6 +130,8 @@ export interface ShowdownMcJob {
   ranges: F64[];
   samples: number;
   seed: number;
+  /** 層化 MC の指定（3 人以上・winTie あり・stratifiedMc 時）。省略で従来経路。 */
+  strat?: StratSpec;
 }
 
 /**
@@ -142,8 +148,17 @@ export interface MultiwayNSolveOptions {
   targetExploitabilityPt?: number;
   /** MC equity を再サンプルする反復間隔（epoch 長）。 */
   refreshEvery?: number;
-  /** ショーダウン MC のサンプル数。省略時は人数に応じた既定（下記）。 */
+  /**
+   * ショーダウン MC のサンプル数。省略時は人数に応じた既定（下記）。
+   * 3 人以上の集合には `mcSamplesFor` により**到達確率比例で減らして**配る。
+   */
   samples?: number;
+  /**
+   * 全ショーダウン集合へ `samples` を**均等配分**する（旧挙動）。既定 false。
+   * 到達確率比例配分（既定）は同一解に約 10 倍速で到達することを実測済みなので、
+   * 通常は不要。旧結果の再現・配分の対照実験のためだけに残す。
+   */
+  uniformSamples?: boolean;
   seed?: number;
   /**
    * ショーダウン MC を並列実行する worker 数。0/1 で単一スレッド（既定）。
@@ -194,6 +209,39 @@ export interface MultiwayNSolveOptions {
    * 無駄な反復を止める。commonRandom と併用推奨。省略時は無効（従来どおり絶対しきい値のみ）。
    */
   plateauStopFrac?: number;
+  /**
+   * HU 勝ち/引き分けテーブル（`loadHuWinTieTable()`）。与えると **2 人ショーダウンを
+   * 厳密計算**に切り替える（MC ノイズ 0・大幅高速化）。3 人以上の同時オールインは
+   * 従来どおり MC。省略時は全て MC（従来動作）。
+   */
+  winTie?: WinTieTable;
+  /**
+   * 同時オールインの上限人数。**既定 3**（HRC の Math エンジン・ICMIZER と同じゲーム定義:
+   * 3 人がオールインした時点で残りは自動フォールド。docs/BATON_OC.md §9）。
+   * 3 人以上の同時オールインは到達確率が桁で小さく（4 人集合 0.0003%）、実測で解は
+   * ノイズ幅以内しか変わらない一方、6 人卓ではショーダウン集合が 42→16 に減り 4〜6 倍速。
+   * 完全ゲーム（全員がオーバーコール可）は 99 などを指定する。
+   */
+  maxActive?: number;
+  /**
+   * 3 人以上のショーダウン MC を**層化**する（既定 true, `winTie` があるときのみ有効）。
+   * overcaller は「最も狭い相手レンジに対する勝率」上位 `ocCandidates` クラスだけを評価し、
+   * 未評価クラスは候補最小値で埋める。OC の最適反応が候補の下位 1/4 に触れたら次回から
+   * 候補数を倍にする（適応 K）。false で従来のコンボ数比例 MC（対照実験用）。
+   */
+  stratifiedMc?: boolean;
+  /** 層化 MC の overcaller 候補クラス数の初期値（既定 24。12 では僅かに漂うことを実測）。 */
+  ocCandidates?: number;
+  /**
+   * 表示レンジの線引き方式（**既定 'avg'**）。HRC 照合（2026-09-07, docs/BATON_OC.md §11）:
+   *  - 'avg'    : FP 全反復の平均頻度 ≥ 0.5。均衡近似である「平均戦略」そのもの。
+   *               6人 平均|差| 1.26pt / 4人 CO +1.0pt。
+   *  - 'lateAvg': 反復の後半だけの平均頻度 ≥ 0.5。6人 1.26pt / 4人 CO −2.1pt。
+   *  - 'evSign' : 最終 EV差 ≥ 0（最適反応のスナップショット）。6人 0.99pt / 4人 CO −2.4pt。
+   *               無差別帯で振れる（FP の BR は収束しない）ため既定にしない。
+   * いずれも差は |EV| < 0.01pt の無差別ハンドの数え方で、EV 上の損は無い。実験用に残す。
+   */
+  displayMode?: 'avg' | 'lateAvg' | 'evSign';
 }
 
 export interface MultiwayNSolveResult {
@@ -204,6 +252,44 @@ export interface MultiwayNSolveResult {
   equity: Record<string, { pre: number; post: number }>;
   /** ノードキー → クラス別頻度（169）。決定性・相互検証テスト用。 */
   strategies: Map<string, F64>;
+}
+
+/**
+ * ショーダウン集合 A（参加者 k 人）に配る MC サンプル数（到達確率比例配分）。
+ *
+ * ## 根拠
+ * 集合 A の EV 誤差寄与 ≒ `reach(A) × サンプリング誤差(A)`。同時オールインは 1 人増える
+ * ごとに「その人もコールする」条件が乗るので reach は桁で落ちる。実測（4人卓
+ * CO14/BU34/SB33/BB22, 到達レンジの幅の積＝上界）:
+ *   2人集合 ≒ 1（大半） / 3人集合 0.005〜0.05% / **4人集合 0.0003%（33万回に1回）**
+ * にもかかわらず全集合へ同数サンプルを配ると、**求解時間の 99% が 3 人以上に費やされる**
+ * （2 人は showdownExact で厳密・ゼロコストになったため）。誤差あたりのコストが最悪の配分。
+ *
+ * ## 配分則
+ * 1 人増えるごとに 1/8。ただし MC 推定が成立する下限（base/16）で打ち切る。
+ *
+ * ## なぜ下限が要るか＝OC ノードが壊れると上流が崩れる（実測で因果まで特定）
+ * **3 人以上の同時オールインは OC（オーバーコール）が発生したときにしか起きない。**
+ * その OC レンジは構造的にごく狭く、実測では 4人/6人・6/10/20/34bb のすべてで
+ * **必ず {AA} ⊆ OC ⊆ {AA, KK, QQ}（または空）**、中央値 0.5%。ところが
+ * `estimateNodeEquities` は hero クラスを**コンボ数比例**で引くため（AA は 6/1326＝
+ * わずか 0.45%）、OC の可否を決める AA/KK/QQ に落ちるサンプルが最初から極端に少ない。
+ * サンプルを削りすぎると OC レンジが先に壊れ、それが上流の PU レンジまで崩す:
+ *   3000: OC=[AA KK QQ] → CO 18.6% / BU 37.9%（24000 と同一）
+ *   1500: OC=[AA AKs KK QQ]（AKs 混入）→ CO 17.6%
+ *    750: OC=[AA KK QQ JJ TT 99]  → **CO 12.8% / BU 28.5%（崩壊）**
+ * 下限はこの「OC レンジの健全性」で決まる。3人集合が受け取る base/8=3000 は安全側で、
+ * 6人卓 8000 反復でも **OC 42 ノード中の異常 0 件**・均等配分と同一解を確認済み。
+ *
+ * ## 検証（8000反復, 同一シード）
+ *   均等配分 141.8s → CO 18.3% / BU 37.9% / SB 100%（expl 0.0008）
+ *   本配分    14.2s → CO 18.6% / BU 37.9% / SB 100%（expl 0.0015）
+ * = **同一の答えに約 10 倍速**。バイアスが無いことは 1/4・1/8 配分 ×
+ * 4000/8000/16000 反復の対照実験で確認済み（すべて同じ 37.9% に収束）。
+ */
+export function mcSamplesFor(k: number, base: number): number {
+  if (k <= 2) return base; // 2人は winTie 指定時は厳密。未指定時は reach≒1 なので削らない。
+  return Math.max(Math.round(base / 16), Math.round(base / 8 ** (k - 2)));
 }
 
 /** 人数ごとの既定サンプル数（コストは Σ_A(|A|+1)|A| に比例。人数増で漸減）。 */
@@ -230,6 +316,11 @@ function buildEngine(
   seed: number,
   workers: number,
   mcRunner?: McRunner,
+  winTie?: WinTieTable,
+  uniformSamples = false,
+  maxActive = 3,
+  stratified = true,
+  K0: number = DEFAULT_STRAT.K,
 ) {
   const n = state.playersLeft;
   const order = positionsForPlayersLeft(n);
@@ -279,7 +370,7 @@ function buildEngine(
         else actions[order[j]!] = 'F';
       }
       const key = normalizeKey(n, actions);
-      const node: NodeDesc = { i, S, id, actor: order[i]!, actionType, key };
+      const node: NodeDesc = { i, S, id, actor: order[i]!, actionType, key, truncated: pc >= maxActive };
       nodes.push(node);
       nodeById.set(id, node);
     }
@@ -290,7 +381,11 @@ function buildEngine(
   // pcEqA[A].get(seat) = 参加者 seat のクラス別 all-in equity（169, hero=full 条件）
   // smA[A][seat] = 全席の周辺 ICM equity（到達レンジで平均）
   const showdownSets: number[] = [];
-  for (let A = 1; A < 1 << n; A++) if (popcount(A) >= 2) showdownSets.push(A);
+  for (let A = 1; A < 1 << n; A++) if (popcount(A) >= 2 && popcount(A) <= maxActive) showdownSets.push(A);
+  // 層化 MC: 集合 A ごとの overcaller 候補数（適応 K）と、直近 refresh で渡した候補列。
+  const kA = new Map<number, number>();
+  const candA = new Map<number, Map<number, Int16Array>>();
+  const useStrat = stratified && winTie !== undefined;
   const pcEqA = new Map<number, Map<number, F64>>();
   const smA = new Map<number, number[]>();
 
@@ -337,13 +432,6 @@ function buildEngine(
   };
 
   const refresh = async (strat: Map<number, F64>, epoch: number): Promise<void> => {
-    const jobs = showdownSets.map((A) => {
-      const { node, participants } = makeShowdownNode(A);
-      const ranges = arrivalRanges(A, participants, strat);
-      const jobSeed = mix(seed, epoch, A);
-      return { A, node, participants, ranges, jobSeed };
-    });
-
     const store = (A: number, participants: number[], res: ShowdownMcResult): void => {
       const m = new Map<number, F64>();
       for (let p = 0; p < participants.length; p++) m.set(participants[p]!, res.pcEq[p]!);
@@ -351,10 +439,59 @@ function buildEngine(
       smA.set(A, res.seatMarginal);
     };
 
+    // 2 人ショーダウンは勝ち/引き分け表で**厳密**に即時計算し、MC は 3 人以上だけに絞る。
+    // push/fold の到達確率の大半は「押した1人＋コールした1人」なので、これで MC ノイズ床の
+    // 主要因が消え、同時に大幅に速くなる（テーブル未指定なら従来どおり全て MC）。
+    // 残る MC には**到達確率に比例して**サンプルを配る（mcSamplesFor 参照）。同時オールイン
+    // する人数が増えるほど到達確率は桁で落ちるので、同数を配るのは誤差あたりのコストが最悪。
+    const jobs: {
+      A: number; node: ShowdownNode; participants: number[]; ranges: F64[]; jobSeed: number; samples: number;
+      strat?: StratSpec;
+    }[] = [];
+    for (const A of showdownSets) {
+      const { node, participants } = makeShowdownNode(A);
+      const ranges = arrivalRanges(A, participants, strat);
+      if (winTie && participants.length === 2) {
+        store(A, participants, computeShowdown2Exact(node, ranges, winTie));
+        continue;
+      }
+      const s = uniformSamples ? samples : mcSamplesFor(participants.length, samples);
+      let stratSpec: StratSpec | undefined;
+      if (useStrat) {
+        // overcaller（参加者 idx≥2）の候補 = 「他参加者のうち最も狭い到達レンジ」に対する勝率上位 K。
+        const K = kA.get(A) ?? K0;
+        const cand: (Int16Array | undefined)[] = [];
+        const cm = new Map<number, Int16Array>();
+        for (let h = 0; h < participants.length; h++) {
+          if (h < 2) {
+            cand.push(undefined);
+            continue;
+          }
+          let tight = -1;
+          let tf = Number.POSITIVE_INFINITY;
+          for (let p = 0; p < participants.length; p++) {
+            if (p === h) continue;
+            const f = rangeFraction(ranges[p]!);
+            if (f < tf) {
+              tf = f;
+              tight = p;
+            }
+          }
+          const c = rankClassesByEquityVs(ranges[tight]!, winTie!).subarray(0, K);
+          cand.push(c);
+          cm.set(participants[h]!, c);
+        }
+        candA.set(A, cm);
+        stratSpec = { cand, mOc: DEFAULT_STRAT.mOc, mLow: DEFAULT_STRAT.mLow, sMarg: DEFAULT_STRAT.sMarg };
+      }
+      jobs.push({ A, node, participants, ranges, jobSeed: mix(seed, epoch, A), samples: s, strat: stratSpec });
+    }
+    if (jobs.length === 0) return;
+
     // 注入された並列ランナー（ブラウザ Web Worker プール等）があれば最優先で使う。
     if (mcRunner) {
       const results = await mcRunner(
-        jobs.map((j) => ({ node: j.node, ranges: j.ranges, samples, seed: j.jobSeed })),
+        jobs.map((j) => ({ node: j.node, ranges: j.ranges, samples: j.samples, seed: j.jobSeed, strat: j.strat })),
       );
       for (let i = 0; i < jobs.length; i++) store(jobs[i]!.A, jobs[i]!.participants, results[i]!);
       return;
@@ -363,14 +500,14 @@ function buildEngine(
     const wp = await ensurePool();
     if (!wp) {
       for (const j of jobs) {
-        const res = computeShowdownMc(j.node, j.ranges, samples, j.jobSeed);
+        const res = computeShowdownMc(j.node, j.ranges, j.samples, j.jobSeed, j.strat);
         store(j.A, j.participants, res);
       }
       return;
     }
     await Promise.all(
       jobs.map(async (j) => {
-        const res = await wp.run({ node: j.node, ranges: j.ranges, samples, seed: j.jobSeed });
+        const res = await wp.run({ node: j.node, ranges: j.ranges, samples: j.samples, seed: j.jobSeed, strat: j.strat });
         store(j.A, j.participants, res);
       }),
     );
@@ -418,7 +555,41 @@ function buildEngine(
     return { down, terminal: down(0, 0) };
   };
 
+  /**
+   * 適応 K: OC ノードの最適反応（aggrEV ≥ foldEV）が候補列の下位 1/4 に触れていたら、
+   * その集合の候補数を次回 refresh から倍にする。候補外は「候補最小値」で埋めているので、
+   * 候補が狭すぎると弱い手が過大評価されうる——それを自動で広げる安全弁。戻り値は広げた集合数。
+   */
+  const adaptCandidates = (ev: EVBundle): number => {
+    if (!useStrat) return 0;
+    let widened = 0;
+    for (const nd of nodes) {
+      if (nd.actionType !== 'OC' || nd.truncated) continue;
+      if ((ev.reach.get(nd.id) ?? 0) === 0) continue;
+      const A0 = nd.S | (1 << nd.i);
+      const cand = candA.get(A0)?.get(nd.i);
+      if (!cand || cand.length >= N_CLASSES) continue;
+      const aev = ev.aggrEV.get(nd.id)!;
+      const fev = ev.foldEV.get(nd.id)!;
+      let touch = false;
+      for (let q = Math.floor(cand.length * 0.75); q < cand.length; q++) {
+        if (aev[cand[q]!]! >= fev) {
+          touch = true;
+          break;
+        }
+      }
+      if (touch) {
+        kA.set(A0, Math.min(cand.length * 2, N_CLASSES));
+        widened++;
+      }
+    }
+    return widened;
+  };
+
   return {
+    maxActive,
+    exactTwoWay: winTie !== undefined,
+    adaptCandidates,
     n,
     order,
     payouts,
@@ -449,7 +620,7 @@ interface EVBundle {
 /** 現在戦略から全ノードの EV / 到達確率 / 終局分布を計算する。 */
 function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean): EVBundle {
   const aggrProb = new Map<number, number>();
-  for (const nd of eng.nodes) aggrProb.set(nd.id, rangeFraction(strat.get(nd.id)!));
+  for (const nd of eng.nodes) aggrProb.set(nd.id, nd.truncated ? 0 : rangeFraction(strat.get(nd.id)!));
 
   const { down, terminal } = eng.enumerateAll(aggrProb);
 
@@ -478,6 +649,12 @@ function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean):
   const foldEV = new Map<number, number>();
   for (const nd of eng.nodes) {
     const { i, S } = nd;
+    if (popcount(S) > eng.maxActive) {
+      // 上限超えの前方集合＝到達不能（上流で打ち切り済み）。評価しない。
+      foldEV.set(nd.id, 0);
+      aggrEV.set(nd.id, new Float64Array(N_CLASSES));
+      continue;
+    }
     const foldOut = down(i + 1, S); // フォールド後（S 不変, i∉A）
 
     // フォールド EV（クラス非依存, card-blind 母集団）
@@ -487,12 +664,19 @@ function computeEVs(eng: Engine, strat: Map<number, F64>, cardRemoval: boolean):
 
     // アグレッシブ EV（クラス別）
     const aev = new Float64Array(N_CLASSES);
+    if (nd.truncated) {
+      // 同時オールイン上限: 決定なし（強制フォールド）。EV差 0 で表示し、FP 更新は行わない。
+      aev.fill(fev);
+      aggrEV.set(nd.id, aev);
+      continue;
+    }
     if (condAggr) {
       // hero=i がアグレッシブに出た後（i∈A 確定）の後方ツリーを、hero クラス条件つき
       // アクション確率で DFS 評価する。各内部ノードで out=p·push+(1−p)·fold（ベクトル）。
       const heroAggrDfs = (j: number, G: number, out: F64, depth: number): void => {
         if (j === eng.n) {
           if (popcount(G) === 1) out.fill(eng.V_win[i]![i]!); // A={i}: 不戦勝
+          else if (popcount(G) > eng.maxActive) out.fill(0); // 上限超え（重み 0 の枝）
           else out.set(eng.getPcEq(G, i)); // ショーダウン: クラス別 all-in equity
           return;
         }
@@ -577,6 +761,10 @@ function eqPost(eng: Engine, ev: EVBundle): number[] {
 function initStrategies(eng: Engine, warm?: Map<string, F64>): Map<number, F64> {
   const strat = new Map<number, F64>();
   for (const nd of eng.nodes) {
+    if (nd.truncated) {
+      strat.set(nd.id, new Float64Array(N_CLASSES)); // 決定なし＝常にフォールド
+      continue;
+    }
     const w = warm?.get(nd.key);
     strat.set(nd.id, w && w.length === N_CLASSES ? Float64Array.from(w) : new Float64Array(N_CLASSES).fill(0.5));
   }
@@ -590,6 +778,8 @@ function buildResult(
   exploitabilityPt: number,
   converged: boolean,
   iterations: number,
+  displayMode: 'avg' | 'lateAvg' | 'evSign',
+  lateAvg: Map<number, F64> | null,
 ): MultiwayNSolveResult {
   const eqPre = icmEquities(eng.T, eng.payouts);
   const post = eqPost(eng, finalEv);
@@ -598,19 +788,36 @@ function buildResult(
   const quality = { exploitability: exploitabilityPt, converged, iterations };
 
   const nodes: SolutionNode[] = eng.nodes.map((nd) => {
-    const arr = strat.get(nd.id)!;
+    const arr = strat.get(nd.id)!; // FP 平均頻度（低ノイズ）
     const aev = finalEv.aggrEV.get(nd.id)!;
     const fev = finalEv.foldEV.get(nd.id)!;
+    // 表示レンジ（支配関係で単調化して市松穴を除去, EV中立）。既定は FP 平均頻度 ≥ 0.5
+    // （displayMode 'avg'）。'evSign' / 'lateAvg' は実験用（MultiwayNSolveOptions.displayMode 参照）。
+    // 打ち切りノード（同時オールイン上限）は決定なし＝全て降り。
+    let pushBool: boolean[];
+    const late = lateAvg?.get(nd.id);
+    if (nd.truncated) {
+      pushBool = new Array<boolean>(N_CLASSES).fill(false);
+    } else if (displayMode === 'evSign') {
+      const evDiff = new Float64Array(N_CLASSES);
+      for (let c = 0; c < N_CLASSES; c++) evDiff[c] = aev[c]! - fev;
+      pushBool = monotonizePush({ classOrder: HAND_CLASS_ORDER, values: evDiff, combos: COMBO_COUNT, threshold: 0 });
+    } else if (displayMode === 'lateAvg' && late) {
+      pushBool = monotonizePush({ classOrder: HAND_CLASS_ORDER, values: late, combos: COMBO_COUNT, threshold: 0.5 });
+    } else {
+      pushBool = monotonizePush({ classOrder: HAND_CLASS_ORDER, values: arr, combos: COMBO_COUNT, threshold: 0.5 });
+    }
     const freq: Record<string, number> = {};
     const ev: Record<string, number> = {};
     const hands: string[] = [];
     let weighted = 0;
     for (let c = 0; c < N_CLASSES; c++) {
       const label = HAND_CLASS_ORDER[c]!;
-      freq[label] = arr[c]!;
-      ev[label] = aev[c]! - fev; // アグレッシブ − フォールド の EV 差
-      if (arr[c]! >= 0.5) hands.push(label);
-      weighted += COMBO_COUNT[c]! * arr[c]!;
+      const push = pushBool[c]! ? 1 : 0;
+      freq[label] = push;
+      ev[label] = aev[c]! - fev; // アグレッシブ − フォールド の EV 差（表示用, 生値）
+      if (push) hands.push(label);
+      weighted += COMBO_COUNT[c]! * push;
     }
     return {
       key: nd.key,
@@ -653,7 +860,10 @@ export async function solveMultiway(
   const commonRandom = opts.commonRandom ?? false;
   const initIters = opts.initIterations ?? 0;
   const plateauFrac = opts.plateauStopFrac;
-  const eng = buildEngine(state, samples, seed, workers, opts.mcRunner);
+  const eng = buildEngine(
+    state, samples, seed, workers, opts.mcRunner, opts.winTie, opts.uniformSamples,
+    opts.maxActive ?? 3, opts.stratifiedMc ?? true, opts.ocCandidates ?? DEFAULT_STRAT.K,
+  );
   const poolPt = eng.payouts.reduce((a, b) => a + b, 0);
   // ノードレベル MC の推定量バイアス + アクション確率のカードリムーバル近似で
   // 均衡でも ~プール比 0.1% の床を持つ（M3 申し送り）。しきい値は床の上に置く。
@@ -669,19 +879,34 @@ export async function solveMultiway(
     let exploitabilityPt = Number.POSITIVE_INFINITY;
     let converged = false;
     let prevExpl = Number.POSITIVE_INFINITY;
+    // 後半平均（表示用）: 反復 t ≥ lateStart の BR を平均する。早期停止で後半に入らなければ null。
+    const displayMode = opts.displayMode ?? 'avg';
+    const lateStart = Math.floor(maxIters / 2) + 1;
+    const lateAvg = new Map<number, F64>();
+    let lateCount = 0;
 
     for (let t = 1; t <= maxIters; t++) {
       iterations = t;
       if (t > 1 && t % refreshEvery === 0) await eng.refresh(strat, iterEpoch(t));
       const ev = computeEVs(eng, strat, cardRemoval);
+      if (t % refreshEvery === 0) eng.adaptCandidates(ev);
       const w = 1 / (t + initIters + 1);
+      const accLate = displayMode === 'lateAvg' && t >= lateStart;
+      if (accLate) lateCount++;
       for (const nd of eng.nodes) {
+        if (nd.truncated) continue;
         const aev = ev.aggrEV.get(nd.id)!;
         const fev = ev.foldEV.get(nd.id)!;
         const arr = strat.get(nd.id)!;
+        let la = accLate ? lateAvg.get(nd.id) : undefined;
+        if (accLate && !la) {
+          la = new Float64Array(N_CLASSES);
+          lateAvg.set(nd.id, la);
+        }
         for (let c = 0; c < N_CLASSES; c++) {
           const br = aev[c]! >= fev ? 1 : 0;
           arr[c]! += w * (br - arr[c]!);
+          if (la) la[c]! += (br - la[c]!) / lateCount;
         }
       }
       if (t % refreshEvery === 0 || t === maxIters) {
@@ -706,7 +931,7 @@ export async function solveMultiway(
     exploitabilityPt = exploitability(eng, strat, finalEv);
     converged = exploitabilityPt <= targetExpl;
 
-    return buildResult(eng, strat, finalEv, exploitabilityPt, converged, iterations);
+    return buildResult(eng, strat, finalEv, exploitabilityPt, converged, iterations, displayMode, lateCount > 0 ? lateAvg : null);
   } finally {
     eng.dispose();
   }
@@ -740,7 +965,10 @@ export async function evaluateMultiwayStrategy(
   const seed = opts.seed ?? MC_SEED;
   const workers = resolveWorkers(opts.workers);
   const cardRemoval = opts.cardRemoval ?? false;
-  const eng = buildEngine(state, samples, seed, workers, opts.mcRunner);
+  const eng = buildEngine(
+    state, samples, seed, workers, opts.mcRunner, opts.winTie, opts.uniformSamples,
+    opts.maxActive ?? 3, opts.stratifiedMc ?? true, opts.ocCandidates ?? DEFAULT_STRAT.K,
+  );
   try {
     const strat = new Map<number, F64>();
     for (const nd of eng.nodes) {

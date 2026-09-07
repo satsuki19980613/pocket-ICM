@@ -8,7 +8,7 @@
  */
 
 import { parentPort } from 'node:worker_threads';
-import { computeShowdownMc, type ShowdownMcResult } from './showdownJob.js';
+import { computeShowdownMc, type ShowdownMcResult, type StratSpec } from './showdownJob.js';
 import type { ShowdownNode } from './showdownMc.js';
 
 interface JobInput {
@@ -16,6 +16,7 @@ interface JobInput {
   ranges: Float64Array[];
   samples: number;
   seed: number;
+  strat?: StratSpec;
 }
 
 if (parentPort) {
@@ -26,6 +27,7 @@ if (parentPort) {
         input.ranges,
         input.samples,
         input.seed,
+        input.strat,
       );
       parentPort!.postMessage({ ok: true, result });
     } catch (e) {

@@ -16,6 +16,8 @@ export * from './showdownJob.js';
 export * from './placement.js';
 export * from './sidepot.js';
 export * from './showdownMc.js';
+export * from './showdownExact.js';
+export * from './huWinTieLoader.browser.js';
 export * from './cardRemoval.js';
 export * from './mcConfig.js';
 export * from './halfFloat.js';

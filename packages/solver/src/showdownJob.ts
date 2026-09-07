@@ -1,19 +1,33 @@
 /**
  * ショーダウン集合 A 1 個分の MC 計算（M4 / nwaySolver から切り出し）。
  *
- * 単一スレッドの求解ループと worker（nwayWorker）の双方から呼ぶ純粋関数。
+ * 単一スレッドの求解ループと worker（nwayWorker / App の mcWorker）の双方から呼ぶ純粋関数。
  * 与えられた ShowdownNode・参加者到達レンジ・サンプル数・シードから、
  *   - pcEq[p]      = 参加者 p のクラス別 all-in equity（169, hero=full 条件）
  *   - seatMarginal = 全席の周辺 ICM equity（到達レンジで平均, 長さ N）
  * を返す。両パスで同一シード → 同一結果（並列化しても解が変わらない）。
+ *
+ * ## 2 つの経路
+ * - **層化（`strat` 指定, 3 人以上の既定）**: hero パスをクラス層化する。overcaller
+ *   （参加者 idx≥2）は上位 K 候補クラスだけを各 `mOc` 本、pusher/caller（idx 0,1）は
+ *   全 169 クラスを各 `mLow` 本、marginal パスは `sMarg` 本。到達確率が桁で小さい 3 人以上の
+ *   集合に対し、従来比 1/10 〜 1/18 の本数で同一解に達する（docs/BATON_OC.md §8）。
+ * - **従来（`strat` 省略）**: hero をコンボ数比例で引く k+1 パス（各 `samples` 本）。
+ *   旧結果の再現・対照実験用に残す。
  */
 
-import { estimateNodeEquities, type ShowdownNode } from './showdownMc.js';
+import {
+  estimateNodeEquities,
+  estimateHeroStratified,
+  OutcomeCache,
+  type ShowdownNode,
+} from './showdownMc.js';
 import { DeterministicRng } from './placement.js';
 import { HAND_CLASS_ORDER } from './huEquity.js';
 
 const N_CLASSES = HAND_CLASS_ORDER.length; // 169
 const FULL_RANGE = new Float64Array(N_CLASSES).fill(1);
+const ALL_CLASSES = Int16Array.from({ length: N_CLASSES }, (_, i) => i);
 
 export interface ShowdownMcResult {
   /** 参加者ごと（node.participants と同順）のクラス別 all-in equity。 */
@@ -21,6 +35,26 @@ export interface ShowdownMcResult {
   /** 全席の周辺 ICM equity（長さ = preHandStacks.length）。 */
   seatMarginal: number[];
 }
+
+/**
+ * 層化 MC の指定（求解側が組み立てて worker へ渡す。構造化クローン可）。
+ * `cand[h]` は参加者 h の hero パスで評価するクラス index 列（overcaller は上位 K、
+ * pusher/caller は省略＝全クラス）。ランキングは求解側が winTie 表で作る
+ * （`rankClassesByEquityVs`）ので、worker 側は表を持たなくてよい。
+ */
+export interface StratSpec {
+  /** 参加者ごとの候補クラス列。undefined/空 = 全 169 クラス。 */
+  cand: (Int16Array | undefined)[];
+  /** 候補クラス（overcaller）1 クラスあたりのサンプル本数。 */
+  mOc: number;
+  /** 全クラス評価（pusher/caller）1 クラスあたりのサンプル本数。 */
+  mLow: number;
+  /** marginal パス（全員到達レンジ）のサンプル本数。 */
+  sMarg: number;
+}
+
+/** 層化 MC の既定（4人/6人の基準スポットで従来解と一致・単スレ 10〜18 倍速を実測）。 */
+export const DEFAULT_STRAT = { K: 24, mOc: 40, mLow: 3, sMarg: 500 } as const;
 
 /** レンジが空なら全レンジで代用（MC を成立させるため）。 */
 function nonEmpty(freq: Float64Array): Float64Array {
@@ -47,16 +81,19 @@ function mix2(a: number, b: number): number {
  *
  * @param ranges 参加者ごとの到達レンジ（node.participants と同順, 空可→FULL 代用）。
  * @param seed   この A・この epoch に固有の基底シード（パスごとに派生）。
+ * @param strat  層化指定。与えると層化経路（上記）、省略で従来経路。
  */
 export function computeShowdownMc(
   node: ShowdownNode,
   ranges: readonly Float64Array[],
   samples: number,
   seed: number,
+  strat?: StratSpec,
 ): ShowdownMcResult {
   const k = node.participants.length;
   if (ranges.length !== k) throw new Error('computeShowdownMc: ranges length must equal participants');
   const base = ranges.map(nonEmpty);
+  if (strat) return computeShowdownStratified(node, base, seed, strat);
 
   const pcEq: Float64Array[] = [];
   for (let h = 0; h < k; h++) {
@@ -70,5 +107,34 @@ export function computeShowdownMc(
   const rngS = new DeterministicRng(mix2(seed, 0xbeef));
   const { seatMarginal } = estimateNodeEquities(node, base, samples, rngS);
 
+  return { pcEq, seatMarginal };
+}
+
+/** 層化経路の本体（base は非空レンジ）。 */
+function computeShowdownStratified(
+  node: ShowdownNode,
+  base: Float64Array[],
+  seed: number,
+  strat: StratSpec,
+): ShowdownMcResult {
+  const k = node.participants.length;
+  const cache = new OutcomeCache(node);
+  const pcEq: Float64Array[] = [];
+  for (let h = 0; h < k; h++) {
+    const cand = strat.cand[h];
+    const classes = cand && cand.length > 0 ? cand : ALL_CLASSES;
+    const per = cand && cand.length > 0 ? strat.mOc : strat.mLow;
+    const rng = new DeterministicRng(mix2(seed, h + 1));
+    const { eq, counts } = estimateHeroStratified(node, base, h, classes, per, rng, cache);
+    // 未評価クラスは「評価したクラスの最小値」で埋める（上界として安全側）。
+    // レンジ平均で埋めると弱いクラスが過大評価され OC が 100% に崩壊する（実測済み・禁止）。
+    let mn = Number.POSITIVE_INFINITY;
+    for (let c = 0; c < N_CLASSES; c++) if (counts[c]! > 0 && eq[c]! < mn) mn = eq[c]!;
+    if (!Number.isFinite(mn)) mn = 0;
+    for (let c = 0; c < N_CLASSES; c++) if (counts[c]! === 0) eq[c] = mn;
+    pcEq.push(eq);
+  }
+  const rngS = new DeterministicRng(mix2(seed, 0xbeef));
+  const { seatMarginal } = estimateNodeEquities(node, base, strat.sMarg, rngS);
   return { pcEq, seatMarginal };
 }

@@ -129,8 +129,14 @@ export function reconstructSpot(reads: RawReads): ReconstructResult {
 
     // root への逆算: フォールド済みはブラインドのデッド分のみを putIn とみなす。
     const putIn = folded ? blindOb : screenBet;
-    const fullBehind = screenStack + putIn;
-    const rootStack = fullBehind - blindOb;
+    // 占有は検出できたがスタック数字が読めない席（seatPresence のみで occupied）: root 復元に
+    // 使える数値が無い。ここで席を落とすと 6-max が 5-max として黙って誤解される（本バグ）。
+    // 代わりに 0 を仮置きして席を残し（人数は正しい）、raw.stack.conf(=0) 由来で
+    // lowConfidenceFields に `${pos}.stack` が載る（確認画面で手入力）。zod は finite/nonnegative を
+    // 要求するので NaN は渡せない。※solver へは仮値 0 が入るため確認画面での修正が前提（§6.1 プリフィル）。
+    const stackFinite = Number.isFinite(screenStack);
+    const fullBehind = (stackFinite ? screenStack : 0) + putIn;
+    const rootStack = stackFinite ? fullBehind - blindOb : Math.max(0, fullBehind - blindOb);
 
     rootSeats.push({
       pos,

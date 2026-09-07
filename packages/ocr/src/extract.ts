@@ -27,6 +27,7 @@ import { readBlinds } from './blinds.js';
 import { readStreetFromBoard } from './street.js';
 import { detectButtonSeat } from './button.js';
 import { isActiveHand } from './cardState.js';
+import { detectSeatPresence } from './seatPresence.js';
 import { recognizeAction } from './actionTag.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { grayFromRgba } from './numberField.js';
@@ -149,9 +150,19 @@ export function extractRawReads(
     // stackMinCh（ホログラム加工プレートのキラキラ除去）は BB でも有効（BL 実測 168 で
     // 13.5/7.8 等を正読・小数点も生存）。両モードで適用する。
     const stack = readTable(px(img, s.stack), s.stackMinCh, BB_SCORE_FLOOR);
-    const occupied = Number.isFinite(stack.value);
+    // 占有は「スタックが読めたか」だけで決めない。降りて暗く沈んだ席のスタックが NaN でも
+    // 席は実在する（従来はここで empty 化し 6-max を 5-max として黙って誤解 = 本バグ）。
+    // スタックのパースとは**独立**な陽の占有信号（スタック矩形のエッジ密度＝前景ストローク量,
+    // seatPresence 参照）を OR で足す。hero も同じ検出を通す（空フレームでは empty のまま＝
+    // derivePositions が「hero 不在」で安全に棄却する。実局面では hero スタックが読めて occupied）。
+    const stackParsed = Number.isFinite(stack.value);
+    const presence = detectSeatPresence(img, px(img, s.stack), px(img, s.actionZone)).present;
+    const occupied = stackParsed || presence;
+    // 占有だが数字が読めない（presence のみ）席は低信頼にして確認画面で state を強調させる
+    // （confidence.aggregateConfidence が occupancy.conf<threshold で `${pos}.state` を、
+    //  stack.conf(=0)<threshold で `${pos}.stack` を lowConfidenceFields に載せる）。
     const occupancy: Read<Occupancy> = occupied
-      ? { value: 'occupied', conf: stack.conf > 0 ? 0.9 : 0.5 }
+      ? { value: 'occupied', conf: stackParsed ? (stack.conf > 0 ? 0.9 : 0.5) : 0.4 }
       : { value: 'empty', conf: 0.8 };
 
     // BB 表示は先頭 "0." が左端で切れる席（BC/BL/TC/TR）向けに betBb（左に余白）を使う。

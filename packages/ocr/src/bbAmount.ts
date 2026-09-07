@@ -24,6 +24,16 @@ import { grayFromRgba, whiteMask, DIGIT_NORM_H, type WhiteMaskOptions } from './
 export interface BbAmountOptions extends WhiteMaskOptions {
   /** 数値の下限信頼度（未満なら低信頼フラグ）。既定 0.80。 */
   readonly confFloor?: number;
+  /**
+   * 桁受理の NCC 生スコア下限（未満の成分は数値組み立てから捨てる）。既定 0（無効＝旧挙動）。
+   * 飾り（コーナー宝石/星）・端の 1px スリバー（隣プレート枠）・アイコン片（クラブ絵の 2 葉）は
+   * 最良でも生スコア <0.35 で数字に化けるが、実桁は >=0.85 と明確に分離する
+   * （実測: 飾り 0.09 / アイコン 0.20 / スリバー 0.32 vs 実桁 0.85-0.96）。stack/bet で 0.45 を渡すと
+   * 先頭/末尾の偽桁を除去し "111.2"→"11.2" / "5.3"→"3" / ノイズのみ→NaN(bet=0) に落とす。
+   * pot はセンター表示でこの種の縁ノイズが乗りにくく、既存の丸め込み(NaN 化で下流が棄却)を
+   * 避けるため既定 0 のまま（呼び出し側が明示的に渡さない限り不変＝回帰なし）。
+   */
+  readonly scoreFloor?: number;
 }
 
 interface RawComp extends Rect {
@@ -251,7 +261,7 @@ export function readAmountBb(
   // 別途拾い、x 座標で数字列の隙間へ挿し込む。 ----
   const dots = rawAll.filter(
     (c) =>
-      c.h < 0.6 * glyphH &&
+      c.h <= 0.45 * glyphH &&
       c.h >= 2 &&
       c.area >= 4 &&
       c.x >= firstX - 2 &&
@@ -265,6 +275,7 @@ export function readAmountBb(
     ...dots.map((c) => ({ x: c.x, dot: true, comp: c })),
   ].sort((a, b) => a.x - b.x);
 
+  const scoreFloor = opts.scoreFloor ?? 0; // 既定 0＝旧挙動（呼び出し側が明示した席のみ有効）
   let text = '';
   let minScore = 1;
   for (const it of items) {
@@ -273,6 +284,7 @@ export function readAmountBb(
       continue;
     }
     const m = bestMatch(normGlyph(strip, it.comp), templates);
+    if (m.score < scoreFloor) continue; // 飾り/スリバー/アイコン片を桁として採用しない
     text += m.label;
     const s = matchConfidence(m);
     if (s < minScore) minScore = s;

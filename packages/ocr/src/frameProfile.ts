@@ -13,6 +13,16 @@
 import type { FracRect } from './layout.js';
 import type { FracPoint } from './button.js';
 
+/**
+ * 非 hero 席の active/folded 判定ルール（機種依存）。カード裏の青画素比のどの指標を使うか。
+ * Android は folded でも strong（暗い紺）が高いので明るい青 bright で分けるしかない。iOS は
+ * active でも bright≈0 だが strong は active でのみ立つので strong で分ける。cardState.ts 参照。
+ */
+export interface HandActiveRule {
+  readonly metric: 'bright' | 'strong';
+  readonly threshold: number;
+}
+
 /** 画面席の識別子（固定位置）。 */
 export type ScreenSeat = 'TL' | 'TC' | 'TR' | 'BL' | 'BC' | 'BR';
 
@@ -55,6 +65,11 @@ export interface FrameProfile {
   readonly table: FracRect;
   /** 時計回りの席（6）。derivePositions のリング順。 */
   readonly seats: readonly SeatProfile[];
+  /**
+   * カード裏 active/folded 判定ルール（機種依存）。省略時は cardState 既定
+   * （metric='bright', threshold=0.06 = Android 較正）。iOS など bright が使えない機種で上書きする。
+   */
+  readonly handActive?: HandActiveRule;
 }
 
 const R = (x: number, y: number, w: number, h: number): FracRect => ({ x, y, w, h });
@@ -127,4 +142,7 @@ export const CHIPS_6MAX: FrameProfile = {
       buttonAnchor: P(0.285, 0.549), stackMinCh: 168,
     },
   ],
+  // Android: folded は暗い紺で strong 高・bright≈0、active は明るい青。dev _probeCard で
+  // folded bright max 0.0035 / active bright min 0.1336（143002 TC は rect が青に載らず両指標 0 の別要因）。
+  handActive: { metric: 'bright', threshold: 0.06 },
 };

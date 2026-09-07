@@ -49,4 +49,15 @@ describe('isActiveHand', () => {
     const b = solid(100, 45, 130);
     expect(isActiveHand(b, full(b)).value).toBe(false);
   });
+
+  // iOS モード: active カードは bright≈0 だが strong は立つ（実機 active strong≈0.10-0.14 /
+  // folded strong≈0.001）。metric='strong' で薄い真の青も active と拾う（bright だと誤 fold）。
+  it('metric=strong: 薄い真の青（B>R+50, 但し暗め）→ active（bright は 0 でも）', () => {
+    const b = solid(40, 60, 120); // strong 条件を満たすが B<150 なので bright=0
+    const frac = blueFractions(b, full(b));
+    expect(frac.strong).toBeGreaterThan(0.9);
+    expect(frac.bright).toBe(0);
+    expect(isActiveHand(b, full(b), { metric: 'bright' }).value).toBe(false); // 旧 Android ルール=誤 fold
+    expect(isActiveHand(b, full(b), { metric: 'strong', activeFrac: 0.05 }).value).toBe(true);
+  });
 });

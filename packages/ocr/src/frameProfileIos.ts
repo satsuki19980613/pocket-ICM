@@ -37,11 +37,21 @@ const STACK_RECT: Record<SeatProfile['screen'], FracRect> = {
 /** hero 手札の較正済み領域（extract は hero 席の card を読む・GT駆動較正で KJo/AQo 2/2）。 */
 const HERO_CARD: FracRect = { x: 0.413, y: 0.624, w: 0.101, h: 0.134 };
 
+/**
+ * GT 駆動較正した iOS betBb 席矩形（アフィン写像では合わない残差を吸収）。BL は左肩下がりの
+ * アフィン残差で betBb 左端が数字に食い込み、先頭 "0." がクリップされ "0.5 BB"→"5" と誤読していた
+ * （実機 E4073E5F）。左へ寄せ右端は据え置きで "0.5 BB" を全桁取り込む（実機2枚で BL bet 2/2 確認）。
+ * 他席はアフィンのまま（回帰なし）。
+ */
+const BETBB_RECT: Partial<Record<SeatProfile['screen'], FracRect>> = {
+  BL: { x: 0.288, y: 0.447, w: 0.086, h: 0.048 },
+};
+
 const seat = (s: SeatProfile): SeatProfile => ({
   ...s,
   stack: STACK_RECT[s.screen], // 実測較正（アフィンでなく直接）
   bet: fr(s.bet),
-  betBb: s.betBb ? fr(s.betBb) : undefined,
+  betBb: BETBB_RECT[s.screen] ?? (s.betBb ? fr(s.betBb) : undefined),
   // hero 席の card はアフィンだと J→6 誤読が出たため較正値。他席の card 裏(active/folded判定)はアフィン。
   card: s.isHero ? HERO_CARD : fr(s.card),
   actionZone: fr(s.actionZone),
@@ -59,4 +69,9 @@ export const IOS_6MAX: FrameProfile = {
   heroCards: { x: 0.413, y: 0.624, w: 0.101, h: 0.134 },
   table: fr(CHIPS_6MAX.table),
   seats: CHIPS_6MAX.seats.map(seat),
+  // iOS: active カードは明るい青がほぼ無く bright≈0（Android の bright ルールだと全 active を
+  // folded 誤判定する）。真の青 strong は active でのみ立つ（dev _probeCard 実機2枚:
+  // folded strong max 0.0011 / active strong min 0.0978, gap ~89倍）ので strong で分ける。
+  // 閾値はギャップ中点付近（0.05）。※iOS は 2 フレーム(10席)のみ＝過学習に注意。
+  handActive: { metric: 'strong', threshold: 0.05 },
 };

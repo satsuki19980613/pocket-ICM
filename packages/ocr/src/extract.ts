@@ -110,10 +110,19 @@ export function extractRawReads(
   // テーブル上の金額（stack/bet/pot）を BB 換算で読む。
   //  - chips: recognizeAmount → bb(chips) で割る。
   //  - bb: readAmountBb（"20.2 BB"→20.2, 既に BB）→ 正規化しない。
-  const readTable = (rect: Rect, minCh?: number): Read<number> =>
+  // scoreFloor: stack/bet の BB 読みで、飾り/端スリバー/アイコン片が低 NCC で数字化するのを弾く
+  // （bbAmount 参照）。pot はセンター表示で縁ノイズが乗りにくく、既存の下流挙動維持のため渡さない。
+  const readTable = (rect: Rect, minCh?: number, scoreFloor?: number): Read<number> =>
     mode === 'bb'
-      ? readAmountBb(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}, templates.letters)
+      ? readAmountBb(
+          img,
+          rect,
+          templates.digits,
+          { ...(minCh !== undefined ? { minCh } : {}), ...(scoreFloor !== undefined ? { scoreFloor } : {}) },
+          templates.letters,
+        )
       : norm(recognizeAmount(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}), bbChips);
+  const BB_SCORE_FLOOR = 0.45;
 
   // ante は常に chips ヘッダ → recognizeAmount＋正規化。
   const anteChips = recognizeAmount(img, px(img, profile.ante), templates.digits);
@@ -139,7 +148,7 @@ export function extractRawReads(
   const seats: RawSeatRead[] = profile.seats.map((s, i) => {
     // stackMinCh（ホログラム加工プレートのキラキラ除去）は BB でも有効（BL 実測 168 で
     // 13.5/7.8 等を正読・小数点も生存）。両モードで適用する。
-    const stack = readTable(px(img, s.stack), s.stackMinCh);
+    const stack = readTable(px(img, s.stack), s.stackMinCh, BB_SCORE_FLOOR);
     const occupied = Number.isFinite(stack.value);
     const occupancy: Read<Occupancy> = occupied
       ? { value: 'occupied', conf: stack.conf > 0 ? 0.9 : 0.5 }
@@ -147,7 +156,7 @@ export function extractRawReads(
 
     // BB 表示は先頭 "0." が左端で切れる席（BC/BL/TC/TR）向けに betBb（左に余白）を使う。
     const betRect = px(img, mode === 'bb' ? s.betBb ?? s.bet : s.bet);
-    const betRaw = readTable(betRect, mode === 'chips' ? opts.betMinCh : undefined);
+    const betRaw = readTable(betRect, mode === 'chips' ? opts.betMinCh : undefined, BB_SCORE_FLOOR);
     const bet: Read<number> = Number.isFinite(betRaw.value) ? betRaw : { value: 0, conf: 0.6 };
 
     let action: Read<SeatAction>;
@@ -157,7 +166,11 @@ export function extractRawReads(
       // hero は表向き。能動タグのみ見る（fold は BB ウォーク等で別途扱い）。
       action = recognizeAction(img, px(img, s.actionZone), templates.actions);
     } else {
-      const active = isActiveHand(img, px(img, s.card));
+      const active = isActiveHand(
+        img,
+        px(img, s.card),
+        profile.handActive ? { metric: profile.handActive.metric, activeFrac: profile.handActive.threshold } : {},
+      );
       if (!active.value) {
         action = { value: 'fold', conf: active.conf };
       } else {

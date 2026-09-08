@@ -22,7 +22,7 @@ import type { FracRect } from './layout.js';
 import { toPx } from './layout.js';
 import type { FrameProfile } from './frameProfile.js';
 import { recognizeAmount } from './numberField.js';
-import { readAmountBb, detectDisplayMode } from './bbAmount.js';
+import { readAmountBb, readAmountBbAnchored, detectDisplayMode } from './bbAmount.js';
 import { readBlinds } from './blinds.js';
 import { readStreetFromBoard } from './street.js';
 import { detectButtonSeat } from './button.js';
@@ -149,7 +149,21 @@ export function extractRawReads(
   const seats: RawSeatRead[] = profile.seats.map((s, i) => {
     // stackMinCh（ホログラム加工プレートのキラキラ除去）は BB でも有効（BL 実測 168 で
     // 13.5/7.8 等を正読・小数点も生存）。両モードで適用する。
-    const stack = readTable(px(img, s.stack), s.stackMinCh, BB_SCORE_FLOOR);
+    let stack = readTable(px(img, s.stack), s.stackMinCh, BB_SCORE_FLOOR);
+    // BB 表示で現行リーダが NaN（読めない）なら **名前アンカー方式**で復旧を試みる（two-anchor）。
+    // クリーン席は上の readTable が既に有限値を返すのでここは通らず＝ビット不変・回帰なし。
+    // NaN の席（装飾プレート/ドリフト等でローカライズが崩れた席）だけ、黄色名の中心を
+    // アンカーに正しい stack-BB を選んで直左の数字塊を読み直す（bbAmount.readAmountBbAnchored）。
+    const stackRectPx = px(img, s.stack);
+    const yellow = detectYellowName(img, stackRectPx);
+    if (mode === 'bb' && !Number.isFinite(stack.value)) {
+      const anchored = readAmountBbAnchored(
+        img, stackRectPx, templates.digits,
+        { ...(s.stackMinCh !== undefined ? { minCh: s.stackMinCh } : {}), scoreFloor: BB_SCORE_FLOOR },
+        templates.letters, yellow.box?.cx,
+      );
+      if (Number.isFinite(anchored.value)) stack = anchored;
+    }
     // 占有は「スタックが読めたか」だけで決めない。降りて暗く沈んだ席のスタックが NaN でも
     // 席は実在する（従来はここで empty 化し 6-max を 5-max として黙って誤解 = 本バグ）。
     // 占有信号は 2 系統を **OR** で足す（「実在席を絶対に落とさない」が最優先の要件）:
@@ -163,8 +177,8 @@ export function extractRawReads(
     // 未知環境での取りこぼしを減らす純増の信号になる。hero も同じ検出を通す（空フレームでは
     // empty のまま＝derivePositions が「hero 不在」で安全に棄却。実局面では hero スタックが読める）。
     const stackParsed = Number.isFinite(stack.value);
-    const yellowName = detectYellowName(img, px(img, s.stack)).present;
-    const presence = detectSeatPresence(img, px(img, s.stack), px(img, s.actionZone)).present;
+    const yellowName = yellow.present;
+    const presence = detectSeatPresence(img, stackRectPx, px(img, s.actionZone)).present;
     const occupied = stackParsed || yellowName || presence;
     // 占有だが数字が読めない（presence のみ）席は低信頼にして確認画面で state を強調させる
     // （confidence.aggregateConfidence が occupancy.conf<threshold で `${pos}.state` を、

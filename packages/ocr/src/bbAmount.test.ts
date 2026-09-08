@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import type { Gray } from './types.js';
 import type { Rgba } from './color.js';
 import type { Template } from './match.js';
-import { readAmountBb, stackEndsWithBb, detectDisplayMode } from './bbAmount.js';
+import { readAmountBb, readAmountBbAnchored, stackEndsWithBb, detectDisplayMode } from './bbAmount.js';
 
 /** パターンを 1 セル k×k px に拡大して Gray 化（実画像比率に合わせ数字を大きく）。 */
 function glyph(rows: string[], k = 4): Gray {
@@ -94,6 +94,58 @@ describe('readAmountBb', () => {
     const img = render([TWO, ZERO, DOT, TWO, BEE, BEE, ZERO]);
     const withLetters = readAmountBb(img, full(img), digits, { minCh: 100 }, letters);
     expect(withLetters.value).toBeCloseTo(20.2, 5);
+  });
+});
+
+/** 2 つの Rgba を横に連結（間に gap 列の暗背景）。two-anchor の複数 BB 配置を作る。 */
+function hcat(a: Rgba, b: Rgba, gap: number): Rgba {
+  const h = Math.max(a.h, b.h);
+  const w = a.w + gap + b.w;
+  const data = new Uint8Array(w * h * 4);
+  for (let i = 0; i < w * h; i++) { data[i * 4] = 20; data[i * 4 + 1] = 20; data[i * 4 + 2] = 20; data[i * 4 + 3] = 255; }
+  const blit = (src: Rgba, x0: number) => {
+    for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+      const s = (y * src.w + x) * 4, d = (y * w + (x0 + x)) * 4;
+      data[d] = src.data[s]!; data[d + 1] = src.data[s + 1]!; data[d + 2] = src.data[s + 2]!;
+    }
+  };
+  blit(a, 0); blit(b, a.w + gap);
+  return { w, h, data };
+}
+
+describe('readAmountBbAnchored (two-anchor 名前アンカー)', () => {
+  it('"20.2 BB" → 20.2（fixed リーダと同値のパリティ）', () => {
+    const img = render([TWO, ZERO, DOT, TWO, BEE, BEE]);
+    const r = readAmountBbAnchored(img, full(img), digits, { minCh: 100 }, letters);
+    expect(r.value).toBeCloseTo(20.2, 5);
+  });
+
+  it('左に BB ポジションバッジ（直左に数字なし）があっても無視して stack を正読', () => {
+    // 左＝バッジ "BB"（数字を伴わない）, 右＝stack "20.2 BB"。判別子「直左に数字」でバッジを除外。
+    const badge = render([BEE, BEE]);
+    const stack = render([TWO, ZERO, DOT, TWO, BEE, BEE]);
+    const img = hcat(badge, stack, 60);
+    const r = readAmountBbAnchored(img, { x: badge.w + 60, y: 0, w: stack.w, h: stack.h }, digits, { minCh: 100 }, letters);
+    expect(r.value).toBeCloseTo(20.2, 5);
+  });
+
+  it('数字付き BB が 2 つ（隣席）なら名前中心 nameCx に近い方を選ぶ', () => {
+    // 左 "20 BB"(=20), 右 "22 BB"(=22)。nameCx を右寄せ→22, 左寄せ→20。
+    const left = render([TWO, ZERO, BEE, BEE]);
+    const right = render([TWO, TWO, BEE, BEE]);
+    const gap = 48; // > 1.2*glyphH(≈38) で桁走査が隣へ橋渡ししない・両群が探索領域内に収まる幅
+    const img = hcat(left, right, gap);
+    const rect = { x: left.w + gap, y: 0, w: right.w, h: right.h };
+    const rightCx = left.w + gap + right.w / 2;
+    const leftCx = left.w / 2;
+    expect(readAmountBbAnchored(img, rect, digits, { minCh: 100 }, letters, rightCx).value).toBe(22);
+    expect(readAmountBbAnchored(img, rect, digits, { minCh: 100 }, letters, leftCx).value).toBe(20);
+  });
+
+  it('BB トークンが無い（数字のみ）→ NaN', () => {
+    const img = render([TWO, ZERO, ZERO]); // "200"（BB 無し）
+    const r = readAmountBbAnchored(img, full(img), digits, { minCh: 100 }, letters);
+    expect(Number.isNaN(r.value)).toBe(true);
   });
 });
 

@@ -101,6 +101,16 @@ describe('detectYellowName', () => {
     expect(y.present).toBe(true);
     expect(y.yellowRows).toBeGreaterThanOrEqual(4);
     expect(y.yellowFrac).toBeGreaterThan(0);
+    // 名前ボックス（two-anchor 用）: 黄色塊の中心 x ≈ 描いた塊の中心, 高さ>0。
+    expect(y.box).toBeDefined();
+    expect(y.box!.cx).toBeGreaterThan(bx - 3);
+    expect(y.box!.cx).toBeLessThan(bx + bw + 3);
+    expect(y.box!.h).toBeGreaterThan(0);
+  });
+
+  it('黄色名なし（empty）は box を返さない', () => {
+    const img = felt(180, 90);
+    expect(detectYellowName(img, stack).box).toBeUndefined();
   });
 
   it('黄色が単一行のノイズだけ → present=false（連続塊でない）', () => {

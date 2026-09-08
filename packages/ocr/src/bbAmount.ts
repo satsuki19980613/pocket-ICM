@@ -302,6 +302,163 @@ export function readAmountBb(
 }
 
 /**
+ * 名前アンカー方式の BB スタック読取（ディレクタの two-anchor 設計）。SPEC §6.2 拡張。
+ *
+ * 目的（ローカライズの頑健化）: BB 表示の席近傍には "BB" が複数現れうる——(1) スタックの "BB"
+ * （数字の直後・黄色名の直上）, (2) **BB ポジションの紫バッジ**（アバター左上）, (3) テーブル felt 上の
+ * 白い "BB" 位置ラベル（左下）, (4) 隣席のスタック "BB"（広域クロップの端）。現行 readAmountBb は
+ * タイトに較正した stack 矩形＋「最右の BB ペア」で (1) を正しく取れているが、矩形がドリフト/拡大
+ * すると (2)(3) がクロップに入り、バッジの "BB" が数字化して誤読する（例 "12.9"→"8812.9"）。
+ *
+ * 実測（scripts/_probeNA2, Android GT 20枚＋iPhone GT 2枚 の bb 席）で判別子は明快:
+ *   - stack-BB は **直左に数字を持つ**（digitLeft=40/40, 数字→BBの隙間 <~2 グリフ幅）。
+ *   - バッジ/felt/隣席の "BB" は **直左に数字を持たない**（15/15）。
+ *   - stack-BB は黄色名の中心に最も近い（dx/Nh∈[-1.05,+4.59]）, バッジ/felt は遠く左（dx/Nh∈[-8.93,-3.89]）。
+ * よって選択規則は「**直左に数字の連続塊を持つ BB トークンのうち、黄色名中心に最も近いもの**」。
+ * その BB の**直左の連続数字塊だけ**を数値スパンにする（バッジ由来の左方 B を数字に化けさせない）。
+ *
+ * これは readAmountBb の「最右 BB ペア＋その左の全 tall」より広域ノイズに強い。**安全策**として
+ * extract は現行 readAmountBb を主とし、これは NaN 時のフォールバックにのみ使う（クリーン席は
+ * 現行パスのまま＝ビット不変・回帰なし）。stackRect は現行と同じ席矩形を渡し、この関数が内部で
+ * 左方（バッジ側）へ広げて探索する。nameCx（黄色名中心 x, 画像絶対 px）が与えられればアンカーに使う。
+ */
+export function readAmountBbAnchored(
+  img: Rgba,
+  stackRect: Rect,
+  templates: readonly Template[],
+  opts: BbAmountOptions = {},
+  letters?: readonly Template[],
+  nameCx?: number,
+): Read<number> {
+  const minCh = opts.minCh ?? 120;
+  const maxSat = opts.maxSat ?? 80;
+  // 探索領域: 矩形がどちら向きにドリフトしても stack を含むよう左右対称に広げる（ドリフトは
+  // 対称なので左右非対称だと片方向で stack を外す＝drift 掃引で実証）。上下は stack 近傍に留め、
+  // 上のカード pip・下の名前を帯外へ落とす。バッジ（左上）・felt/隣席の "BB" は領域に入りうるが
+  // 「直左に数字」判別子＋名前アンカーで stack-BB だけを選ぶ。whiteMask は画像外を内部クランプ。
+  const left = Math.round(stackRect.w * 1.5);
+  const right = Math.round(stackRect.w * 0.7);
+  const up = Math.round(stackRect.h * 0.6);
+  const down = Math.round(stackRect.h * 0.6);
+  const region: Rect = { x: stackRect.x - left, y: stackRect.y - up, w: stackRect.w + left + right, h: stackRect.h + up + down };
+
+  const strip = grayFromRgba(img, region);
+  const mask = stripEdgeBands(whiteMask(img, region, { minCh, maxSat }));
+  const rawAll = rawComponents(mask);
+
+  // 広域領域では card pip 等の**背の高い白ブロブ**が混じるため、readAmountBb の
+  // 「median 高さで較正」だと glyphH が pip 側へ引っ張られ数字が全滅する。そこで**尺度は BB の
+  // "B" 高さ**に委ねる（BB→数字の高さは rigid ＝同一, sd 0.022 の実証; SPEC §6.2 冒頭）。まず通常
+  // グリフ（w/h<=1.6）だけを NCC 分類し、隣接 B,B ペアを見つけ、その B 高さ gh を基準に直左の
+  // 連続数字塊を採る（高さ [0.6,1.5]gh・同一ベースライン）。pip は 'B'/数字に化けても高さで弾かれる。
+  const lset = letters ?? [];
+  const narrow = rawAll
+    .filter((c) => c.area >= 15 && c.h >= 6 && c.h < 0.9 * mask.h && c.w <= 0.5 * mask.w && c.w / c.h <= 1.6)
+    .sort((a, b) => a.x - b.x);
+  if (narrow.length < 3) return { value: NaN, conf: 0 };
+  const labeled = narrow.map((c) => {
+    const m = bestMatch(normGlyph(strip, c), [...templates, ...lset]);
+    return { c, label: m.label, score: m.score };
+  });
+  const isDigit = (l: string): boolean => l.length === 1 && l >= '0' && l <= '9';
+
+  // BB トークン列挙。各トークンの B 高さ gh を尺度に、直左の連続数字塊を集める。
+  interface Cand { digitRun: number[]; gh: number; bbX0: number; bbBottom: number; cx: number }
+  const cands: Cand[] = [];
+  for (let i = 0; i + 1 < labeled.length; i++) {
+    const a = labeled[i]!, b = labeled[i + 1]!;
+    if (a.label !== 'B' || b.label !== 'B' || a.score < 0.5 || b.score < 0.5) continue;
+    const gh = (a.c.h + b.c.h) / 2;
+    if (Math.abs(a.c.h - b.c.h) > 0.35 * gh) continue; // 同程度の高さ
+    if (b.c.x - (a.c.x + a.c.w) > 0.9 * gh) continue; // BB は近接
+    const bbBottom = (a.c.y + a.c.h + b.c.y + b.c.h) / 2;
+    if (Math.abs((a.c.y + a.c.h) - (b.c.y + b.c.h)) > 0.3 * gh) continue; // 同一ベースライン
+    const run: number[] = [];
+    let ref = a.c.x;
+    for (let k = i - 1; k >= 0; k--) {
+      const g = labeled[k]!;
+      if (ref - (g.c.x + g.c.w) > 1.2 * gh) break; // 大きな隙間＝数値の左端（バッジまでは届かない）
+      // 背の低い成分（小数点候補・NCC で数字ラベルに化けても桁ではない）はスキップして左へ継続。
+      if (g.c.h < 0.6 * gh) { ref = g.c.x; continue; }
+      if (!isDigit(g.label)) break; // 背の高い非数字（隣の B 等）で打ち切り
+      if (g.c.h > 1.5 * gh) break; // 数字高は B 高と同程度（rigid）
+      if (Math.abs(g.c.y + g.c.h - bbBottom) > 0.35 * gh) break; // 同一ベースライン
+      run.unshift(k);
+      ref = g.c.x;
+    }
+    if (run.length === 0) continue; // 直左に数字が無い＝バッジ/felt/隣席（判別子）→除外
+    const firstC = labeled[run[0]!]!.c;
+    cands.push({ digitRun: run, gh, bbX0: a.c.x, bbBottom, cx: (firstC.x + a.c.x) / 2 + region.x });
+    i++; // ペア消費
+  }
+  if (cands.length === 0) return { value: NaN, conf: 0 };
+
+  // 選択: 名前中心に最も近い候補。nameCx が無ければ最右（stack は最右, バッジは左）。
+  const chosen = nameCx !== undefined
+    ? cands.reduce((best, c) => (Math.abs(c.cx - nameCx) < Math.abs(best.cx - nameCx) ? c : best))
+    : cands.reduce((best, c) => (c.cx > best.cx ? c : best));
+
+  const gh = chosen.gh;
+  let N = Math.round(0.35 * gh);
+  N = Math.max(4, Math.min(N, Math.max(4, gh - 3)));
+  const numTall: RawComp[] = chosen.digitRun.map((k) => labeled[k]!.c);
+  // 先頭桁がアバター発光弧に融合し幅広ブロブ化して narrow から漏れるケース（iOS コーナー
+  // "19.2"→"9.2"）: 現行 run の左に、弧刈り込みで数字化できる幅広ブロブがあれば復元して前置。
+  {
+    const leftX = numTall[0]!.x;
+    let blob: RawComp | null = null;
+    for (const c of rawAll) {
+      if (c.w / c.h <= 1.6) continue; // 幅広のみ
+      if (c.h < 0.7 * gh || c.h > 1.8 * gh) continue;
+      if (c.x + c.w > leftX + 2 || leftX - (c.x + c.w) > 1.2 * gh) continue; // run の直左
+      if (Math.abs(c.y + c.h - chosen.bbBottom) > 0.5 * gh) continue;
+      if (!blob || c.x > blob.x) blob = c;
+    }
+    if (blob) {
+      const t = trimArcBridge(mask, blob, N);
+      if (t.area >= 15 && t.h >= 0.6 * gh && t.w / t.h <= 1.6) numTall.unshift(t);
+    }
+  }
+  numTall.sort((a, b) => a.x - b.x);
+  const firstX = numTall[0]!.x;
+  const lastTall = numTall[numTall.length - 1]!;
+  const lastX = lastTall.x + lastTall.w;
+  const digitBottom = median(numTall.map((c) => c.y + c.h));
+
+  // 小数点は生マスクの小成分から拾う（readAmountBb と同一の基準, gh を尺度に）。
+  const dots = rawAll.filter(
+    (c) =>
+      c.h <= 0.45 * gh &&
+      c.h >= 2 &&
+      c.area >= 4 &&
+      c.x >= firstX - 2 &&
+      c.x + c.w <= lastX + 2 &&
+      Math.abs(c.y + c.h - digitBottom) <= 0.3 * gh,
+  );
+
+  type Item = { readonly x: number; readonly dot: boolean; readonly comp: RawComp };
+  const items: Item[] = [
+    ...numTall.map((c) => ({ x: c.x, dot: false, comp: c })),
+    ...dots.map((c) => ({ x: c.x, dot: true, comp: c })),
+  ].sort((a, b) => a.x - b.x);
+
+  const scoreFloor = opts.scoreFloor ?? 0;
+  let text = '';
+  let minScore = 1;
+  for (const it of items) {
+    if (it.dot) { text += '.'; continue; }
+    const m = bestMatch(normGlyph(strip, it.comp), templates);
+    if (m.score < scoreFloor) continue;
+    text += m.label;
+    const s = matchConfidence(m);
+    if (s < minScore) minScore = s;
+  }
+  const value = parseAmount(text);
+  if (value === null) return { value: NaN, conf: 0 };
+  return { value, conf: Math.max(0, Math.min(1, minScore)) };
+}
+
+/**
  * スタックの末尾 2 背高成分が "B","B" か（＝BB 表示）を NCC で確認。SPEC §6.2 のモード判定。
  * digits＋letters（"B"）でマッチし、末尾 2 tall が両方 'B' なら true。chips は数字で終わるので false。
  * 実画像 hero 101/101 で chips/BB を完全分離（ピッチ判定より確実）。成分 3 未満は false。

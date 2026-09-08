@@ -77,6 +77,13 @@ export interface YellowName {
   readonly yellowFrac: number;
   /** 黄色を含む行数（診断用）。 */
   readonly yellowRows: number;
+  /**
+   * 検出した名前の外接ボックス（画像絶対 px, 追加情報）。名前アンカー方式のスタック読取で
+   * 「スタックの BB は名前中心の直上」判別に使う（stackAnchor / bbAmount 参照）。名前の
+   * **行射影で最長の黄色行連続帯**を名前帯とし、その帯内の黄色画素の x/y 範囲を採る
+   * （帯外の飾り黄色・上下の孤立黄色を落とす）。present=false のときは undefined。
+   */
+  readonly box?: { readonly cx: number; readonly top: number; readonly bottom: number; readonly h: number };
 }
 
 /**
@@ -109,16 +116,38 @@ export function detectYellowName(img: Rgba, stackRect: Rect, opts: YellowNameOpt
   if (w === 0 || h === 0) return { present: false, yellowFrac: 0, yellowRows: 0 };
   let total = 0;
   let rows = 0;
+  const rowCnt = new Int32Array(h);
   for (let y = y0; y < y1; y++) {
     let c = 0;
     for (let x = x0; x < x1; x++) {
       const s = (y * img.w + x) * 4;
       if (isYellowNamePixel(img.data[s]!, img.data[s + 1]!, img.data[s + 2]!)) c++;
     }
+    rowCnt[y - y0] = c;
     total += c;
     if (c >= minPerRow) rows++;
   }
-  return { present: rows >= minRows, yellowFrac: total / (w * h), yellowRows: rows };
+  const present = rows >= minRows;
+  const base = { present, yellowFrac: total / (w * h), yellowRows: rows };
+  if (!present) return base;
+  // 名前ボックス: 「黄色を含む行（>=minPerRow）」の最長連続帯を名前帯とし、その帯内の黄色画素の
+  // x/y 範囲を採る（上下の孤立黄色・飾りを落とす）。
+  let bestS = -1, bestLen = 0, curS = -1;
+  for (let i = 0; i <= h; i++) {
+    const on = i < h && rowCnt[i]! >= minPerRow;
+    if (on && curS < 0) curS = i;
+    else if (!on && curS >= 0) { if (i - curS > bestLen) { bestLen = i - curS; bestS = curS; } curS = -1; }
+  }
+  if (bestS < 0 || bestLen < 3) return base;
+  const nyTop = y0 + bestS, nyBot = y0 + bestS + bestLen;
+  let minX = img.w, maxX = -1;
+  for (let y = nyTop; y < nyBot; y++)
+    for (let x = x0; x < x1; x++) {
+      const s = (y * img.w + x) * 4;
+      if (isYellowNamePixel(img.data[s]!, img.data[s + 1]!, img.data[s + 2]!)) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    }
+  if (maxX < minX) return base;
+  return { ...base, box: { cx: (minX + maxX) / 2, top: nyTop, bottom: nyBot, h: bestLen } };
 }
 
 export interface SeatPresenceOptions {

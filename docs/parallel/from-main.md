@@ -125,3 +125,24 @@ OCR セッションへ。同じ作業ディレクトリで並行作業します�
 **証拠**: MAIN が切り出した銘板 crop を確認済み（seat_TL/TC/TR/BR/BC/BL・and_TL）。必要なら同手順で再現可能（pngCodec + プロファイル stack 矩形中心の下を切る）。一時スクリプトは削除済み（OCR所有 scripts は不変）。
 
 握手不要（凍結interface不変）。実装方針の相談があれば from-ocr.md へ。
+
+---
+
+## [2026-09-08 MAINが accuracy.ts をアンカー経路にパリティ修正＋iOS action 実バグを報告]
+
+さつき指示「既知のアンカー方式バグを修正」で MAIN が検証・対応。**本番実行時のアンカーバグは MAIN 所有には無し**（占有NaN→stack0は buildBoardState が stack<=0 で弾く＝黙って0で解けない）。以下は OCR 所有領域なので申し送ります。
+
+### ① 私が修正: `scripts/accuracy.ts` を本番アンカー経路に一致（検証パリティ）
+- **バグ**: accuracy.ts の抽出が旧・固定座標（`extractRawReadsAuto` CHIPS_6MAX/IOS_6MAX）のままで、本番 `prefill.ts`（`extractAnchored` 主）と別経路を測っていた＝**アンカー経路の回帰を主ハーネスが見逃す**。コメントも「本番 prefill.ts と同じ」と陳腐化。
+- **修正（OCR所有ファイルだがさつき指示で MAIN が実施）**: 既定を `extractAnchored`（throw時のみ旧経路にcatchフォールバック＝prefill.ts と同一）に。旧経路比較用に **`--legacy`** フラグを追加（`--auto` は `--legacy` 時のみ有効）。tsc緑。
+- **実測（アンカー経路・私が独立実行）**: Android GT **判定100%(20/20)・有効受理100%・棄却100%**。iPhone GT **occupancy/stack/playersLeft/verdict/heroPos/pot/heroHand/blinds/ante 全100%**。**本番相当は無回帰**。
+- 注意: 「完全一致」は Android 70%/iPhone 0% に見えるが、内訳は下記②③のノイズ。**判定と求解に効く項目は全一致**。
+
+### ② iOS action = fold 誤検出（実バグ・OCR画像チューニング要）
+- iPhone GT で **action 58.3%(7/12)**: 非hero席が `none`（アクティブ/ブラインド投函）なのに **fold 誤検出**（E4073E5F TL/BL, EC7CD106 TL/TC/BL）＋連動で bet 0。原因は**アンカー抽出が機種別 `handActive` 指標(iOS=strong)を選べず** Android の bright 指標で判定（あなたの cutover ノート「iOS action cosmetic 後退」）。
+- **現状は求解に非伝播で安全**（誤検出席が BB/SB＝reconstructSpot が folded でも blindOb で rootStack 復元→verdict/stack/playersLeft 100%）。だが**iOS でアクティブな all-in 非ブラインド席が fold 誤検出されると root が狂う潜在リスク**。`anchorAction.ts`/`cardState.ts` で iOS の strong 指標を選べるように（アンカーは解像度非依存で機種不明＝機種非依存な指標 or 両対応判定が要る）。**OCR所有＝あなたの領域でお願いします**。
+
+### ③ 棄却(chips)フレームの read 採点アーティファクト
+- accuracy.ts の「完全一致」が **棄却される chips フレームのゴミ read 値まで採点**（142820等 chips ○=判定は正しく棄却だが read 24/32）。旧経路は CHIPS_6MAX で chips も読めたので高得点に見えていただけ。**棄却フレームは field 採点から除外**するのが妥当（メトリクス設計＝OCR判断）。
+
+握手不要（interface不変）。②③はあなたのハーネス/画像知見で。実機の失敗スクショ入手時に②の iOS 較正も併せて。

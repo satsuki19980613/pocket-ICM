@@ -14,6 +14,7 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
 import { extractRawReads, extractRawReadsAuto, type ExtractTemplates } from '../src/extract.js';
+import { extractAnchored } from '../src/extractAnchored.js';
 import { IOS_6MAX } from '../src/frameProfileIos.js';
 import { FULL_FRAME } from '../src/contentRect.js';
 import { resampleRgba } from '../src/resize.js';
@@ -37,7 +38,9 @@ const templates: ExtractTemplates = {
 const DIR = 'local-fixtures';
 const argvPre = process.argv.slice(2);
 const gtPath = argvPre.includes('--gt') ? argvPre[argvPre.indexOf('--gt') + 1]! : 'scripts/accuracy.groundtruth.json';
-const useAuto = argvPre.includes('--auto'); // 多機種: コンテンツ矩形検出→拡大の入口を使う
+const useAuto = argvPre.includes('--auto'); // 多機種: コンテンツ矩形検出→拡大の入口を使う（--legacy 時のみ有効）
+// 既定は本番と同じアンカー抽出。--legacy で旧・固定座標経路（アンカー導入前）を測る（比較用）。
+const useLegacy = argvPre.includes('--legacy');
 // 低解像度21:9(iPhone)代理: 各画像を指定幅へ縮小してから抽出（Android GT をそのまま流用可）。
 const downscaleW = argvPre.includes('--downscale') ? Number(argvPre[argvPre.indexOf('--downscale') + 1]) : 0;
 const GT = JSON.parse(readFileSync(gtPath, 'utf8')) as {
@@ -103,14 +106,27 @@ for (const [frame, gt] of Object.entries(GT.frames)) {
   if (downscaleW > 0 && rgba.w > downscaleW) {
     rgba = resampleRgba(rgba, downscaleW, Math.round((downscaleW * rgba.h) / rgba.w));
   }
-  // 本番 prefill.ts と同じプロファイル選択: iPhone クラス(幅<2400)は IOS_6MAX を full-frame
-  // canonical で、Android(2730 幅)は CHIPS_6MAX＋cr 自動検出。--auto の時のみ機種選択する。
-  const isAndroid = rgba.w >= 2400;
-  const reads: RawReads = useAuto
-    ? (isAndroid
+  // 本番 prefill.ts と同一経路で測る（検証パリティ）: 抽出はアンカー方式一本（解像度・アスペクト
+  // 非依存）。固定座標プロファイルは extractAnchored が throw した時の crash 安全網としてのみ使う。
+  // これにより本番でのアンカー経路の回帰を本ハーネスが確実に捕捉する（旧経路は --legacy で残す）。
+  let reads: RawReads;
+  if (useLegacy) {
+    const isAndroid = rgba.w >= 2400;
+    reads = useAuto
+      ? (isAndroid
+          ? extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads
+          : extractRawReadsAuto(rgba, IOS_6MAX, templates, { betMinCh: 125, contentRect: FULL_FRAME }).reads)
+      : extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
+  } else {
+    try {
+      reads = extractAnchored(rgba, templates, {});
+    } catch {
+      const isAndroid = rgba.w >= 2400;
+      reads = isAndroid
         ? extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads
-        : extractRawReadsAuto(rgba, IOS_6MAX, templates, { betMinCh: 125, contentRect: FULL_FRAME }).reads)
-    : extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
+        : extractRawReadsAuto(rgba, IOS_6MAX, templates, { betMinCh: 125, contentRect: FULL_FRAME }).reads;
+    }
+  }
   const res: OcrValidation = runOcrPipeline(reads);
   const ms = Date.now() - t0;
 

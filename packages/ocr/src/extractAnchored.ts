@@ -14,7 +14,7 @@
  *   → 左上ヘッダの SB/BB・アンティ（readBlinds, chips → BB 正規化）
  *   → D ディスク → 最近傍占有席 = ボタン（§B6）
  *   → hero カード帯の 2 枚 → heroHand（recognizeHeroHandColor）
- *   → displayMode: stack が "BB" 終端か（§B7）
+ *   → displayMode: stack が "BB" 終端か（§B7, stackEndsWithBb/detectDisplayMode）
  *
  * 席は SLOTS 順 [TL,TC,TR,BR,BC,BL]（時計回り, derivePositions のリング順）で返す。id は
  * スロット名（GT / accuracy の SeatId と一致）。金額はすべて BB 換算（BB 表示は既に BB、chips は
@@ -28,8 +28,10 @@
  * stack 読み（fix 3）: 名前直上 BB アンカーを主とし、名前ボックス検出が破綻した席（手番グロー枠 hero /
  * 折れ暗コーナー / iOS 小名）は固定フラクショナル y の数字ライン（STACK_Y_FRAC）で読み直す。
  *
- * 割り切り: action は非 hero の fold（isActiveHand）＋ allin ヒューリスティック（stack≈0）のみ。能動タグ
- * NCC（raise/call/check）は読まない（フォームに非伝播＝求解無影響, [[ocr-bb-multidevice]]）。
+ * action（本番 extract.ts と同等）: 非 hero は fold（isActiveHand）→ active なら能動タグ NCC
+ * （recognizeAction; raise/call/allin/check）。hero も能動タグを読む。タグが none の非 hero で
+ * stack≈0 なら allin ヒューリスティックで補完。能動タグは AnchorTemplates.actions を渡した場合のみ
+ * 読み、raise/limp/walk の対象外局面を下流 spotReconstruction が棄却できる（§6.5・過受理の是正）。
  */
 
 import type { AnteScheme, DisplayMode, Occupancy, RawReads, RawSeatRead, Read, Rect, SeatAction } from './types.js';
@@ -38,6 +40,8 @@ import type { Template } from './match.js';
 import { normalizeForAnchors } from './upscaleNormalize.js';
 import { enumerateSeats, SLOTS, type SeatSlot, type Slot } from './seatEnum.js';
 import { readAmountBbAnchored } from './bbAmount.js';
+import { recognizeAction } from './actionTag.js';
+import { actionZoneRect } from './anchorAction.js';
 import { readBlinds } from './blinds.js';
 import { readPotAnchored, type PotAnchorRegion } from './potAnchor.js';
 import { goldDiscCandidates, type FracPoint } from './button.js';
@@ -52,6 +56,12 @@ export interface AnchorTemplates {
   readonly ranks: readonly Template[];
   /** BB 接尾辞・モード判定の "B"。省略時はモード判定できず chips 既定になる。 */
   readonly letters?: readonly Template[];
+  /**
+   * 能動アクション語（レイズ/コール/オールイン/チェック）。省略時は能動タグを読まず、
+   * fold(cardState) ＋ allin ヒューリスティックのみ（従来挙動）。渡すと本番 extract 同様に
+   * 席のタグを読み、raise/limp/walk を下流 spotReconstruction が対象外棄却できる（§B/§6.5）。
+   */
+  readonly actions?: readonly Template[];
 }
 
 export interface AnchorOptions {
@@ -258,7 +268,7 @@ function readHeroHand(img: Rgba, ranks: readonly Template[]): Read<string> {
  * アンカー抽出のメイン。img は任意解像度／アスペクト。RawReads（extractRawReads と同形）を返す。
  */
 export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: AnchorOptions = {}): RawReads {
-  const { digits, ranks, letters } = templates;
+  const { digits, ranks, letters, actions } = templates;
   const scoreFloor = opts.scoreFloor ?? BB_SCORE_FLOOR;
 
   // §B2/§B3: 正規化してから席列挙。normalizeForAnchors は決定的なので enumerateSeats が内部で
@@ -276,16 +286,24 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   const stackRectOf = (s: SeatSlot): Rect | null =>
     s.nameBox ? stackRectFromName(s.nameBox) : null;
 
-  // §B7: 表示モード判定。名前直上帯を **BB アンカーリーダ**にかけ、BB ペア＋直左数字が
-  // 取れれば bb（chips 表示には "BB" 接尾辞が無いので BB ペアは生じない）。occupied 席を
-  // hero 先頭で順に試し、最初に BB 読みが有限値になった時点で bb 確定。どれも取れなければ chips。
+  // §B7: 表示モード判定。名前直上のタイト帯を **BB アンカーリーダ**（readAmountBbAnchored）に
+  // かけ、**直左に数字塊を持つ BB トークン**が取れれば bb（chips 表示のスタックは純数字・カンマで
+  // "BB" 接尾辞が無く、名前直上のタイト帯には BB トークンが生じない）。占有席の **OR 投票**で
+  // 「1 席でも BB 読取が有限なら bb」とする。
+  //
+  // 旧実装との差（過受理の是正）: 旧コードは readStackAnchored の **minCh 段階昇段**
+  // ([120,168,185,150,96,80]) で読み、低 minCh(96/80) と罠の 150 が chips スタックの felt/縁
+  // ノイズを BB に化けさせ、chips 表示を bb と誤判定して**生チップ額を BB として過受理**していた
+  // （指揮側 164 枚照合で 25 枚の危険な過受理）。モード判定は**単一の保守的な minCh=120 のみ**で
+  // 読む（昇段しない）——実測で chips スタックはこの minCh では BB アンカーが有限値を返さず（NaN）、
+  // BB スタックは iOS/Android とも ≥1 席が有限になる。stackEndsWithBb（末尾 2 tall = B ペア）は
+  // iOS 低解像度で系統的に false になり BB 局面を取りこぼした（アンカーリーダの弧較正/探索の方が頑健）。
   let mode: DisplayMode = opts.displayMode ?? 'chips';
   if (opts.displayMode === undefined && letters) {
-    const ordered = [...occ].sort((a, b) => (b.isHero ? 1 : 0) - (a.isHero ? 1 : 0));
-    for (const s of ordered) {
+    for (const s of occ) {
       const sr = stackRectOf(s);
       if (!sr || !s.nameBox) continue;
-      const r = readStackAnchored(nimg, sr, s.nameBox.cx, digits, letters, scoreFloor);
+      const r = readAmountBbAnchored(nimg, sr, digits, { scoreFloor, minCh: 120 }, letters, s.nameBox.cx);
       if (Number.isFinite(r.value)) { mode = 'bb'; break; }
     }
   }
@@ -382,10 +400,19 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
       conf: stackParsed ? (stack.conf > 0 ? 0.9 : 0.5) : 0.4,
     };
 
-    // action: hero は none。非 hero は isActiveHand で fold 判定＋ stack≈0 で allin ヒューリスティック。
-    // カード領域は名前直上のスタックの更に上（アバター帯）。nameBox から相対で作る。
+    // action（本番 extract.ts のセマンティクスを踏襲・§B/§6.5）:
+    //  - hero: 表向き。能動タグのみ読む（fold は BB ウォーク等で下流が別途扱う）。
+    //  - 非 hero: cardState で fold 判定 → active なら能動タグを読む。
+    // 能動タグ（raise/call/check/allin）は actions テンプレを渡したときだけ読む。読めば下流
+    // spotReconstruction が raise / 非オールインの call（リンプ）/ walk を**対象外棄却**できる
+    // （旧アンカー抽出はタグを読まず、BB 表示でも raise/limp 局面を受理していた＝過受理の一因）。
+    // タグ帯は名前アンカーから actionZoneRect（本番 actionZone と同相対位置）。カード領域は
+    // 名前直上のスタックの更に上（アバター帯）。
     let action: Read<SeatAction> = { value: 'none', conf: 0.6 };
-    if (!isHero && s.nameBox) {
+    const az = actionZoneRect(nimg, s.slot, s.nameBox);
+    if (isHero) {
+      if (actions) action = recognizeAction(nimg, az, actions);
+    } else if (s.nameBox) {
       const h = Math.max(6, s.nameBox.h);
       const cardRect: Rect = {
         x: Math.round(s.nameBox.cx - 1.6 * h),
@@ -395,9 +422,12 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
       };
       const active = isActiveHand(nimg, cardRect, opts.handActive ?? {});
       if (!active.value) action = { value: 'fold', conf: active.conf };
+      else if (actions) action = recognizeAction(nimg, az, actions);
     }
-    // allin: 非 hero・stack がほぼ 0（シューブ済み）。構造から allin を確定（§B5 の精神）。
-    if (!isHero && stackParsed && stack.value < 0.5) {
+    // allin: 能動タグが読めなかった（none）非 hero で stack がほぼ 0（シューブ済み）なら構造から
+    // allin を確定（§B5 の精神・従来の allin 復旧を温存）。タグが raise/call/check を返した席は
+    // 上書きしない（下流の対象外判定を尊重）。
+    if (!isHero && action.value === 'none' && stackParsed && stack.value < 0.5) {
       action = { value: 'allin', conf: 0.6 };
     }
 

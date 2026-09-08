@@ -12,11 +12,13 @@
  */
 
 import {
+  extractAnchored,
   extractRawReadsAuto,
   runOcrPipeline,
   CHIPS_6MAX,
   IOS_6MAX,
   FULL_FRAME,
+  type RawReads,
   type ExtractTemplates,
   type ExtractOptions,
   type Rgba,
@@ -51,15 +53,20 @@ export function ocrPrefillFromRgba(
   templates: ExtractTemplates,
   opts: ExtractOptions = {},
 ): OcrPrefillResult {
-  // プロファイル選択（機種差＝非アフィンなので単一プロファイルでは吸収不可・SPEC §6.2）。
-  //  - Android(2730×1260 クラス, 較正基準)は CHIPS_6MAX＋コンテンツ矩形自動検出（全画面=恒等）。
-  //  - iPhone(1792×828 クラス, より小解像度)は iOS 専用 IOS_6MAX を full-frame canonical で使う
-  //    （iPhone は full-bleed でセーフエリア無し＝内寄せ不要。iPhone 同士は解像度差のみ＝スケールで吸収）。
-  // 判定は解像度（幅）で行う: Android 実機は 2730 幅、iPhone は 1792 幅前後。閾値 2400。
-  const isAndroid = img.w >= 2400;
-  const { reads } = isAndroid
-    ? extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts })
-    : extractRawReadsAuto(img, IOS_6MAX, templates, { ...DEFAULT_OPTS, ...opts, contentRect: FULL_FRAME });
+  // 抽出はアンカー方式に一本化（解像度・アスペクト非依存・docs/OCR_PHASE2.md）。固定座標プロファイル
+  // ＋`img.w>=2400` の機種二値分岐は、較正解像度から外れた実機（例 1310×536）で全席ズレて棄却/誤読
+  // する破綻があり、ランドマーク（黄色名→直上BB／中央"Pot :"／Dボタン→リング位相）からの相対読みで
+  // 置換した。全27枚で旧固定座標とスタック±0.05一致・棄却も一致し、旧では読めない劣化フレームを救う
+  // ことを実測（§B9 基準①②③）。旧固定座標経路は **crash 安全網**として throw 時のみ使う（挙動不変）。
+  let reads: RawReads;
+  try {
+    reads = extractAnchored(img, templates, {});
+  } catch {
+    const isAndroid = img.w >= 2400;
+    reads = isAndroid
+      ? extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts }).reads
+      : extractRawReadsAuto(img, IOS_6MAX, templates, { ...DEFAULT_OPTS, ...opts, contentRect: FULL_FRAME }).reads;
+  }
   // 取り込み条件＝BB 表示のみ（SPEC §5.2）。チップ総額表示は早期に棄却して手入力へ誘導する。
   if (reads.displayMode !== 'bb') {
     return { ok: false, issues: [CHIPS_MODE_ISSUE], lowConfidenceFields: [] };

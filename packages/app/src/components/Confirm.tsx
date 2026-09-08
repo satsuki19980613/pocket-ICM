@@ -16,6 +16,11 @@ export function Confirm(props: {
   imageUrl?: string | null;
   /** 手入力モーダルを開く（項目別「修正」・全体「修正」共通）。 */
   onEdit: () => void;
+  /**
+   * 検出人数を確認画面でその場修正する（安全網）。写真取り込みで席のスタックが読めないと
+   * その席が空席扱いで抜け、人数が少なく出る。指定時のみ「検出人数」ブロックを出す。
+   */
+  onFixPlayers?: (n: number) => void;
   onSolve: () => void;
 }): JSX.Element {
   const { state } = props;
@@ -27,6 +32,8 @@ export function Confirm(props: {
   const potOk = delta !== null && Math.abs(delta) < 1e-9;
   // 席スタックのいずれかが低信頼なら Players 行を CHECK 強調（モックの low 行に対応）。
   const stacksLow = state.seats.some((s) => low.has(`${s.pos}.stack`));
+  // 写真取り込みのときは「検出人数」を大きく確認させ、その場で人数を直せるようにする（安全網）。
+  const showPlayersCheck = !!props.onFixPlayers && !!props.imageUrl;
 
   const Edit = (): JSX.Element => (
     <button type="button" className="edit" onClick={props.onEdit}>
@@ -44,6 +51,30 @@ export function Confirm(props: {
           </button>
         )}
       </div>
+
+      {showPlayersCheck && (
+        <div className="players-check">
+          <div className="pc-head">
+            <span className="pc-label">検出人数</span>
+            <span className="pc-count">{state.playersLeft}人</span>
+          </div>
+          <div className="seg pc-seg">
+            {[2, 3, 4, 5, 6].map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`segbtn${state.playersLeft === n ? ' on' : ''}`}
+                onClick={() => props.onFixPlayers!(n)}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <p className="pc-note">
+            ⚠️ テーブルの実際の人数と合っていますか？ フォールドした席のスタックが読み取れないと、その席が抜けて人数が少なく出ることがあります。違う人数を選ぶと席を補います（補った席のスタックは下の Stacks でご確認ください）。
+          </p>
+        </div>
+      )}
 
       <div className="readout">
         <div className="row">
@@ -64,11 +95,13 @@ export function Confirm(props: {
           <span className="vl">{state.heroPos}</span>
           <Edit />
         </div>
-        <div className={`row${stacksLow ? ' low' : ''}`}>
-          <span className="lb">Players</span>
-          <span className="vl">{state.playersLeft}</span>
-          <Edit />
-        </div>
+        {!showPlayersCheck && (
+          <div className={`row${stacksLow ? ' low' : ''}`}>
+            <span className="lb">Players</span>
+            <span className="vl">{state.playersLeft}</span>
+            <Edit />
+          </div>
+        )}
         <div className="row">
           <span className="lb">Pot</span>
           <span className={`vl ${potOk ? 'ok' : 'warn'}`}>

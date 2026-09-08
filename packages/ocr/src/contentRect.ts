@@ -20,8 +20,10 @@ import type { Rgba } from './color.js';
 import type { FrameProfile, SeatProfile } from './frameProfile.js';
 import type { FracPoint } from './button.js';
 import type { Template } from './match.js';
-import { recognizeAmount } from './numberField.js';
+import { recognizeAmount, grayFromRgba } from './numberField.js';
 import { resampleRgba } from './resize.js';
+import { findCardRects, largestCardRects } from './detect.js';
+import { recognizeHeroHandColor } from './cards.js';
 
 /** 較正解像度（横）。extractRawReadsAuto と一致させる。 */
 export const CANON_W = 2730;
@@ -125,6 +127,36 @@ function readsDigitsNorm(
   return Number.isFinite(recognizeNorm(img, orig, cr, canonW, canonH, digits, minCh).value);
 }
 
+/**
+ * hero 手札領域を cr へ写像→切り出し→較正解像度へ拡大し、2 枚のカードを検出して
+ * hero ハンドの認識信頼度を返す（0..1）。**cr 整列の強アンカー**: hero カードは常在・
+ * 大きく高コントラストで位置に敏感なため、数字スタックだけのスコアが「位置ズレでも自信を
+ * 持って読めるゴミ」を選ぶ問題（実 iPhone で cr が僅かにずれ hero KJo→K6o 誤読）を補正する。
+ * カードが 2 枚検出できない cr は 0（＝整列が悪い）。ranks が無ければ 0（従来どおり）。
+ */
+function heroCardConf(
+  img: Rgba,
+  profile: FrameProfile,
+  cr: ContentRect,
+  canonW: number,
+  canonH: number,
+  ranks?: readonly Template[],
+): number {
+  if (!ranks) return 0;
+  const mapped = mapFrac(profile.heroCards, cr);
+  const rp = toPx(mapped, img.w, img.h);
+  if (rp.w <= 2 || rp.h <= 2) return 0;
+  const crop = cropPx(img, rp);
+  const tw = Math.max(4, Math.round(profile.heroCards.w * canonW));
+  const th = Math.max(4, Math.round(profile.heroCards.h * canonH));
+  const up = resampleRgba(crop, tw, th);
+  const g = grayFromRgba(up, { x: 0, y: 0, w: tw, h: th });
+  const found = findCardRects(g, { threshold: 190, minAreaFrac: 0.02, closeRadius: 1 });
+  const rects = largestCardRects(found, 2);
+  if (rects.length < 2) return 0;
+  return recognizeHeroHandColor(up, rects[0]!, rects[1]!, ranks).conf;
+}
+
 /** cr の自己整合スコア: スタックが実認識できる席数（0..席数, 整数）。Android 高速パス判定用。 */
 export function scoreContentRect(
   img: Rgba,
@@ -153,6 +185,7 @@ function scoreCr(
   canonW: number,
   canonH: number,
   digits: readonly Template[],
+  ranks?: readonly Template[],
 ): number {
   let s = 0;
   const add = (r: { value: number; conf: number }) => {
@@ -163,8 +196,16 @@ function scoreCr(
   add(recognizeNorm(img, profile.pot, cr, canonW, canonH, digits));
   add(recognizeNorm(img, profile.blindsNum, cr, canonW, canonH, digits));
   add(recognizeNorm(img, profile.ante, cr, canonW, canonH, digits));
+  // hero 手札アンカー（強め重み）。数字スタックは位置がずれても "finite なゴミ" を自信を
+  // 持って読むことがあり、それだけだと最適 cr を外す。hero カードの認識信頼度は整列に敏感で、
+  // 正しい cr で高く・ずれた cr で急落する（実 iPhone: 0.9 → 0.24）。HERO_WEIGHT 倍して
+  // 加えることで、数字が拮抗する候補間で hero が読める整列を選ばせる。
+  s += HERO_WEIGHT * heroCardConf(img, profile, cr, canonW, canonH, ranks);
   return s;
 }
+
+/** hero 手札アンカーのスコア重み（数字スタック 1 席分＝conf1.0 の HERO_WEIGHT 倍）。 */
+const HERO_WEIGHT = 4;
 
 /**
  * 「フィット矩形」: canonical アスペクトを保ったまま画面に内接させた content 矩形
@@ -233,6 +274,7 @@ export function detectContentRect(
   profile: FrameProfile,
   digits: readonly Template[],
   opts: DetectContentRectOptions = {},
+  ranks?: readonly Template[],
 ): ContentRect {
   const perfect = profile.seats.length;
   const canonAspect = profile.aspect;
@@ -257,14 +299,14 @@ export function detectContentRect(
   // （Android/実機）は全画面がほぼ最適なので、僅差のズレ候補で全画面を上書きさせない
   // （＝Android 回帰防止）。実機 iPhone のように全画面が大きく外れる場合のみ内寄せ cr を選ぶ。
   const MARGIN = 0.75;
-  const fullScore = scoreCr(img, profile, FULL_FRAME, canonW, canonH, digits);
+  const fullScore = scoreCr(img, profile, FULL_FRAME, canonW, canonH, digits, ranks);
   let best: ContentRect = FULL_FRAME;
   let bestScore = fullScore + MARGIN;
   for (const sc of scales)
     for (const ox of offsets)
       for (const oy of offsets) {
         const cr = fitRect(img, canonAspect, sc, ox, oy);
-        const s = scoreCr(img, profile, cr, canonW, canonH, digits);
+        const s = scoreCr(img, profile, cr, canonW, canonH, digits, ranks);
         if (s > bestScore) {
           bestScore = s;
           best = cr;

@@ -13,6 +13,16 @@
 import type { FracRect } from './layout.js';
 import type { FracPoint } from './button.js';
 
+/**
+ * 非 hero 席の active/folded 判定ルール（機種依存）。カード裏の青画素比のどの指標を使うか。
+ * Android は folded でも strong（暗い紺）が高いので明るい青 bright で分けるしかない。iOS は
+ * active でも bright≈0 だが strong は active でのみ立つので strong で分ける。cardState.ts 参照。
+ */
+export interface HandActiveRule {
+  readonly metric: 'bright' | 'strong';
+  readonly threshold: number;
+}
+
 /** 画面席の識別子（固定位置）。 */
 export type ScreenSeat = 'TL' | 'TC' | 'TR' | 'BL' | 'BC' | 'BR';
 
@@ -55,6 +65,11 @@ export interface FrameProfile {
   readonly table: FracRect;
   /** 時計回りの席（6）。derivePositions のリング順。 */
   readonly seats: readonly SeatProfile[];
+  /**
+   * カード裏 active/folded 判定ルール（機種依存）。省略時は cardState 既定
+   * （metric='bright', threshold=0.06 = Android 較正）。iOS など bright が使えない機種で上書きする。
+   */
+  readonly handActive?: HandActiveRule;
 }
 
 const R = (x: number, y: number, w: number, h: number): FracRect => ({ x, y, w, h });
@@ -118,10 +133,16 @@ export const CHIPS_6MAX: FrameProfile = {
     },
     {
       screen: 'BL', isHero: false,
-      stack: R(0.191, 0.594, 0.065, 0.036), bet: R(0.303, 0.466, 0.066, 0.05),
+      // stack: 旧 x0.191/w0.065 は数字にタイト過ぎ、先頭桁が左端で切れる局面があった
+      // （Android は conf 0.37 で辛うじて正読・実 iPhone は "10.9"→"0.9" と先頭 "1" が脱落）。
+      // 左に余白を足す（x0.182/w0.074）と両機種で正読かつ conf≈1.0（dev _diagBL 4/4）。
+      stack: R(0.182, 0.594, 0.074, 0.036), bet: R(0.303, 0.466, 0.066, 0.05),
       betBb: R(0.295, 0.466, 0.074, 0.05),
       card: R(0.21, 0.52, 0.075, 0.08), actionZone: R(0.09, 0.51, 0.17, 0.06),
       buttonAnchor: P(0.285, 0.549), stackMinCh: 168,
     },
   ],
+  // Android: folded は暗い紺で strong 高・bright≈0、active は明るい青。dev _probeCard で
+  // folded bright max 0.0035 / active bright min 0.1336（143002 TC は rect が青に載らず両指標 0 の別要因）。
+  handActive: { metric: 'bright', threshold: 0.06 },
 };

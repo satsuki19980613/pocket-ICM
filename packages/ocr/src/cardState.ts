@@ -28,8 +28,16 @@ export interface CardStateOptions {
   readonly strongMargin?: number;
   /** 明るい青の B 下限。既定 150。 */
   readonly brightB?: number;
-  /** active と判定する bright 比のしきい値。既定 0.06。 */
+  /** active と判定する青画素比のしきい値。既定 metric='bright' で 0.06 / 'strong' で 0.05。 */
   readonly activeFrac?: number;
+  /**
+   * active 判定に使う指標。機種依存（FrameProfile が指定）:
+   *  - 'bright'（既定・Android）: 明るい青比。Android は active で高く（0.13-0.28）folded は≈0。
+   *  - 'strong'（iOS）: 真の青比。iOS は active カードの明るい青がほぼ無い（bright≈0）が、真の青は
+   *    薄く残る（active strong≈0.10-0.14 / folded strong≈0.001）。iOS folded は Android と違い
+   *    strong も低いので strong で分離できる（Android は folded でも strong 高＝bright が必須）。
+   */
+  readonly metric?: 'bright' | 'strong';
 }
 
 /** カード領域の青画素比（strong / bright）。 */
@@ -58,12 +66,14 @@ export function blueFractions(img: Rgba, cardRect: Rect, opts: CardStateOptions 
  * conf は閾値からの距離。folded/empty は false（両者の区別は占有＝スタック有無で行う）。
  */
 export function isActiveHand(img: Rgba, cardRect: Rect, opts: CardStateOptions = {}): Read<boolean> {
-  const { bright } = blueFractions(img, cardRect, opts);
-  const thr = opts.activeFrac ?? 0.06;
-  const active = bright >= thr;
-  // active は bright が閾値の 2 倍で conf~0.9、folded は bright≈0 で conf~0.9。
+  const fr = blueFractions(img, cardRect, opts);
+  const metric = opts.metric ?? 'bright';
+  const val = metric === 'strong' ? fr.strong : fr.bright;
+  const thr = opts.activeFrac ?? (metric === 'strong' ? 0.05 : 0.06);
+  const active = val >= thr;
+  // active は指標が閾値の 2 倍で conf~0.9、folded は指標≈0 で conf~0.9。
   const conf = active
-    ? Math.min(0.95, 0.6 + (bright - thr) * 3)
-    : Math.min(0.95, 0.7 + (thr - bright) * 3);
+    ? Math.min(0.95, 0.6 + (val - thr) * 3)
+    : Math.min(0.95, 0.7 + (thr - val) * 3);
   return { value: active, conf: Math.max(0, Math.min(1, conf)) };
 }

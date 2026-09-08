@@ -22,11 +22,12 @@ import type { FracRect } from './layout.js';
 import { toPx } from './layout.js';
 import type { FrameProfile } from './frameProfile.js';
 import { recognizeAmount } from './numberField.js';
-import { readAmountBb, detectDisplayMode } from './bbAmount.js';
+import { readAmountBb, readAmountBbAnchored, detectDisplayMode } from './bbAmount.js';
 import { readBlinds } from './blinds.js';
 import { readStreetFromBoard } from './street.js';
 import { detectButtonSeat } from './button.js';
 import { isActiveHand } from './cardState.js';
+import { detectSeatPresence, detectYellowName } from './seatPresence.js';
 import { recognizeAction } from './actionTag.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { grayFromRgba } from './numberField.js';
@@ -110,10 +111,19 @@ export function extractRawReads(
   // テーブル上の金額（stack/bet/pot）を BB 換算で読む。
   //  - chips: recognizeAmount → bb(chips) で割る。
   //  - bb: readAmountBb（"20.2 BB"→20.2, 既に BB）→ 正規化しない。
-  const readTable = (rect: Rect, minCh?: number): Read<number> =>
+  // scoreFloor: stack/bet の BB 読みで、飾り/端スリバー/アイコン片が低 NCC で数字化するのを弾く
+  // （bbAmount 参照）。pot はセンター表示で縁ノイズが乗りにくく、既存の下流挙動維持のため渡さない。
+  const readTable = (rect: Rect, minCh?: number, scoreFloor?: number): Read<number> =>
     mode === 'bb'
-      ? readAmountBb(img, rect, templates.digits, minCh !== undefined ? { minCh } : {})
+      ? readAmountBb(
+          img,
+          rect,
+          templates.digits,
+          { ...(minCh !== undefined ? { minCh } : {}), ...(scoreFloor !== undefined ? { scoreFloor } : {}) },
+          templates.letters,
+        )
       : norm(recognizeAmount(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}), bbChips);
+  const BB_SCORE_FLOOR = 0.45;
 
   // ante は常に chips ヘッダ → recognizeAmount＋正規化。
   const anteChips = recognizeAmount(img, px(img, profile.ante), templates.digits);
@@ -139,15 +149,47 @@ export function extractRawReads(
   const seats: RawSeatRead[] = profile.seats.map((s, i) => {
     // stackMinCh（ホログラム加工プレートのキラキラ除去）は BB でも有効（BL 実測 168 で
     // 13.5/7.8 等を正読・小数点も生存）。両モードで適用する。
-    const stack = readTable(px(img, s.stack), s.stackMinCh);
-    const occupied = Number.isFinite(stack.value);
+    let stack = readTable(px(img, s.stack), s.stackMinCh, BB_SCORE_FLOOR);
+    // BB 表示で現行リーダが NaN（読めない）なら **名前アンカー方式**で復旧を試みる（two-anchor）。
+    // クリーン席は上の readTable が既に有限値を返すのでここは通らず＝ビット不変・回帰なし。
+    // NaN の席（装飾プレート/ドリフト等でローカライズが崩れた席）だけ、黄色名の中心を
+    // アンカーに正しい stack-BB を選んで直左の数字塊を読み直す（bbAmount.readAmountBbAnchored）。
+    const stackRectPx = px(img, s.stack);
+    const yellow = detectYellowName(img, stackRectPx);
+    if (mode === 'bb' && !Number.isFinite(stack.value)) {
+      const anchored = readAmountBbAnchored(
+        img, stackRectPx, templates.digits,
+        { ...(s.stackMinCh !== undefined ? { minCh: s.stackMinCh } : {}), scoreFloor: BB_SCORE_FLOOR },
+        templates.letters, yellow.box?.cx,
+      );
+      if (Number.isFinite(anchored.value)) stack = anchored;
+    }
+    // 占有は「スタックが読めたか」だけで決めない。降りて暗く沈んだ席のスタックが NaN でも
+    // 席は実在する（従来はここで empty 化し 6-max を 5-max として黙って誤解 = 本バグ）。
+    // 占有信号は 2 系統を **OR** で足す（「実在席を絶対に落とさない」が最優先の要件）:
+    //   (1) 黄色名（detectYellowName）: ディレクタ設計＋AI 目視で検証した**意味的な主信号**。
+    //       非 hero occupied 席はスタック直下に黄色のプレイヤー名を必ず出す（empty は黄色 0）。
+    //       実測（GT 22枚）で occupied 80/80・empty 30/30・折れ暗名/1文字名も検出（seatPresence 参照）。
+    //   (2) エッジ密度（detectSeatPresence）: 既存の頑健な保険信号（empty max 0.002 vs
+    //       occupied min 0.089 の 40 倍マージン）。黄色名が未知機種でプロファイルずれ等により
+    //       名前帯を外しても、こちらが席を拾う。
+    // OR なので黄色名の追加は「席を落とす方向」には決して働かず（empty は両信号とも 0）、
+    // 未知環境での取りこぼしを減らす純増の信号になる。hero も同じ検出を通す（空フレームでは
+    // empty のまま＝derivePositions が「hero 不在」で安全に棄却。実局面では hero スタックが読める）。
+    const stackParsed = Number.isFinite(stack.value);
+    const yellowName = yellow.present;
+    const presence = detectSeatPresence(img, stackRectPx, px(img, s.actionZone)).present;
+    const occupied = stackParsed || yellowName || presence;
+    // 占有だが数字が読めない（presence のみ）席は低信頼にして確認画面で state を強調させる
+    // （confidence.aggregateConfidence が occupancy.conf<threshold で `${pos}.state` を、
+    //  stack.conf(=0)<threshold で `${pos}.stack` を lowConfidenceFields に載せる）。
     const occupancy: Read<Occupancy> = occupied
-      ? { value: 'occupied', conf: stack.conf > 0 ? 0.9 : 0.5 }
+      ? { value: 'occupied', conf: stackParsed ? (stack.conf > 0 ? 0.9 : 0.5) : 0.4 }
       : { value: 'empty', conf: 0.8 };
 
     // BB 表示は先頭 "0." が左端で切れる席（BC/BL/TC/TR）向けに betBb（左に余白）を使う。
     const betRect = px(img, mode === 'bb' ? s.betBb ?? s.bet : s.bet);
-    const betRaw = readTable(betRect, mode === 'chips' ? opts.betMinCh : undefined);
+    const betRaw = readTable(betRect, mode === 'chips' ? opts.betMinCh : undefined, BB_SCORE_FLOOR);
     const bet: Read<number> = Number.isFinite(betRaw.value) ? betRaw : { value: 0, conf: 0.6 };
 
     let action: Read<SeatAction>;
@@ -157,7 +199,11 @@ export function extractRawReads(
       // hero は表向き。能動タグのみ見る（fold は BB ウォーク等で別途扱い）。
       action = recognizeAction(img, px(img, s.actionZone), templates.actions);
     } else {
-      const active = isActiveHand(img, px(img, s.card));
+      const active = isActiveHand(
+        img,
+        px(img, s.card),
+        profile.handActive ? { metric: profile.handActive.metric, activeFrac: profile.handActive.threshold } : {},
+      );
       if (!active.value) {
         action = { value: 'fold', conf: active.conf };
       } else {
@@ -206,7 +252,9 @@ export function extractRawReadsAuto(
 ): { reads: RawReads; contentRect: ContentRect } {
   const canonW = 2730;
   const canonH = Math.round(canonW / profile.aspect);
-  const contentRect = opts.contentRect ?? detectContentRect(img, profile, templates.digits);
+  // hero 手札を cr 整列アンカーに使う（ranks を渡す）。数字だけのスコアが位置ズレ cr を
+  // 選ぶのを防ぐ（contentRect.scoreCr 参照）。
+  const contentRect = opts.contentRect ?? detectContentRect(img, profile, templates.digits, {}, templates.ranks);
   const normalized = normalizeToCanonical(img, contentRect, canonW, canonH);
   const reads = extractRawReads(normalized, profile, templates, { ...opts, contentRect: undefined });
   return { reads, contentRect };

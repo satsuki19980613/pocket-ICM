@@ -12,9 +12,13 @@
  */
 
 import {
+  extractAnchored,
   extractRawReadsAuto,
   runOcrPipeline,
   CHIPS_6MAX,
+  IOS_6MAX,
+  FULL_FRAME,
+  type RawReads,
   type ExtractTemplates,
   type ExtractOptions,
   type Rgba,
@@ -36,15 +40,37 @@ export interface OcrPrefillResult {
 /** ベット読みの minCh は chips プロファイルの確定値（extractFrame と同一）。 */
 const DEFAULT_OPTS: ExtractOptions = { betMinCh: 125 };
 
-/** Rgba → OCR プリフィル結果（6-max chips/BB プロファイル）。 */
+/**
+ * 取り込み対象外（チップ総額表示）のメッセージ。SPEC §5.2（さつき決定 2026-09-07）:
+ * スタックが BB 表示のスクショだけ取り込み可、チップ総額表示は手入力に回す。
+ */
+export const CHIPS_MODE_ISSUE =
+  'このスクショはチップ表示です。スタックが BB 表示（例: 20.2 BB）の画面を取り込んでください（チップ表示は手入力をご利用ください）。';
+
+/** Rgba → OCR プリフィル結果（6-max BB 表示プロファイル）。 */
 export function ocrPrefillFromRgba(
   img: Rgba,
   templates: ExtractTemplates,
   opts: ExtractOptions = {},
 ): OcrPrefillResult {
-  // コンテンツ矩形を自動検出→較正解像度へ拡大してから抽出（多機種対応）。
-  // Android 2730×1260 は全画面判定＝恒等で従来どおり。低解像度スマホは内寄せ/縮小を吸収。
-  const { reads } = extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts });
+  // 抽出はアンカー方式に一本化（解像度・アスペクト非依存・docs/OCR_PHASE2.md）。固定座標プロファイル
+  // ＋`img.w>=2400` の機種二値分岐は、較正解像度から外れた実機（例 1310×536）で全席ズレて棄却/誤読
+  // する破綻があり、ランドマーク（黄色名→直上BB／中央"Pot :"／Dボタン→リング位相）からの相対読みで
+  // 置換した。全27枚で旧固定座標とスタック±0.05一致・棄却も一致し、旧では読めない劣化フレームを救う
+  // ことを実測（§B9 基準①②③）。旧固定座標経路は **crash 安全網**として throw 時のみ使う（挙動不変）。
+  let reads: RawReads;
+  try {
+    reads = extractAnchored(img, templates, {});
+  } catch {
+    const isAndroid = img.w >= 2400;
+    reads = isAndroid
+      ? extractRawReadsAuto(img, CHIPS_6MAX, templates, { ...DEFAULT_OPTS, ...opts }).reads
+      : extractRawReadsAuto(img, IOS_6MAX, templates, { ...DEFAULT_OPTS, ...opts, contentRect: FULL_FRAME }).reads;
+  }
+  // 取り込み条件＝BB 表示のみ（SPEC §5.2）。チップ総額表示は早期に棄却して手入力へ誘導する。
+  if (reads.displayMode !== 'bb') {
+    return { ok: false, issues: [CHIPS_MODE_ISSUE], lowConfidenceFields: [] };
+  }
   const res = runOcrPipeline(reads);
   if (!res.ok || !res.state) {
     return { ok: false, issues: res.issues, lowConfidenceFields: res.lowConfidenceFields };

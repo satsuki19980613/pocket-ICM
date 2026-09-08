@@ -15,12 +15,16 @@ import {
   loadPfTableBrowser,
   pfCoverage,
   lookupPf,
+  loadNnTableBrowser,
+  nnInRange,
+  lookupNn,
   maxWorkerCap,
   type LoadedHuTable,
   type WinTieTable,
   type WinTie3Table,
   type Pf3wayTable,
   type PfTable,
+  type NnTable,
   type McRunner,
   type ShowdownMcResult,
   type Exact3DenseChunk,
@@ -41,6 +45,9 @@ import pf3wayMetaUrl from '../../solver/artifacts/pf3way.meta.json?url';
 // 4人 push or fold / AOF 事前計算テーブル（f16 量子化版・同上の静的アセット）。
 import pf4wayBinUrl from '../../solver/artifacts/pf4way.f16.bin?url';
 import pf4wayMetaUrl from '../../solver/artifacts/pf4way.meta.json?url';
+// 5人 push or fold NN 蒸留モデル（GOLD 精度を学習した即時ルックアップ・約0.7MB・同上の静的アセット）。
+import nn5wayBinUrl from '../../solver/artifacts/nn5way.model.bin?url';
+import nn5wayMetaUrl from '../../solver/artifacts/nn5way.model.meta.json?url';
 import type {
   McRequest,
   McResultMsg,
@@ -122,6 +129,13 @@ let pf4wayPromise: Promise<PfTable> | null = null;
 function getPf4wayTable(): Promise<PfTable> {
   pf4wayPromise ??= loadPfTableBrowser({ meta: pf4wayMetaUrl, bin: pf4wayBinUrl });
   return pf4wayPromise;
+}
+
+// 5人 NN モデルは初回の5人求解でのみ fetch（~0.7MB, 以後キャッシュ）。
+let nn5wayPromise: Promise<NnTable> | null = null;
+function getNn5way(): Promise<NnTable> {
+  nn5wayPromise ??= loadNnTableBrowser({ meta: nn5wayMetaUrl, bin: nn5wayBinUrl });
+  return nn5wayPromise;
 }
 
 interface CommonNode {
@@ -223,7 +237,25 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
         })) as unknown as CommonResult;
       }
       dto = toDto(r, 4, state.heroPos, state.heroHand);
+    } else if (state.playersLeft === 5) {
+      // 5人は蒸留 NN（GOLD 解を学習した即時ルックアップ）。範囲内（標準ブラインド/アンティ・
+      // 全席25bb以下）なら即時解、範囲外（深いスタック等）や読込失敗は N-way ソルバーへ
+      // フォールバック（pf3way/pf4way と同型）。
+      let r: CommonResult | null = null;
+      const nn = await getNn5way().catch(() => null);
+      if (nn && nnInRange(nn, state)) {
+        r = lookupNn(nn, state) as unknown as CommonResult;
+      }
+      if (!r) {
+        const [winTie, winTie3] = await Promise.all([getWinTie(), getWinTie3()]);
+        r = (await solveMultiway(state, {
+          workers: 0, mcRunner, winTie, winTie3, avgPower: 1, refreshSchedule: 'geometric',
+          mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
+        })) as unknown as CommonResult;
+      }
+      dto = toDto(r, 5, state.heroPos, state.heroHand);
     } else {
+      // 6人（nn6way 未生成）＝直接求解。
       const [winTie, winTie3] = await Promise.all([getWinTie(), getWinTie3()]);
       const r = await solveMultiway(state, {
         workers: 0, mcRunner, winTie, winTie3, avgPower: 1, refreshSchedule: 'geometric',

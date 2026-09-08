@@ -23,6 +23,11 @@ packages/solver/artifacts/nn*way.train.*
 packages/solver/artifacts/nn*way.control.json
 packages/solver/artifacts/nn*way.status.json
 packages/solver/artifacts/nn*way.progress.json
+# 旧run（過学習等）の残骸アーティファクト（.old 挿入で上のパターンから漏れる）はローカルのみ。
+packages/solver/artifacts/nn*way.old.*
+
+# 使い捨ての実験/ベンチ/検証スクリプト（各ファイル冒頭に「commit しない」明記の個人用dev道具）。
+packages/solver/_*.ts
 
 # Python 進捗モニタの生成物
 __pycache__/

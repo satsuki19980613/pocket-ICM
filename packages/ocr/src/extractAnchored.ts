@@ -1,0 +1,442 @@
+/**
+ * アンカー抽出（画像 → RawReads, OCR_PHASE2 §B1）。本番未接続の Phase 2b。
+ *
+ * 固定座標プロファイルを使わず、ランドマーク（黄色名・"BB" グリフ・D ディスク・中央ピル）からの
+ * 相対読みで RawReads を組み立てる。返す形は extract.ts の extractRawReads と同一で、下流の
+ * runOcrPipeline（spotReconstruction → positionDerivation → BoardState）をそのまま再利用する
+ * （クリーンな境界: 抽出だけ差し替え、下流は不変）。
+ *
+ * パイプライン（§B1）:
+ *   normalizeForAnchors（§B2 拡大正規化）
+ *   → enumerateSeats（§B3 席列挙: 6 スロットの占有＋黄色名ボックス＋hero）
+ *   → 各占有席: 名前直上の "N.N BB" を readAmountBbAnchored で読む（§B4 stack）
+ *   → 中央 "Pot :" ピルを readPotAnchored で読む（§B5 pot）
+ *   → 左上ヘッダの SB/BB・アンティ（readBlinds, chips → BB 正規化）
+ *   → D ディスク → 最近傍占有席 = ボタン（§B6）
+ *   → hero カード帯の 2 枚 → heroHand（recognizeHeroHandColor）
+ *   → displayMode: stack が "BB" 終端か（§B7）
+ *
+ * 席は SLOTS 順 [TL,TC,TR,BR,BC,BL]（時計回り, derivePositions のリング順）で返す。id は
+ * スロット名（GT / accuracy の SeatId と一致）。金額はすべて BB 換算（BB 表示は既に BB、chips は
+ * ヘッダ bb で正規化）。
+ *
+ * bet 読み（fix 1/2, readBetAnchored）: 席前チップ "N BB" を BB アンカーで読む。bet=0 固定だと下流
+ * spotReconstruction が SB/BB の投函分（putIn=blindOb）を失い root が SB −0.5 / BB −1.0 ずれ、allin は
+ * root が潰れる。**ポジションは決め打ちせず実チップを読み**（§B1 の設計原則）、下流が blindOb で相殺する。
+ * チップ無し・folded 席は読まず bet=0（幻レイズ棄却を回避, §B8）。
+ *
+ * stack 読み（fix 3）: 名前直上 BB アンカーを主とし、名前ボックス検出が破綻した席（手番グロー枠 hero /
+ * 折れ暗コーナー / iOS 小名）は固定フラクショナル y の数字ライン（STACK_Y_FRAC）で読み直す。
+ *
+ * 割り切り: action は非 hero の fold（isActiveHand）＋ allin ヒューリスティック（stack≈0）のみ。能動タグ
+ * NCC（raise/call/check）は読まない（フォームに非伝播＝求解無影響, [[ocr-bb-multidevice]]）。
+ */
+
+import type { AnteScheme, DisplayMode, Occupancy, RawReads, RawSeatRead, Read, Rect, SeatAction } from './types.js';
+import type { Rgba } from './color.js';
+import type { Template } from './match.js';
+import { normalizeForAnchors } from './upscaleNormalize.js';
+import { enumerateSeats, SLOTS, type SeatSlot, type Slot } from './seatEnum.js';
+import { readAmountBbAnchored } from './bbAmount.js';
+import { readBlinds } from './blinds.js';
+import { readPotAnchored, type PotAnchorRegion } from './potAnchor.js';
+import { goldDiscCandidates, type FracPoint } from './button.js';
+import { isActiveHand } from './cardState.js';
+import { recognizeAmount, grayFromRgba } from './numberField.js';
+import { findCardRects, largestCardRects } from './detect.js';
+import { recognizeHeroHandColor } from './cards.js';
+import type { HandActiveRule } from './frameProfile.js';
+
+export interface AnchorTemplates {
+  readonly digits: readonly Template[];
+  readonly ranks: readonly Template[];
+  /** BB 接尾辞・モード判定の "B"。省略時はモード判定できず chips 既定になる。 */
+  readonly letters?: readonly Template[];
+}
+
+export interface AnchorOptions {
+  readonly displayMode?: DisplayMode;
+  readonly anteScheme?: AnteScheme;
+  /** カード裏 active/folded 判定ルール（機種依存）。省略時 cardState 既定（Android bright/0.06）。 */
+  readonly handActive?: HandActiveRule;
+  /** pot 中央帯（正規化画像に対するフラクショナル, 省略時 DEFAULT_POT_REGION）。 */
+  readonly potRegion?: PotAnchorRegion;
+  /** BB 読みの scoreFloor（既定 0.45, stack の飾り片除去）。 */
+  readonly scoreFloor?: number;
+}
+
+/** 左上ヘッダのブラインド数値部 "330/660"（フラクショナル）。CHIPS_6MAX 較正値を流用。 */
+const HEADER_BLINDS: Rect = { x: 0.172, y: 0.012, w: 0.084, h: 0.044 };
+/** 左上ヘッダのアンティ（フラクショナル）。CHIPS_6MAX 較正値を流用。 */
+const HEADER_ANTE: Rect = { x: 0.18, y: 0.058, w: 0.06, h: 0.04 };
+/** hero カード帯（フラクショナル）。2 枚の表向きカードを内包する高さを確保（_dbg2 で全機種一致）。 */
+const HERO_CARD_BAND = { x: 0.40, y: 0.62, w: 0.22, h: 0.20 };
+
+/**
+ * D ボタンディスクの席アンカー（フラクショナル）。ディスクは名前プレートより内側（テーブル中心寄り）に
+ * 載るため、名前中心ではなくディスク位置に較正したアンカーを使う（CHIPS_6MAX.buttonAnchor と同値。
+ * 実測で Android/iOS のディスク重心がこの位置に落ちる — _dbg2）。SLOTS 順。
+ */
+const BUTTON_ANCHORS: readonly FracPoint[] = [
+  { x: 0.349, y: 0.276 }, // TL
+  { x: 0.569, y: 0.266 }, // TC
+  { x: 0.692, y: 0.276 }, // TR
+  { x: 0.746, y: 0.549 }, // BR
+  { x: 0.603, y: 0.623 }, // BC (hero)
+  { x: 0.285, y: 0.549 }, // BL
+];
+
+const BB_SCORE_FLOOR = 0.45;
+
+/**
+ * whiteMask の minCh を段階的に上げて BB スタックを読む。席プレートの背景明度・ホログラム飾りの
+ * 強さが席／機種で異なり単一 minCh では両立しない（実測: BL・iOS TL は 168 が必要, TC/TR は 120 で
+ * ないと NaN, 150 は sparkle 混入で **高信頼の誤読** を出す罠）。順序 [120,168,185,150] で最初に
+ * 有限値になったものを採る（120 で正読できる席はそのまま＝回帰なし。120 が NaN の席だけ 168→185 と
+ * 上げ、罠の 150 は最後）。scoreFloor で飾り片を桁から除外（§B4）。
+ *
+ * iOS 下段（BR/BC）・hero の手番グロー枠等でグリフ明度が沈む席向けに、より低い minCh（96/80）も
+ * 末尾に足す（120 で NaN の席だけ降段。上段の順序は不変＝回帰なし）。低 minCh は felt/隣接の弱い
+ * 白を拾いやすいが scoreFloor＋BB アンカー（直左数字を持つ BB のみ）が偽桁を除外する。
+ */
+const MINCH_SEQ = [120, 168, 185, 150, 96, 80] as const;
+function readStackAnchored(
+  img: Rgba,
+  sr: Rect,
+  cx: number,
+  digits: readonly Template[],
+  letters: readonly Template[] | undefined,
+  scoreFloor: number,
+): Read<number> {
+  for (const minCh of MINCH_SEQ) {
+    const r = readAmountBbAnchored(img, sr, digits, { scoreFloor, minCh }, letters, cx);
+    if (Number.isFinite(r.value)) return r;
+  }
+  return { value: NaN, conf: 0 };
+}
+
+/**
+ * 席前のベット・チップ "N BB" を **BB アンカー**で読む（§B1 の bet 読み・fix 1/2）。
+ *
+ * 動機: bet=0 固定だと、下流 spotReconstruction が `rootStack = screenStack + putIn(=bet) - blindOb`
+ * で SB/BB の投函分（putIn=blindOb）を失い、SB は −0.5・BB は −1.0 だけ root がずれる（実測: 全 27 枚で
+ * 系統オフセット）。allin 席は screenStack≈0＋大きいベット（例 5.9 BB）なので、bet を読まないと
+ * root が潰れる（123636 SB 5.4→0.5, 115309 BU 9.6→1）。**ポジションはこの段では未知**なのでブラインドを
+ * 決め打ちできず、実チップを読む（§B1 の設計原則: 実チップを読み、下流が blindOb で相殺する）。
+ *
+ * チップは席（名前）とテーブル中心の間に載る。名前ボックス中心から**中心方向へ**較正オフセット
+ * （BET_OFFSETS, CHIPS_6MAX の betBb 中心 − 席名中心の実測差）だけ寄せた点を bet 中心とし、その周りの
+ * 小矩形を readAmountBbAnchored（直左に数字を持つ BB のみ・アンカー最近傍を採る）にかける。チップが
+ * 無い席（フォールド・非ブラインド）は "N BB" が無く NaN → bet=0（幻レイズ棄却を避ける, §B8）。
+ */
+const BET_OFFSETS: Record<Slot, { dx: number; dy: number }> = {
+  TL: { dx: 0.085, dy: 0.069 },
+  TC: { dx: 0.001, dy: 0.069 },
+  TR: { dx: -0.106, dy: 0.073 },
+  BR: { dx: -0.117, dy: -0.149 },
+  BC: { dx: -0.075, dy: -0.165 },
+  BL: { dx: 0.116, dy: -0.151 },
+};
+
+/** 名前ボックス（px）と席スロットから、席前ベット "N BB" 探索用の矩形＋アンカー x を作る。 */
+function betRectFromName(
+  img: Rgba,
+  slot: Slot,
+  nb: { cx: number; cy: number; h: number },
+): { rect: Rect; cx: number } {
+  const off = BET_OFFSETS[slot];
+  const bx = nb.cx + off.dx * img.w;
+  const by = nb.cy + off.dy * img.h;
+  const h = Math.max(6, nb.h);
+  const sh = Math.round(1.4 * h);
+  const sw = Math.round(3.2 * h); // タイト（readAmountBbAnchored が更に左右へ拡張。中央 pot 帯を避ける）
+  return {
+    rect: { x: Math.round(bx - sw / 2), y: Math.round(by - sh / 2), w: sw, h: sh },
+    cx: bx,
+  };
+}
+
+/** 席前ベット "N BB" を読む（minCh 昇段。チップ無し→NaN）。 */
+function readBetAnchored(
+  img: Rgba,
+  slot: Slot,
+  nb: { cx: number; cy: number; h: number },
+  digits: readonly Template[],
+  letters: readonly Template[] | undefined,
+  scoreFloor: number,
+): Read<number> {
+  const { rect, cx } = betRectFromName(img, slot, nb);
+  return readStackAnchored(img, rect, cx, digits, letters, scoreFloor);
+}
+
+/**
+ * 席スタック**数字ライン**のフラクショナル y（SLOTS 順）。名前ボックス検出が破綻した席（手番グロー枠で
+ * 名前が checkered プレートに埋もれ黄色塊が寸断 → nb.top/h/cx が不正）のフォールバックで、数字帯を
+ * **固定フラクショナル y** に置いて探す（名前の悪い top に依らない）。値は Android/iOS 双方で数字が
+ * 収まる**数字ライン**（実測 sweep: BR 0.596・BC 0.70 で Android 203304 と iOS 2 機を同時に正読）。
+ * iOS は Android 較正から affine（y'≈0.0005+0.959y）で上へずれるため、下段席は Android の矩形中心
+ * より高い位置になる。x は検出できた nb.cx を使う（水平は概ね安定, リーダが左右へ拡張して数字塊を捕捉）。
+ * 上段席（TL/TC/TR）・BL は本 27＋1310 でフォールバックが発火しない（名前検出が安定）が、汎用性の
+ * ため iOS affine 補正した数字ラインを置く（発火してもリーダ内部拡張と scoreFloor が過読を抑える）。
+ */
+const STACK_Y_FRAC: Record<Slot, number> = {
+  TL: 0.262, TC: 0.166, TR: 0.263, BR: 0.596, BC: 0.70, BL: 0.60,
+};
+
+const median = (xs: readonly number[]): number => {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)]!;
+};
+
+const fracRect = (img: Rgba, f: Rect): Rect => ({
+  x: Math.round(f.x * img.w),
+  y: Math.round(f.y * img.h),
+  w: Math.round(f.w * img.w),
+  h: Math.round(f.h * img.h),
+});
+
+const norm = (r: Read<number>, bb: number): Read<number> =>
+  bb > 0 && Number.isFinite(r.value) ? { value: r.value / bb, conf: r.conf } : { value: r.value, conf: r.conf };
+
+/** SB<BB の不変条件を守る（extract.sanitizeBlinds と同義）。 */
+function sanitizeBlinds(sb: Read<number>, bb: Read<number>): { sb: Read<number>; bb: Read<number> } {
+  if (Number.isFinite(bb.value) && bb.value > 0) {
+    const bad = !Number.isFinite(sb.value) || sb.value <= 0 || sb.value >= bb.value;
+    if (bad) return { sb: { value: bb.value / 2, conf: Math.min(sb.conf, 0.3) }, bb };
+  }
+  return { sb, bb };
+}
+
+/**
+ * 名前ボックス（正規化画像 px）から、その直上のスタック "N.N BB" 探索用の矩形を作る。
+ * スタックは名前の直上・ほぼ同一水平中心（コーナー席は多少ずれるが readAmountBbAnchored が
+ * 左右へ広げて吸収する）。矩形寸法は名前高 h を基準にする（グリフ高≒名前高, §B4）。
+ */
+function stackRectFromName(nb: { cx: number; top: number; h: number }): Rect {
+  const h = Math.max(6, nb.h);
+  const sh = Math.round(1.4 * h); // スタック行（BB 込み）の高さ
+  const sw = Math.round(4.5 * h); // 中心寄せの数字幅（readAmountBbAnchored が更に左右へ拡張）
+  const gap = Math.round(0.15 * h);
+  return {
+    x: Math.round(nb.cx - sw / 2),
+    y: Math.round(nb.top - gap - sh),
+    w: sw,
+    h: sh,
+  };
+}
+
+/**
+ * 名前ボックス破綻席のフォールバック stack 帯（固定フラクショナル y ＋検出 nb.cx）。名前検出が寸断され
+ * nb.top が数字帯を外す席（手番グロー席 hero BC / 折れ暗コーナー BR / iOS 小名 BR・BC）向け。帯を高く
+ * （3.2×robustH）取り、機種の affine ずれと nb.top 誤差を吸収する。robustH は席の nameBox 高の中央値。
+ */
+function stackFallbackRect(img: Rgba, slot: Slot, nbCx: number, hRobust: number): Rect {
+  const h = Math.max(8, hRobust);
+  const sh = Math.round(2.2 * h); // 過剰に高いとアバター/グローを取り込み glyphH 較正が狂い誤読（実測 sweep）
+  const sw = Math.round(5.0 * h);
+  const cy = STACK_Y_FRAC[slot] * img.h;
+  return { x: Math.round(nbCx - sw / 2), y: Math.round(cy - sh / 2), w: sw, h: sh };
+}
+
+/** hero(BC) の 2 枚を検出して heroHand を読む。 */
+function readHeroHand(img: Rgba, ranks: readonly Template[]): Read<string> {
+  const hrect = fracRect(img, HERO_CARD_BAND);
+  const g = grayFromRgba(img, hrect);
+  const found = findCardRects(g, { threshold: 190, minAreaFrac: 0.02, closeRadius: 1 }).map((r) => ({
+    x: hrect.x + r.x,
+    y: hrect.y + r.y,
+    w: r.w,
+    h: r.h,
+  }));
+  const rects = largestCardRects(found, 2);
+  if (rects.length < 2) return { value: '', conf: 0 };
+  return recognizeHeroHandColor(img, rects[0]!, rects[1]!, ranks);
+}
+
+/**
+ * アンカー抽出のメイン。img は任意解像度／アスペクト。RawReads（extractRawReads と同形）を返す。
+ */
+export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: AnchorOptions = {}): RawReads {
+  const { digits, ranks, letters } = templates;
+  const scoreFloor = opts.scoreFloor ?? BB_SCORE_FLOOR;
+
+  // §B2/§B3: 正規化してから席列挙。normalizeForAnchors は決定的なので enumerateSeats が内部で
+  // 使う正規化画像と同一（nameBox はこの正規化画像座標）。
+  const { img: nimg } = normalizeForAnchors(img);
+  const enr = enumerateSeats(img);
+  const occ = enr.seats.filter((s) => s.occupied);
+
+  // ロバストな名前高（占有席 nameBox 高の中央値）。手番グロー席・iOS 小名で個々の nb.h が過小に
+  // 出るため、フォールバック stack 帯の尺度に使う（個々の壊れた nb.h に依存させない）。
+  const robustNameH = median(occ.map((s) => s.nameBox?.h ?? 0).filter((h) => h > 0)) || 20;
+
+  // 各占有席のスタック探索矩形（名前ボックスから導出）。nameBox が無い占有席（黄色名を外した
+  // 席）は矩形を作れず stack=NaN のまま（occupancy は保持＝席は落とさない）。
+  const stackRectOf = (s: SeatSlot): Rect | null =>
+    s.nameBox ? stackRectFromName(s.nameBox) : null;
+
+  // §B7: 表示モード判定。名前直上帯を **BB アンカーリーダ**にかけ、BB ペア＋直左数字が
+  // 取れれば bb（chips 表示には "BB" 接尾辞が無いので BB ペアは生じない）。occupied 席を
+  // hero 先頭で順に試し、最初に BB 読みが有限値になった時点で bb 確定。どれも取れなければ chips。
+  let mode: DisplayMode = opts.displayMode ?? 'chips';
+  if (opts.displayMode === undefined && letters) {
+    const ordered = [...occ].sort((a, b) => (b.isHero ? 1 : 0) - (a.isHero ? 1 : 0));
+    for (const s of ordered) {
+      const sr = stackRectOf(s);
+      if (!sr || !s.nameBox) continue;
+      const r = readStackAnchored(nimg, sr, s.nameBox.cx, digits, letters, scoreFloor);
+      if (Number.isFinite(r.value)) { mode = 'bb'; break; }
+    }
+  }
+
+  // ヘッダ SB/BB・アンティ（常に chips 表記）→ bb で BB 正規化。
+  const blindsRaw = readBlinds(nimg, fracRect(nimg, HEADER_BLINDS), digits);
+  const bbChips = Number.isFinite(blindsRaw.bb.value) && blindsRaw.bb.value > 0 ? blindsRaw.bb.value : 1;
+  const bbNorm = norm(blindsRaw.bb, bbChips).value; // BB 換算での BB（=1, allin bet の下駄に使う）。
+  const anteChips = recognizeAmount(nimg, fracRect(nimg, HEADER_ANTE), digits);
+
+  // pot（§B5）: BB 表示は中央ピルを BB アンカーで、chips は中央矩形の生読み→正規化。
+  let pot: Read<number>;
+  if (mode === 'bb') {
+    let p = readPotAnchored(nimg, digits, letters, { scoreFloor: 0 }, opts.potRegion);
+    // タイト帯で読めない稀なフレーム（実測 143002: ピル数字がにじむ）は広い帯で再挑戦。値がずれても
+    // 有限にして棄却を避ける（下流の zod は pot に finite を要求, 精度は confidence で下げる）。
+    if (!Number.isFinite(p.value) && !opts.potRegion) {
+      p = readPotAnchored(nimg, digits, letters, { scoreFloor: 0 }, { x: 0.42, y: 0.29, w: 0.17, h: 0.08 });
+    }
+    pot = { value: p.value, conf: p.conf };
+  } else {
+    const potRect = fracRect(nimg, { x: 0.46, y: 0.305, w: 0.11, h: 0.05 });
+    pot = norm(recognizeAmount(nimg, potRect, digits), bbChips);
+  }
+
+  // D ボタン: テーブル領域内の金ディスク → 占有席の名前アンカー最近傍。
+  // 席アンカーは各占有席の nameBox 中心（フラクショナル）。空席はアンカーに含めない。
+  const table: Rect = {
+    x: Math.round(0.05 * nimg.w),
+    y: Math.round(0.12 * nimg.h),
+    w: Math.round(0.90 * nimg.w),
+    h: Math.round(0.68 * nimg.h),
+  };
+  // ボタン: テーブル領域のゴールドディスク候補のうち、いずれかの席アンカー近傍（<=0.10）に
+  // 落ちるものから **最大面積** を選ぶ。実 D ディスクは大きく（area ~680–1030）、席プレートの
+  // 金枠飾りは小さい（~440）。detectButtonSeat の「最近傍」では、複数席に近い金飾りがあると
+  // 実ディスクより僅かに近い飾りを拾う（実 iPhone EC7CD106 で TL の D を TR 飾りが奪う）ため、
+  // 近傍かつ最大面積で選ぶ。
+  const MAX_ANCHOR_DIST = 0.10;
+  let button: { slot: (typeof SLOTS)[number]; area: number } | undefined;
+  for (const c of goldDiscCandidates(nimg, table)) {
+    let ni = -1, nd = Infinity;
+    for (let i = 0; i < BUTTON_ANCHORS.length; i++) {
+      const a = BUTTON_ANCHORS[i]!;
+      const d = Math.hypot(a.x - c.cx, a.y - c.cy);
+      if (d < nd) { nd = d; ni = i; }
+    }
+    if (nd > MAX_ANCHOR_DIST || ni < 0) continue;
+    if (!button || c.area > button.area) button = { slot: SLOTS[ni]!, area: c.area };
+  }
+  const buttonSlot = button?.slot;
+
+  // hero 手札。
+  const heroHand = readHeroHand(nimg, ranks);
+
+  // 席（SLOTS 順）。
+  const seats: RawSeatRead[] = enr.seats.map((s) => {
+    const isHero = s.isHero;
+    if (!s.occupied) {
+      return {
+        id: s.slot,
+        isHero,
+        isButton: false,
+        occupancy: { value: 'empty' as Occupancy, conf: 0.8 },
+        action: { value: 'none' as SeatAction, conf: 0.8 },
+        stack: { value: NaN, conf: 0 },
+        bet: { value: 0, conf: 0.6 },
+      };
+    }
+
+    // stack（名前直上 BB アンカー）。
+    let stack: Read<number> = { value: NaN, conf: 0 };
+    const sr = stackRectOf(s);
+    if (sr && s.nameBox) {
+      if (mode === 'bb') {
+        stack = readStackAnchored(nimg, sr, s.nameBox.cx, digits, letters, scoreFloor);
+        // 名前ボックス破綻席（hero 手番グロー / 折れ暗コーナー / iOS 小名）: 名前直上帯では数字帯を
+        // 外し NaN になる。固定フラクショナル y のフォールバック帯で読み直す（§B4 の頑健化）。
+        if (!Number.isFinite(stack.value)) {
+          const fr = stackFallbackRect(nimg, s.slot, s.nameBox.cx, robustNameH);
+          const fb = readStackAnchored(nimg, fr, s.nameBox.cx, digits, letters, scoreFloor);
+          if (Number.isFinite(fb.value)) stack = fb;
+        }
+      } else {
+        // chips: 名前直上帯を生読み → BB 正規化（chips は §B7 で棄却対象なので精度は不問）。
+        stack = norm(recognizeAmount(nimg, sr, digits), bbChips);
+      }
+    }
+    const stackParsed = Number.isFinite(stack.value);
+
+    // occupancy（席は seatEnum が確定＝ここで落とさない, b2153df 継承）。
+    const occupancy: Read<Occupancy> = {
+      value: 'occupied',
+      conf: stackParsed ? (stack.conf > 0 ? 0.9 : 0.5) : 0.4,
+    };
+
+    // action: hero は none。非 hero は isActiveHand で fold 判定＋ stack≈0 で allin ヒューリスティック。
+    // カード領域は名前直上のスタックの更に上（アバター帯）。nameBox から相対で作る。
+    let action: Read<SeatAction> = { value: 'none', conf: 0.6 };
+    if (!isHero && s.nameBox) {
+      const h = Math.max(6, s.nameBox.h);
+      const cardRect: Rect = {
+        x: Math.round(s.nameBox.cx - 1.6 * h),
+        y: Math.round(s.nameBox.top - 6.0 * h),
+        w: Math.round(3.2 * h),
+        h: Math.round(3.6 * h),
+      };
+      const active = isActiveHand(nimg, cardRect, opts.handActive ?? {});
+      if (!active.value) action = { value: 'fold', conf: active.conf };
+    }
+    // allin: 非 hero・stack がほぼ 0（シューブ済み）。構造から allin を確定（§B5 の精神）。
+    if (!isHero && stackParsed && stack.value < 0.5) {
+      action = { value: 'allin', conf: 0.6 };
+    }
+
+    // ベット読み（fix 1/2）: 席前チップ "N BB" を BB アンカーで読む。ブラインド投函（SB=0.5/BB=1）や
+    // allin の全額（例 5.9 BB）を捕捉し、下流 root 逆算に putIn として渡す（bet=0 だと SB/BB が
+    // −0.5/−1.0 ずれ、allin は root 潰れ）。チップ無し席は NaN → bet=0（幻レイズ棄却を避ける, §B8）。
+    // 折れ済み席は投函チップが場に無い前提（未オープン局面）なので読まない＝bet 0（＝下流で dead blind
+    // のみ putIn）。hero も SB/BB になりうるので読む。
+    let betRead: Read<number> = { value: NaN, conf: 0 };
+    if (s.nameBox && action.value !== 'fold') {
+      betRead = readBetAnchored(nimg, s.slot, s.nameBox, digits, letters, scoreFloor);
+    }
+    let betVal = Number.isFinite(betRead.value) ? betRead.value : 0;
+    let betConf = Number.isFinite(betRead.value) ? betRead.conf : 0.4;
+    // allin 席で bet が読めない稀ケース: stack≈0 のまま bet=0 だと rootStack<0 で zod 棄却。
+    // bb 下駄（blindOb 上限）で rootStack≥0 を保証（従来の割り切りを allin 復旧フォールバックとして温存）。
+    if (action.value === 'allin' && !(betVal > 0) && Number.isFinite(bbNorm)) {
+      betVal = bbNorm;
+      betConf = 0.3;
+    }
+
+    return {
+      id: s.slot,
+      isHero,
+      isButton: buttonSlot === s.slot,
+      occupancy,
+      action,
+      stack,
+      bet: { value: betVal, conf: betConf },
+    };
+  });
+
+  return {
+    street: { value: 'preflop', conf: 0.8 }, // アンカー抽出はプリフロップ終了フレーム前提（§A）。
+    blinds: sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips)),
+    ante: { scheme: opts.anteScheme ?? 'all', amount: norm(anteChips, bbChips) },
+    pot,
+    heroHand,
+    seats,
+    displayMode: mode,
+  };
+}

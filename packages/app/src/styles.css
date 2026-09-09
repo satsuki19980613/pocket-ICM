@@ -369,6 +369,32 @@ select.inp { appearance: none; cursor: pointer; }
   margin-bottom: 5px;
 }
 .afield.key .inp { border-color: rgba(252, 238, 10, 0.5); background: rgba(252, 238, 10, 0.05); }
+.pwwrap { position: relative; display: block; }
+/* 目のボタンぶんだけ右に余白を空ける（数字/記号が隠れないように）。 */
+.pwwrap .inp.pw { padding-right: 56px; }
+.pwtoggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  height: 32px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--body);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 150ms var(--ease);
+}
+.pwtoggle:hover, .pwtoggle[aria-pressed='true'] { opacity: 1; }
+.pwtoggle:focus-visible { outline: 1px solid var(--cyan); outline-offset: -2px; }
+
 .afield-err { display: block; margin-top: 5px; font-size: 12px; font-style: normal; color: var(--red); }
 
 .auth-err {
@@ -1181,6 +1207,8 @@ button.cell { cursor: pointer; }
 .check .ng .mark { background: rgba(255, 59, 59, 0.18); color: var(--red); }
 .check .ng { background: rgba(255, 59, 59, 0.05); }
 .check small { display: block; color: var(--dim); font-size: 11.5px; margin-top: 3px; line-height: 1.6; }
+/* チェックリスト下の小さな補足（対応形式・解析は端末内。icm / error で共有）。 */
+.check-note { margin: var(--s2) 0 0; font-size: 11px; color: var(--dim2); line-height: 1.6; }
 
 /* 確認画面の readout（項目別に「修正」） */
 .readout .lb { color: var(--dim); width: 104px; flex: none; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -1291,9 +1319,52 @@ button.cell { cursor: pointer; }
   padding: 10px var(--s4); border-bottom: 1px solid var(--line);
 }
 .imgmodal-title { font-family: var(--mono); font-size: 12px; letter-spacing: 0.03em; color: var(--dim); }
+/* 画像 ＋（あれば）OCR 照合表をまとめてスクロールさせる外枠。画像単体の原寸ズームは
+   従来どおり .imgmodal-body 側の内部スクロールに任せる（入れ子スクロールで問題ない）。 */
+.imgmodal-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .imgmodal-body { overflow: auto; -webkit-overflow-scrolling: touch; background: #000; }
 .imgmodal-body img { display: block; width: 100%; height: auto; cursor: zoom-in; }
 .imgmodal-body.zoom img { width: auto; max-width: none; cursor: zoom-out; }
+
+/* ---- 元画像 × OCR 出力の照合表（SPEC §5.2.3・WP-B1） ---- */
+.imgmodal-readout { padding: var(--s4); border-top: 1px solid var(--line); }
+.imgmodal-readout .scr-h.sm { margin-bottom: var(--s2); }
+.imgmodal-readout .scr-h.sm:not(:first-child) { margin-top: var(--s4); }
+.imgmodal-readout .readout { margin-bottom: 0; }
+/* 信頼度バッジ（値の右に小さく添える）。低信頼は .lowconf と組み合わせて黄で強調。 */
+.conf {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--dim2);
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.lowconf .conf { color: inherit; }
+/* 席テーブルは 375px 幅でも横スクロールしないよう折り返す（既存 .seatrow-ro は1行前提のため
+   このモーダル内だけ挙動を変える）。 */
+.imgmodal-seats-ro .seatrow-ro { flex-wrap: wrap; row-gap: 6px; }
+/* hero/D バッジ（.herotag は margin-left:auto で右寄せ仕様のため、後続のセルが並ぶこの表では
+   使わず専用クラスを用意する）。 */
+.imgmodal-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid var(--line-2);
+  color: var(--dim);
+}
+.imgmodal-tag.hero { color: var(--yellow); border-color: rgba(252, 238, 10, 0.5); }
+/* 注意: モディファイアは .btn ではなく .dbtn にする（グローバルな .btn ボタン
+   コンポーネントと名前衝突し、黄塗り帯化するため実機確認済み）。 */
+.imgmodal-tag.dbtn { color: var(--cyan); border-color: rgba(58, 230, 255, 0.4); }
+/* 状態・アクションのセル（スタック/ベットは既存 .stk / .betchip を流用）。 */
+.imgmodal-field { font-size: 12px; color: var(--fg); white-space: nowrap; }
+.imgmodal-field.lowconf { padding: 1px 5px; }
+.imgmodal-chipcheck { margin: var(--s3) 0 0; font-size: 12px; color: var(--cyan); line-height: 1.6; }
+.imgmodal-readout .check-h { margin-top: var(--s4); }
 
 /* ==== M4: Action tree（全ポジ常時表示・行内トグル）＋連動レンジ ==== */
 .tree { display: flex; flex-direction: column; gap: 6px; }
@@ -1739,5 +1810,151 @@ button.cell { cursor: pointer; }
 .userpub-item { padding: 13px 14px; border-bottom: 1px solid var(--line); }
 .userpub-item .rescard { margin-top: 0; }
 .home-empty small { display: block; margin-top: 8px; font-size: 12px; color: var(--dim2); line-height: 1.7; }
+
+/* ==== WP-C: 非同期計算・記録タブの状態行・トースト（SPEC v3 §5.4/§5.7） ==== */
+
+/* 計算中は入力を止める注意パネル（icm タブ, §5.7 の3）。赤ではなく情報色（シアン）。 */
+.icm-blocked {
+  margin: 0 0 var(--s3);
+  padding: 12px 13px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--cyan);
+  background: rgba(58, 230, 255, 0.08);
+  border: 1px solid rgba(58, 230, 255, 0.35);
+}
+
+/* 小型スピナー（記録行の「計算中」用. .spinner の縮小版）。 */
+.spinner.sm {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border-width: 2px;
+}
+
+/* 記録行: 計算中 / 失敗・中断（ボタンでなく div。タップでは開かない）。 */
+.recstate { cursor: default; }
+.recstate:hover { border-color: var(--line); }
+.recspin {
+  grid-column: 1 / 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+.recerrmsg { grid-column: 1 / 4; font-size: 12px; color: var(--red); line-height: 1.6; }
+.recretry-row { grid-column: 1 / 4; margin-top: 6px; }
+.recretry { width: auto; padding: 7px 16px; }
+
+/* 記録行内の公開タグ（小・記録メタ行にインライン表示）。 */
+.rectag {
+  display: inline-block;
+  margin-left: 7px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  padding: 1px 6px;
+  border: 1px solid rgba(58, 230, 255, 0.4);
+  color: var(--cyan);
+  background: rgba(58, 230, 255, 0.1);
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.recunsel { color: var(--dim2); }
+
+/* 結果画面: 自分の選択（3択）・公開の確認（コメント＋実行ボタン）。 */
+.actsel { margin-bottom: var(--s2); }
+.pub-confirm { margin-top: 10px; }
+
+/* ---- トースト（画面下・タブバーの上, SPEC §5.7 の4） ---- */
+.toast-wrap {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 92px;
+  z-index: 70;
+  width: calc(100% - 24px);
+  max-width: 396px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 14px;
+  background: rgba(21, 22, 15, 0.97);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--yellow);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  animation: toastIn 220ms var(--ease);
+}
+.toast.err { border-left-color: var(--red); }
+.toast-msg { flex: 1; font-size: 13px; color: var(--fg); line-height: 1.5; }
+.toast-x {
+  flex: none;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+}
+.toast-x:hover { color: var(--fg); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================================
+   WP-D — スレッドの通常投稿（Home/Thread/投稿コンポーザ, SPEC v3 §5.1）
+   ========================================================================= */
+
+/* 通常投稿の本文＋画像。Home フィード / userpub のカード（タップでスレッドへ）
+   ・Thread 見出し（PostHead, 編集時は .cmt-edit を流用）の両方で使う。 */
+.post-body {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.post-body-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.66;
+  color: #e2e3d4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.post-img { display: block; margin-top: 8px; max-width: 100%; }
+.post-img img { border: 1px solid var(--line); display: block; max-width: 100%; height: auto; }
+
+/* 投稿コンポーザ（ホーム FAB → モーダル）。.modal/.modal-body は既存の手入力モーダルと共通。 */
+.post-compose-body {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 11px;
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg);
+}
+.post-compose-body:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+.post-compose-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.post-compose-count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim2); }
 
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

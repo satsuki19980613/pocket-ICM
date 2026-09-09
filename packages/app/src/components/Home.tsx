@@ -1,6 +1,6 @@
 import type { FeedAuthor, FeedPost } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
-import { Avatar, relTime } from './feedShared';
+import { Avatar, PostBody, relTime } from './feedShared';
 
 export type FeedState = 'loading' | 'error' | 'ready';
 
@@ -42,8 +42,8 @@ export function Home(props: {
     return (
       <div className="feed">
         <div className="home-empty">
-          <p>まだ公開された結果がありません。</p>
-          <small>計算結果の画面で「ホームで公開する」をオンにすると、ここに並びます。</small>
+          <p>まだ投稿がありません。</p>
+          <small>投稿するか、計算結果を公開するとここに並びます。</small>
         </div>
       </div>
     );
@@ -80,8 +80,14 @@ function PostCard(props: {
           </button>
           <i>・{relTime(p.created_at)}</i>
         </div>
-        {p.lead_comment && <p>{p.lead_comment}</p>}
-        <ResultCard result={p.result} onOpen={props.onOpenThread} />
+        {p.kind === 'result' && p.result ? (
+          <>
+            {p.lead_comment && <p>{p.lead_comment}</p>}
+            <ResultCard result={p.result} onOpen={props.onOpenThread} />
+          </>
+        ) : (
+          <PostBody body={p.body} imageUrl={p.image_url} onOpen={props.onOpenThread} />
+        )}
         <div className="acts">
           <button type="button" onClick={props.onOpenThread}>
             💬 {p.comment_count}

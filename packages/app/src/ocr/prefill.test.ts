@@ -40,4 +40,15 @@ describe('ocrPrefillFromRgba', () => {
     expect(res.issues).toContain(CHIPS_MODE_ISSUE);
     expect(res.form).toBeUndefined();
   });
+
+  it('chips 棄却でも readout / issueCodes / imageSize を返す（照合ビューは失敗画像でも見せる・SPEC §5.2.3）', () => {
+    const res = ocrPrefillFromRgba(blackRgba(800, 370), templates);
+    expect(res.ok).toBe(false);
+    expect(res.readout).toBeDefined();
+    expect(res.readout!.issues).toContain(CHIPS_MODE_ISSUE);
+    expect(res.readout!.issueCodes).toContain('display_mode_chips');
+    expect(Array.isArray(res.readout!.seats)).toBe(true);
+    expect(res.issueCodes).toEqual(res.readout!.issueCodes);
+    expect(res.imageSize).toEqual({ w: 800, h: 370 });
+  });
 });

@@ -1,41 +1,73 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState } from '@oshihiki/core';
+import type { OcrReadout } from '@oshihiki/ocr';
 import { Auth } from './components/Auth';
 import { supabase, isConfigured } from './supabase/client';
+import { getMyProfile } from './supabase/profile';
 import { IcmInput } from './components/IcmInput';
 import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
 import { ErrorView } from './components/ErrorView';
 import { RecordsView } from './components/RecordsView';
+import { Toast } from './components/Toast';
 // Drill（訓練）は SPEC §5.6 により一旦 Coming Soon。DrillView 実装はコード上温存（未配線）。
 import { ComingSoon } from './components/ComingSoon';
 import { Home, type FeedState } from './components/Home';
 import { Thread } from './components/Thread';
 import { UserPub } from './components/UserPub';
+import { PostComposer } from './components/PostComposer';
 import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
 import { Admin } from './components/Admin';
 import { buildBoardState, defaultForm, reconcilePositions, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
-import { prefillFromScreenshot } from './ocr/screenshotPrefill';
+import { prefillFromScreenshot, type OcrPrefillResult } from './ocr/screenshotPrefill';
 import {
-  buildRecord,
   evLossOf,
+  finishRecord,
   headlineNode,
+  startRecord,
+  verdictOf,
   type HeroAction,
   type SpotRecord,
 } from './records/model';
 import { deleteRecord, listRecords, putRecord } from './records/store';
 import {
+  IDLE_JOB,
+  canStartSolve,
+  completeJob,
+  failJob,
+  startJob,
+  type SolveJob,
+} from './solveJob';
+import {
+  abortStaleSolving,
+  completeRecord,
+  createSolvingRecord,
+  deleteMyRecord,
+  failRecord,
+  findMyRecordIdByClientId,
+  listMyRecords,
+  publishRecord,
+  retryRecord,
+  setHeroAction,
+  unpublishRecord,
+} from './supabase/records';
+import { compressForUpload, markImageProtected, uploadSpotImage } from './supabase/images';
+import { attachFinalState, diffStates, logOcrRead } from './supabase/ocrLog';
+import {
   addComment,
+  createPost,
   deleteComment,
+  dbToHeroAction,
+  deletePost,
   editComment,
+  editPost,
   getThread,
   listFeed,
-  publishResult,
   setLike,
   uploadThreadImage,
   type FeedAuthor,
@@ -49,7 +81,6 @@ type Screen =
   | 'userpub'
   | 'icm'
   | 'confirm'
-  | 'solving'
   | 'result'
   | 'error'
   | 'history'
@@ -58,13 +89,20 @@ type Screen =
   | 'admin';
 
 /**
- * 結果画面の由来。solve=新規求解（保存可）、record=履歴の再表示（読み取り専用）、
+ * 結果画面の由来。record=記録タブ・完了トースト経由の再表示（自分の記録・選択と公開を編集可）、
  * thread=公開結果の閲覧（読み取り専用・戻るはスレッドへ）。
+ * v3: 計算は非同期化され、求解直後にその場で結果画面へ遷移する経路（旧 'solve'）は無くなった
+ * （SPEC §5.7）。計算完了後は必ず記録タブ経由（トーストタップ or 一覧タップ）で開く。
  */
-type ResultOrigin =
-  | { kind: 'solve' }
-  | { kind: 'record'; rec: SpotRecord }
-  | { kind: 'thread'; threadId: string };
+type ResultOrigin = { kind: 'record'; rec: SpotRecord } | { kind: 'thread'; threadId: string };
+
+/** トースト1件（完了/失敗の通知）。同時に1つだけ（新しいものが古いものを置き換える）。 */
+interface ToastState {
+  key: number;
+  message: string;
+  kind: 'done' | 'err';
+  onTap: () => void;
+}
 
 /** 各画面のヘッダタイトル（モックの titles マップ準拠）。 */
 const TITLES: Record<Screen, string> = {
@@ -73,7 +111,6 @@ const TITLES: Record<Screen, string> = {
   userpub: '公開結果',
   icm: 'ICM',
   confirm: '条件確認',
-  solving: '計算中',
   result: '計算結果',
   error: '条件確認',
   history: '記録',
@@ -138,6 +175,63 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
   }
 }
 
+/**
+ * スクショ1枚に対する OCR 実行＋サーバ記録（画像アップロード・OCR ログ）をまとめて行う
+ * （SPEC §5.7 の A: スクショ投入時）。アップロード・ログの失敗はアプリを止めない
+ * （imageId/ocrReadId は未設定のまま呼び出し側へ返し、以降もローカルだけで計算は続けられる）。
+ * OCR が読めなかった画像は精度改善の資産として無期限保持に切り替える
+ * （markImageProtected, §7.2/§12）。
+ */
+async function runOcrAndLog(
+  file: File,
+): Promise<{ res: OcrPrefillResult; imageId?: string; ocrReadId?: string }> {
+  let imageId: string | undefined;
+  try {
+    const { blob, width, height } = await compressForUpload(file);
+    const up = await uploadSpotImage(blob, { width, height });
+    if (up.ok) imageId = up.data.imageId;
+  } catch {
+    /* 圧縮/アップロード失敗はアプリを止めない（§7.2）。imageId は未設定のまま進む。 */
+  }
+
+  const res = await prefillFromScreenshot(file);
+
+  let ocrReadId: string | undefined;
+  try {
+    const built = res.ok && res.form ? buildBoardState(res.form) : null;
+    const w = res.imageSize?.w ?? 0;
+    const h = res.imageSize?.h ?? 0;
+    const log = await logOcrRead({
+      imageId,
+      ok: res.ok,
+      displayMode: res.readout?.displayMode,
+      street: res.readout?.street.value,
+      issues: res.issues,
+      issueCodes: res.issueCodes ?? [],
+      lowConfidence: res.lowConfidenceFields,
+      rawReads: res.readout,
+      state: built?.ok ? (built.state ?? null) : null,
+      device: {
+        ua: navigator.userAgent,
+        dpr: window.devicePixelRatio || 1,
+        w,
+        h,
+        aspect: h ? w / h : 0,
+      },
+    });
+    if (log.ok) ocrReadId = log.data.id;
+  } catch {
+    /* OCR ログの失敗もアプリを止めない（成功・失敗を問わず記録したいが、書けなければ諦める）。 */
+  }
+
+  // OCR が読めなかった画像は無期限保持へ（精度改善の資産, §7.2/§12）。
+  if (!res.ok && imageId) {
+    await markImageProtected(imageId).catch(() => undefined);
+  }
+
+  return { res, imageId, ocrReadId };
+}
+
 export function App(): JSX.Element {
   // 認証セッション。undefined=判定中（初期ロード）, null=未ログイン, Session=ログイン済み。
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -154,16 +248,32 @@ export function App(): JSX.Element {
   // OCR プリフィルの低信頼フィールド（"UTG.stack" 等）。確認画面で強調する。
   const [lowConf, setLowConf] = useState<string[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
-  // OCR で読み取った元画像（objectURL）。写真経由のときだけ保持し、確認/修正画面で
-  // 「元画像を確認」から原寸照合できるようにする。手入力・リセットで破棄。
+  // OCR で読み取った元画像（objectURL）。写真経由のときだけ保持し、確認/修正/エラー画面で
+  // 「元画像を確認」から照合できるようにする。手入力・リセットで破棄。
   const [ocrImageUrl, setOcrImageUrl] = useState<string | null>(null);
-  // 計算中の待機文言のバリエーション。深い局面（25bb超の席あり）は厳密 MC、
-  // 5〜6人は層化 MC の反復が厚いため、それぞれ通常より時間がかかる旨を出す。
-  const [solvingNote, setSolvingNote] = useState<'deep' | 'many' | null>(null);
-  // 記録（履歴）: IndexedDB から読み込み。
+  // OCR 出力（元画像 × OCR 結果の照合ビュー用, SPEC §5.2.3）。写真経由のときだけ持つ。
+  const [readout, setReadout] = useState<OcrReadout | undefined>(undefined);
+  const [imageSize, setImageSize] = useState<{ w: number; h: number } | undefined>(undefined);
+  // OCR 直後（利用者が確認画面で直す前）の BoardState。solve() 実行時に diffStates の基準として
+  // 使う（§12.1: 利用者が直した差分＝暗黙の正解ラベル）。手入力のみのときは null のまま。
+  const [ocrOriginalState, setOcrOriginalState] = useState<BoardState | null>(null);
+  // スクショ由来の画像/OCR 読み取りログの id（solve() 実行時に results 行へ紐付ける）。
+  const [pendingImageId, setPendingImageId] = useState<string | undefined>(undefined);
+  const [pendingOcrReadId, setPendingOcrReadId] = useState<string | undefined>(undefined);
+  // 記録（履歴）: サーバが正・IndexedDB はキャッシュ（§9.3/§9.4）。
   const [records, setRecords] = useState<SpotRecord[]>([]);
-  // 結果画面の由来（保存可否・戻り先を決める）。
-  const [resultOrigin, setResultOrigin] = useState<ResultOrigin>({ kind: 'solve' });
+  // 結果画面の由来（読み取り専用/編集可・戻り先を決める）。
+  const [resultOrigin, setResultOrigin] = useState<ResultOrigin | null>(null);
+  // 計算ジョブ。App のトップレベル state で持つことで、画面遷移（コンポーネントの
+  // アンマウント）で消えない（SPEC §5.7 の2・6: 計算中も他タブを自由に操作できる）。
+  const [solveJob, setSolveJob] = useState<SolveJob>(IDLE_JOB);
+  // 完了/失敗トースト（同時に1つ）。
+  const [toast, setToast] = useState<ToastState | null>(null);
+  // 再送（resyncPending）の多重起動ガード。refreshRecords から呼ぶため再入しうる。
+  const resyncing = useRef(false);
+  // 設定「計算したら最初から公開する」（profiles.default_public）。結果画面の公開レバーの
+  // 初期状態に使う（SPEC §5.3。オンでも「この内容で公開する」を押すまで公開はされない）。
+  const [defaultPublish, setDefaultPublish] = useState(false);
 
   // --- M6 フィード/スレッド/他人公開 ---
   const [feedState, setFeedState] = useState<FeedState>('loading');
@@ -173,18 +283,103 @@ export function App(): JSX.Element {
   const [pubAuthor, setPubAuthor] = useState<FeedAuthor | null>(null);
   const [pubPosts, setPubPosts] = useState<FeedPost[]>([]);
   const [pubState, setPubState] = useState<FeedState>('loading');
+  // 通常投稿コンポーザ（v3・ホームの FAB から開く。計算は ICM タブに一本化, SPEC §5.1.2）。
+  const [composerOpen, setComposerOpen] = useState(false);
 
+  /**
+   * 記録タブの再取得（SPEC §9.4）。まずローカルキャッシュを描き、サーバ取得が済み次第
+   * 差し替える。ただしオフライン等でまだサーバに届いていない記録（pendingSync）は
+   * 消さない＝ユーザーの計算結果を絶対に失わない（冒頭の守ること）。
+   */
   async function refreshRecords(): Promise<void> {
+    let local: SpotRecord[] = [];
     try {
-      setRecords(await listRecords());
+      local = await listRecords();
+      setRecords(local);
     } catch {
       /* IndexedDB 不可の環境では履歴は空のまま（機能縮退）。 */
     }
+    const remote = await listMyRecords();
+    if (remote.ok) {
+      const pendingOnly = local.filter(
+        (r) => r.pendingSync && !remote.data.some((s) => s.clientId === r.clientId),
+      );
+      // サーバ反映が未完（solving/aborted のまま）でも、ローカルに完了済みの結果があるなら
+      // そちらを見せる。完了した計算が「中断されました」に化けて見えるのを防ぐ。
+      const byClient = new Map(local.map((r) => [r.clientId, r]));
+      const merged = remote.data.map((r) => {
+        const l = byClient.get(r.clientId);
+        return l && l.status === 'done' && r.status !== 'done' ? { ...l, serverId: r.serverId } : r;
+      });
+      setRecords([...pendingOnly, ...merged]);
+      // サーバに届いていない記録があれば、この機会（＝オンラインが確認できた今）に再送する。
+      if (pendingOnly.length > 0) void resyncPending(pendingOnly);
+    }
   }
 
-  useEffect(() => {
-    void refreshRecords();
-  }, []);
+  /**
+   * オフライン等でサーバへ届かなかった記録の再送（SPEC §9.4）。
+   * `client_id` が冪等キーなので二重登録は起きない（挿入が一意制約で弾かれたら
+   * 既存行の id を引き直して続きの更新だけ行う）。再送に失敗したものは pendingSync の
+   * まま残し、次に記録タブを開いたときにまた試す。
+   */
+  async function resyncPending(pending: readonly SpotRecord[]): Promise<void> {
+    if (resyncing.current || pending.length === 0) return;
+    resyncing.current = true;
+    let changed = false;
+    try {
+      for (const rec of pending) {
+        let serverId = rec.serverId;
+        if (!serverId) {
+          const created = await createSolvingRecord({
+            clientId: rec.clientId,
+            spot: rec.state,
+            imageId: rec.imageId,
+            ocrReadId: rec.ocrReadId,
+            heroHand: rec.heroHand,
+            heroPos: rec.heroPos,
+            playersLeft: rec.playersLeft,
+          });
+          if (created.ok) {
+            serverId = created.data.id;
+          } else {
+            // 一意制約で弾かれた＝既にサーバにある可能性。id を引き直す。
+            const found = await findMyRecordIdByClientId(rec.clientId);
+            if (found.ok && found.data.id) serverId = found.data.id;
+          }
+        }
+        if (!serverId) continue; // まだ届かない（オフライン）。次回に委ねる。
+
+        if (rec.status === 'done' && rec.result) {
+          const head = headlineNode(rec.result);
+          const done = await completeRecord(serverId, {
+            solution: rec.result,
+            ms: rec.ms,
+            verdict: head ? verdictOf(head) : 'FOLD',
+            heroEv: head?.heroEv ?? 0,
+          });
+          if (!done.ok) continue;
+          if (rec.heroAction) {
+            await setHeroAction(serverId, rec.heroAction, rec.evLoss).catch(() => undefined);
+          }
+        } else if (rec.status === 'failed') {
+          const f = await failRecord(serverId, rec.error ?? '計算に失敗しました');
+          if (!f.ok) continue;
+        }
+        // status が solving/aborted のものは serverId を結び直すだけ。中断は次回ログイン時の
+        // abortStaleSolving がサーバ側の状態を揃える。
+        try {
+          await putRecord({ ...rec, serverId, pendingSync: false });
+        } catch {
+          /* IndexedDB 不可でも再送自体は成立している。 */
+        }
+        changed = true;
+      }
+    } finally {
+      resyncing.current = false;
+    }
+    if (changed) await refreshRecords();
+  }
 
   // 認証セッションの監視。
   useEffect(() => {
@@ -197,8 +392,10 @@ export function App(): JSX.Element {
       // ログアウト/削除でセッションが切れたら画面状態を初期化。
       if (!s) {
         setScreen('home');
-        setResultOrigin({ kind: 'solve' });
+        setResultOrigin(null);
         setThread(null);
+        setSolveJob(IDLE_JOB);
+        setToast(null);
       }
     });
     return () => {
@@ -207,9 +404,25 @@ export function App(): JSX.Element {
     };
   }, []);
 
-  // ログイン後に一度フィードを読む（起点が home のため）。
+  // ログイン後: 未送信の記録を先に再送 → 中断掃除 → 記録読み込み。フィードも読む（起点が home）。
   useEffect(() => {
-    if (session) void loadFeed();
+    if (!session) return;
+    void (async () => {
+      // 再送を先に行う。順序が逆だと「ローカルでは完了しているがサーバ未反映」の記録を
+      // abortStaleSolving が中断へ落としてしまい、完了済みの結果が中断表示に化ける。
+      try {
+        const local = await listRecords();
+        await resyncPending(local.filter((r) => r.pendingSync));
+      } catch {
+        /* IndexedDB 不可なら再送するものも無い。 */
+      }
+      // 起動時、solving のまま残っている自分の記録を中断に落とす（§5.7 の5）。
+      await abortStaleSolving().catch(() => undefined);
+      await refreshRecords();
+      const prof = await getMyProfile();
+      if (prof.ok) setDefaultPublish(prof.data.default_public);
+    })();
+    void loadFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
@@ -245,9 +458,12 @@ export function App(): JSX.Element {
     if (r.ok) setThread(r.data);
   }
 
-  /** スレッドの見出しカード → 公開結果を全結果画面で（読み取り専用）表示。 */
+  /**
+   * スレッドの見出しカード → 公開結果を全結果画面で（読み取り専用）表示。
+   * 結果投稿のときだけ意味を持つ（通常投稿は結果を持たないため何もしない, v3）。
+   */
   function openThreadResult(): void {
-    if (!thread) return;
+    if (!thread || thread.kind !== 'result' || !thread.result) return;
     setState(thread.result.spot);
     setResult(thread.result.solution);
     setMs(0);
@@ -322,40 +538,113 @@ export function App(): JSX.Element {
     return { ok: true };
   }
 
-  /**
-   * 結果画面から記録を保存。published=true なら IndexedDB 保存に加えクラウド公開
-   * （results is_public＋threads＋一言コメント）。成否を返す。
-   */
-  async function onSave(
-    heroAction: HeroAction,
-    published: boolean,
-    comment: string,
-  ): Promise<{ ok: boolean; message?: string }> {
-    if (!state || !result) return { ok: false, message: '状態がありません' };
-    const rec = buildRecord({ state, result, ms, heroAction, published });
-    try {
-      await putRecord(rec);
-      await refreshRecords();
-    } catch {
-      /* ローカル保存失敗は握りつぶす（オフライン PWA・容量超過等）。 */
-    }
-    if (published) {
-      const head = headlineNode(result);
-      const evLoss = head ? evLossOf(head.heroEv, heroAction) : null;
-      const pub = await publishResult({ state, result, heroAction, evLoss, comment });
-      if (!pub.ok) return { ok: false, message: pub.message };
-      await loadFeed();
-    }
+  /** 自分の通常投稿の本文を編集（SPEC §5.1.2）。 */
+  async function onEditPost(body: string): Promise<{ ok: boolean; message?: string }> {
+    if (!thread) return { ok: false, message: 'スレッドがありません' };
+    const r = await editPost(thread.thread_id, body);
+    if (!r.ok) return { ok: false, message: r.message };
+    await refreshThread();
+    await loadFeed();
     return { ok: true };
   }
 
-  async function onDeleteRecord(id: string): Promise<void> {
-    await deleteRecord(id).catch(() => {});
+  /** 自分の通常投稿を削除（返信ごと消える）。削除したらホームへ戻る（SPEC §5.1.2）。 */
+  async function onDeletePost(): Promise<{ ok: boolean; message?: string }> {
+    if (!thread) return { ok: false, message: 'スレッドがありません' };
+    const r = await deletePost(thread.thread_id);
+    if (!r.ok) return { ok: false, message: r.message };
+    setThread(null);
+    setScreen('home');
+    await loadFeed();
+    return { ok: true };
+  }
+
+  /**
+   * 通常投稿の作成（v3・SPEC §5.1.2）。成功したらフィードを再取得し、既存の Toast の仕組みで
+   * 「投稿しました」を出す（タップで自分のスレッドへ）。PostComposer は成功を受けて自ら閉じる。
+   */
+  async function onCreatePost(input: {
+    body: string;
+    imageFile: File | null;
+  }): Promise<{ ok: boolean; message?: string }> {
+    const r = await createPost(input);
+    if (!r.ok) return { ok: false, message: r.message };
+    await loadFeed();
+    const threadId = r.data.thread_id;
+    showToast('投稿しました', 'done', () => void openThread(threadId));
+    return { ok: true };
+  }
+
+  /** 完了/失敗トーストを出す（同時に1つ。新しいものが古いものを置き換える, SPEC §5.7 の4）。 */
+  function showToast(message: string, kind: 'done' | 'err', onTap: () => void): void {
+    setToast({ key: Date.now(), message, kind, onTap });
+  }
+
+  /** 自分の選択（ALL IN/FOLD/未選択）を保存（SPEC §5.3、押した時点で確定・任意）。 */
+  async function onSelectAction(
+    rec: SpotRecord,
+    action: HeroAction | null,
+  ): Promise<{ ok: boolean; message?: string }> {
+    const head = rec.result ? headlineNode(rec.result) : null;
+    const evLoss = action != null && head ? evLossOf(head.heroEv, action) : null;
+    if (rec.serverId) {
+      const r = await setHeroAction(rec.serverId, action, evLoss);
+      if (!r.ok) return { ok: false, message: r.message };
+    }
+    const updated: SpotRecord = { ...rec, heroAction: action, evLoss };
+    try {
+      await putRecord(updated);
+    } catch {
+      /* ローカル保存失敗は握りつぶす（サーバは更新済み）。 */
+    }
+    await refreshRecords();
+    return { ok: true };
+  }
+
+  /**
+   * 公開レバー（SPEC §5.3）。on=true で `publishRecord`（is_public 更新＋スレッド作成＋
+   * 先頭コメント）、on=false で `unpublishRecord`（スレッド削除＋is_public を戻す）。
+   * v2 にあった `supabase/feed.ts` の `publishResult`（計算結果を新規 results 行として
+   * 公開する経路）は WP-D で削除済み（既に呼び出し元が無いことを確認して削除）。
+   */
+  async function onTogglePublish(
+    rec: SpotRecord,
+    on: boolean,
+    comment: string,
+  ): Promise<{ ok: boolean; message?: string }> {
+    if (!rec.serverId) {
+      return { ok: false, message: 'サーバへの同期待ちのため、まだ公開できません（少し待って再度お試しください）' };
+    }
+    if (on) {
+      const r = await publishRecord(rec.serverId, comment);
+      if (!r.ok) return { ok: false, message: r.message };
+    } else {
+      const r = await unpublishRecord(rec.serverId);
+      if (!r.ok) return { ok: false, message: r.message };
+    }
+    const updated: SpotRecord = { ...rec, published: on };
+    try {
+      await putRecord(updated);
+    } catch {
+      /* ローカル保存失敗は握りつぶす（サーバは更新済み）。 */
+    }
+    await refreshRecords();
+    await loadFeed(); // 公開/取消はホームフィードにも反映する。
+    return { ok: true };
+  }
+
+  /** 記録の削除（サーバ→ローカルの順, SPEC §5.4）。 */
+  async function onDeleteRecord(rec: SpotRecord): Promise<void> {
+    if (rec.serverId) {
+      await deleteMyRecord(rec.serverId).catch(() => undefined);
+    }
+    await deleteRecord(rec.id).catch(() => undefined);
     await refreshRecords();
   }
 
-  /** 履歴の1件を読み取り専用で結果画面に再表示。 */
+  /** 履歴の1件を結果画面に表示（自分の記録＝選択・公開を編集できる, SPEC §5.3/§5.4）。 */
   function openRecord(rec: SpotRecord): void {
+    if (rec.status !== 'done' || !rec.result) return; // 計算中/失敗はタップしても開かない。
     setResultOrigin({ kind: 'record', rec });
     setState(rec.state);
     setResult(rec.result);
@@ -386,13 +675,37 @@ export function App(): JSX.Element {
     });
   }
 
-  /** スクショ添付 → OCR プリフィル → 条件確認。 */
+  /** スクショ由来の画像/OCR 参照を一発分クリアする（次のスポットへ持ち越さない）。 */
+  function clearOcrPending(): void {
+    setPendingImageId(undefined);
+    setPendingOcrReadId(undefined);
+    setOcrOriginalState(null);
+  }
+
+  /** icm タブの「手入力する」（写真なしの新規入力）。前回スクショの文脈を持ち越さない。 */
+  function startFreshManual(): void {
+    setOcrImage(null);
+    setReadout(undefined);
+    setImageSize(undefined);
+    clearOcrPending();
+    setManualOpen(true);
+  }
+
+  /** スクショ添付 → 画像アップロード＋OCR ログ → OCR プリフィル → 条件確認。 */
   async function onScreenshot(file: File): Promise<void> {
     setOcrBusy(true);
     setErrFromPhoto(true);
     setOcrImage(URL.createObjectURL(file));
+    setReadout(undefined);
+    setImageSize(undefined);
+    clearOcrPending();
     try {
-      const res = await prefillFromScreenshot(file);
+      const { res, imageId, ocrReadId } = await runOcrAndLog(file);
+      setReadout(res.readout);
+      setImageSize(res.imageSize);
+      setPendingImageId(imageId);
+      setPendingOcrReadId(ocrReadId);
+
       if (!res.ok || !res.form) {
         setIssues([
           'スクリーンショットから局面を読み取れませんでした（対象はプリフロップ終了フレーム）。',
@@ -414,6 +727,7 @@ export function App(): JSX.Element {
         return;
       }
       setLowConf(res.lowConfidenceFields);
+      setOcrOriginalState(built.state);
       setState(built.state);
       setScreen('confirm');
     } catch (e) {
@@ -424,8 +738,66 @@ export function App(): JSX.Element {
     }
   }
 
+  /**
+   * Web Worker で実際に解く（新規計算・再計算の共通経路）。完了/失敗どちらでもローカル
+   * （IndexedDB）とサーバ（`completeRecord`/`failRecord`）を更新し、トーストを出す。
+   * `rec`/`finalState`/`serverId` を引数で受け取ることで、画面が別タブへ切り替わっても
+   * （このクロージャは App の1つのメソッド呼び出しの中で完結するため）計算が止まらない。
+   */
+  async function runSolve(rec: SpotRecord, finalState: BoardState, serverId: string | undefined): Promise<void> {
+    try {
+      const { result: dto, ms: elapsed } = await solveInWorker(finalState, solveOptsForN(finalState.playersLeft));
+      const finished = finishRecord(rec, { result: dto, ms: elapsed });
+      try {
+        await putRecord(finished);
+      } catch {
+        /* ローカル保存失敗は握りつぶす（サーバ側は下で更新を試みる）。 */
+      }
+      await refreshRecords();
+      setSolveJob((j) => (j.recordId === rec.id ? completeJob(j) : j));
+      showToast('計算が完了しました', 'done', () => openRecord(finished));
+
+      if (serverId) {
+        const head = headlineNode(dto);
+        const verdict = head ? verdictOf(head) : 'FOLD';
+        const heroEv = head?.heroEv ?? 0;
+        const comp = await completeRecord(serverId, { solution: dto, ms: elapsed, verdict, heroEv });
+        if (!comp.ok) {
+          // サーバ反映に失敗しても計算結果はローカルに残す（pendingSync を立てて次回に委ねる）。
+          const pending: SpotRecord = { ...finished, pendingSync: true };
+          try {
+            await putRecord(pending);
+          } catch {
+            /* noop */
+          }
+          await refreshRecords();
+        }
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      const failed: SpotRecord = { ...rec, status: 'failed', error: message };
+      try {
+        await putRecord(failed);
+      } catch {
+        /* noop */
+      }
+      await refreshRecords();
+      setSolveJob((j) => (j.recordId === rec.id ? failJob(j) : j));
+      showToast('計算に失敗しました', 'err', () => setScreen('history'));
+      if (serverId) {
+        await failRecord(serverId, message).catch(() => undefined);
+      }
+    }
+  }
+
+  /**
+   * 「この内容で計算する」（SPEC §5.7）。solving 画面は廃止。記録を1件作って記録タブへ
+   * 遷移し、計算は Worker でバックグラウンド継続する（ジョブは App のトップレベル state
+   * のため、画面遷移で消えない）。
+   */
   async function solve(): Promise<void> {
     if (!state) return;
+    if (!canStartSolve(solveJob)) return; // 同時1件の制約（IcmInput 側でも弾くが二重防御）。
     // 念のための防御（入口で弾いているが、7人以上が届いても求解しない）。
     if (state.playersLeft > MAX_PLAYERS) {
       setErrFromPhoto(false);
@@ -433,33 +805,73 @@ export function App(): JSX.Element {
       setScreen('error');
       return;
     }
-    setResultOrigin({ kind: 'solve' }); // 新規求解は保存可
-    // 25bb超の席があるとテーブルを使えず厳密 MC＝時間がかかる（HRC一致優先）。
-    // 6人は事前計算テーブルがなく層化 MC の反復も厚いため、同様に時間がかかる旨を出す。
-    // （5人は蒸留 NN で即時解＝標準構成なら待ち文言は不要。深いスタックは上の 'deep' で拾う。）
-    if (state.seats.some((s) => s.stack + s.bet > 25)) {
-      setSolvingNote('deep');
-    } else if (state.playersLeft === 6) {
-      setSolvingNote('many');
-    } else {
-      setSolvingNote(null);
+
+    const finalState = state;
+    const clientId = crypto.randomUUID();
+    const imageId = pendingImageId;
+    const ocrReadId = pendingOcrReadId;
+    const originalState = ocrOriginalState;
+    clearOcrPending(); // 一発勝負（このスポット限り）。次のスポットへ持ち越さない。
+
+    // OCR 由来なら、利用者が確認画面で直した差分を正解ラベルとして残す（§12.1）。
+    if (ocrReadId && originalState) {
+      void attachFinalState(ocrReadId, finalState, diffStates(originalState, finalState)).catch(() => undefined);
     }
-    setScreen('solving');
+
+    const localRec = startRecord({
+      clientId,
+      state: finalState,
+      heroHand: finalState.heroHand,
+      heroPos: finalState.heroPos,
+      playersLeft: finalState.playersLeft,
+      imageId,
+      ocrReadId,
+    });
+
+    const created = await createSolvingRecord({
+      clientId,
+      spot: finalState,
+      imageId,
+      ocrReadId,
+      heroHand: finalState.heroHand,
+      heroPos: finalState.heroPos,
+      playersLeft: finalState.playersLeft,
+    });
+    const serverId = created.ok ? created.data.id : undefined;
+    const rec: SpotRecord = { ...localRec, serverId, pendingSync: !created.ok };
+
     try {
-      const { result: dto, ms: elapsed } = await solveInWorker(state, solveOptsForN(state.playersLeft));
-      setResult(dto);
-      setMs(elapsed);
-      setScreen('result');
-    } catch (e) {
-      setErrFromPhoto(false);
-      setIssues([e instanceof Error ? e.message : String(e)]);
-      setScreen('error');
+      await putRecord(rec);
+    } catch {
+      /* IndexedDB 不可の環境でも続行（サーバに残っていれば記録は失われない）。 */
     }
+    await refreshRecords();
+
+    setSolveJob(startJob(rec.id));
+    setScreen('history'); // solving 画面は廃止。記録タブへ遷移し先頭に「計算中」を出す。
+
+    void runSolve(rec, finalState, serverId);
+  }
+
+  /** 記録タブの「再計算」（失敗/中断した記録を解き直す, SPEC §5.4）。 */
+  async function onRetryRecord(rec: SpotRecord): Promise<void> {
+    if (!canStartSolve(solveJob)) return; // 同時1件の制約。
+    if (rec.serverId) {
+      await retryRecord(rec.serverId).catch(() => undefined);
+    }
+    const restarted: SpotRecord = { ...rec, status: 'solving', error: undefined, result: null };
+    try {
+      await putRecord(restarted);
+    } catch {
+      /* noop */
+    }
+    await refreshRecords();
+    setSolveJob(startJob(restarted.id));
+    void runSolve(restarted, restarted.state, rec.serverId);
   }
 
   /** 下段タブの遷移。 */
   function navTab(key: TabKey): void {
-    setResultOrigin({ kind: 'solve' });
     switch (key) {
       case 'home':
         void loadFeed();
@@ -495,12 +907,10 @@ export function App(): JSX.Element {
         return () => setScreen('home');
       case 'result':
         return () => {
-          if (resultOrigin.kind === 'record') {
-            setScreen('history');
-          } else if (resultOrigin.kind === 'thread') {
+          if (resultOrigin?.kind === 'thread') {
             setScreen('thread');
           } else {
-            setScreen('icm');
+            setScreen('history');
           }
         };
       default:
@@ -534,6 +944,7 @@ export function App(): JSX.Element {
   const showTabs = TAB_SCREENS.includes(screen);
   const back = backFor(screen);
   const activeTab = tabForScreen(screen);
+  const jobRunning = solveJob.status === 'running';
 
   return (
     <div className={`app${showTabs ? ' has-tabs' : ''}`}>
@@ -587,6 +998,8 @@ export function App(): JSX.Element {
             onReply={onReply}
             onEditComment={onEditComment}
             onDeleteComment={onDeleteComment}
+            onEditPost={onEditPost}
+            onDeletePost={onDeletePost}
           />
         ))}
 
@@ -603,11 +1016,9 @@ export function App(): JSX.Element {
       {screen === 'icm' && (
         <IcmInput
           onScreenshot={onScreenshot}
-          onManual={() => {
-            setOcrImage(null);
-            setManualOpen(true);
-          }}
+          onManual={startFreshManual}
           ocrBusy={ocrBusy}
+          blocked={jobRunning}
         />
       )}
 
@@ -616,6 +1027,8 @@ export function App(): JSX.Element {
           state={state}
           lowConfidenceFields={lowConf}
           imageUrl={ocrImageUrl}
+          readout={readout}
+          imageSize={imageSize}
           onEdit={() => setManualOpen(true)}
           onFixPlayers={(n) => {
             // 安全網: 写真取り込みで席を1つ取りこぼす（スタック未読=空席扱い）と人数が
@@ -630,31 +1043,10 @@ export function App(): JSX.Element {
         />
       )}
 
-      {screen === 'solving' && (
-        <div className="panel solving">
-          <div className="spinner" />
-          {solvingNote === 'deep' ? (
-            <>
-              <p>正確に計算中…（深いスタックのため）</p>
-              <p className="sub">25bb超の席があるので、丸めず厳密に解いています（数十秒かかることがあります）。</p>
-            </>
-          ) : solvingNote === 'many' ? (
-            <>
-              <p>正確に計算中…（6人のため。初回は約21MBの表を取得します）</p>
-              <p className="sub">同時オールインの組み合わせが多いので、数秒〜十数秒かかることがあります。</p>
-            </>
-          ) : (
-            <>
-              <p>求解中…（端末内 Web Worker）</p>
-              <p className="sub">短い局面は数秒で終わります。</p>
-            </>
-          )}
-        </div>
-      )}
-
       {screen === 'result' &&
         state &&
         result &&
+        resultOrigin &&
         (resultOrigin.kind === 'thread' ? (
           <Result
             state={state}
@@ -662,28 +1054,31 @@ export function App(): JSX.Element {
             ms={ms}
             readOnly
             backLabel="スレッドに戻る"
+            savedAction={dbToHeroAction(thread?.result?.hero_action ?? null)}
+            savedEvLoss={thread?.result?.ev_loss ?? null}
+            savedPublished
             onBack={() => setScreen('thread')}
           />
-        ) : resultOrigin.kind === 'record' ? (
+        ) : (
           <Result
             state={state}
             result={result}
             ms={ms}
-            readOnly
-            savedAction={resultOrigin.rec.heroAction}
-            savedEvLoss={resultOrigin.rec.evLoss}
-            savedPublished={resultOrigin.rec.published}
+            record={{ heroAction: resultOrigin.rec.heroAction, published: resultOrigin.rec.published }}
+            defaultPublish={defaultPublish}
+            onSelectAction={(a) => onSelectAction(resultOrigin.rec, a)}
+            onTogglePublish={(on, comment) => onTogglePublish(resultOrigin.rec, on, comment)}
             onBack={() => setScreen('history')}
           />
-        ) : (
-          <Result state={state} result={result} ms={ms} onSave={onSave} onBack={() => setScreen('icm')} />
         ))}
 
       {screen === 'history' && (
         <RecordsView
           records={records}
           onOpen={openRecord}
-          onDelete={onDeleteRecord}
+          onDelete={(rec) => void onDeleteRecord(rec)}
+          onRetry={(rec) => void onRetryRecord(rec)}
+          jobRunning={jobRunning}
           onBack={() => setScreen('icm')}
         />
       )}
@@ -706,6 +1101,9 @@ export function App(): JSX.Element {
           issues={issues}
           onManual={() => setManualOpen(true)}
           onRetry={errFromPhoto ? () => setScreen('icm') : undefined}
+          imageUrl={ocrImageUrl ?? undefined}
+          readout={readout}
+          imageSize={imageSize}
         />
       )}
 
@@ -715,15 +1113,29 @@ export function App(): JSX.Element {
           onFormChange={setForm}
           onSubmit={submitManual}
           imageUrl={ocrImageUrl}
+          readout={readout}
+          imageSize={imageSize}
           onClose={() => setManualOpen(false)}
         />
       )}
 
-      {/* ホームからは FAB で計算へ（モックの ＋→ICM）。 */}
+      {/* ホームの FAB は投稿コンポーザへ（v3）。計算は ICM タブから（SPEC §5.1.2）。 */}
       {screen === 'home' && (
-        <button type="button" className="fab" aria-label="計算する" onClick={() => setScreen('icm')}>
+        <button type="button" className="fab" aria-label="投稿する" onClick={() => setComposerOpen(true)}>
           ＋
         </button>
+      )}
+
+      {composerOpen && <PostComposer onSubmit={onCreatePost} onClose={() => setComposerOpen(false)} />}
+
+      {toast && (
+        <Toast
+          key={toast.key}
+          message={toast.message}
+          kind={toast.kind}
+          onTap={toast.onTap}
+          onClose={() => setToast(null)}
+        />
       )}
 
       {showTabs && activeTab && <TabBar active={activeTab} onNav={navTab} />}

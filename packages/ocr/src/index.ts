@@ -4,6 +4,8 @@ export * from './gate.js';
 export * from './spotReconstruction.js';
 export * from './confidence.js';
 export * from './pipeline.js';
+export * from './readout.js';
+export * from './issueCodes.js';
 export * from './raster.js';
 export * from './match.js';
 export * from './templates.js';

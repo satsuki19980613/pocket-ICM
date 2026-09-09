@@ -6,8 +6,10 @@ import { Avatar, relTime } from './feedShared';
 type Ack = { ok: boolean; message?: string };
 
 /**
- * スレッド詳細（M6）。公開結果の見出しカード＋♡＋コメント一覧＋返信（画像添付）。
- * 自分のコメントは編集/削除できる。ミューテーション後は親（App）が再取得して反映する。
+ * スレッド詳細（M6・v3 で通常投稿にも対応）。見出しは種別で切り替える
+ * （結果投稿＝ResultCard / 通常投稿＝本文＋画像, SPEC §5.1.3）。＋♡＋コメント一覧＋返信（画像添付）。
+ * 自分のコメントに加え、自分の通常投稿も本文の編集/削除ができる（PostHead）。
+ * ミューテーション後は親（App）が再取得して反映する。
  */
 export function Thread(props: {
   detail: ThreadDetail;
@@ -17,6 +19,10 @@ export function Thread(props: {
   onReply: (input: { body: string; imageFile: File | null }) => Promise<Ack>;
   onEditComment: (commentId: string, body: string) => Promise<Ack>;
   onDeleteComment: (commentId: string) => Promise<Ack>;
+  /** 自分の通常投稿の本文編集（SPEC §5.1.2）。 */
+  onEditPost: (body: string) => Promise<Ack>;
+  /** 自分の通常投稿の削除（削除後は呼び出し側=App がホームへ戻す）。 */
+  onDeletePost: () => Promise<Ack>;
 }): JSX.Element {
   const d = props.detail;
   return (
@@ -29,8 +35,19 @@ export function Thread(props: {
               <b>@{d.author.handle}</b>
             </button>
             <i>・{relTime(d.created_at)}</i>
+            {d.kind === 'post' && d.updated_at && <i>（編集済み）</i>}
           </div>
-          <ResultCard result={d.result} onOpen={props.onOpenResult} />
+          {d.kind === 'result' && d.result ? (
+            <ResultCard result={d.result} onOpen={props.onOpenResult} />
+          ) : (
+            <PostHead
+              body={d.body}
+              imageUrl={d.image_url}
+              mine={d.mine}
+              onEdit={props.onEditPost}
+              onDelete={props.onDeletePost}
+            />
+          )}
           <div className="acts">
             <span>💬 {d.comments.length}</span>
             <button
@@ -60,6 +77,90 @@ export function Thread(props: {
 
       <Composer onReply={props.onReply} />
     </div>
+  );
+}
+
+/**
+ * 通常投稿の見出し（本文＋画像）。自分の投稿なら編集/削除ができる（CommentRow と同じ作法）。
+ * 画像はコメント添付画像と同じ「タップで別タブに原寸表示」（SPEC §5.1.3 の「既存コメント画像と
+ * 同じ作法」）。
+ */
+function PostHead(props: {
+  body: string | null;
+  imageUrl: string | null;
+  mine: boolean;
+  onEdit: (body: string) => Promise<Ack>;
+  onDelete: () => Promise<Ack>;
+}): JSX.Element {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(props.body ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function saveEdit(): Promise<void> {
+    setBusy(true);
+    setErr('');
+    const res = await props.onEdit(draft);
+    setBusy(false);
+    if (res.ok) setEditing(false);
+    else setErr(res.message ?? '編集できませんでした');
+  }
+
+  async function del(): Promise<void> {
+    if (!confirm('この投稿を削除しますか？返信もすべて削除されます。')) return;
+    setBusy(true);
+    setErr('');
+    const res = await props.onDelete();
+    setBusy(false);
+    if (!res.ok) setErr(res.message ?? '削除できませんでした');
+  }
+
+  if (editing) {
+    return (
+      <div className="cmt-edit">
+        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={2000} rows={4} disabled={busy} />
+        {err && <p className="auth-err">{err}</p>}
+        <div className="cmt-edit-acts">
+          <button type="button" className="btn sm" onClick={() => void saveEdit()} disabled={busy || !draft.trim()}>
+            {busy ? '保存中…' : '保存'}
+          </button>
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={() => {
+              setEditing(false);
+              setDraft(props.body ?? '');
+              setErr('');
+            }}
+            disabled={busy}
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {props.body && <p className="post-body-text">{props.body}</p>}
+      {props.imageUrl && (
+        <a href={props.imageUrl} target="_blank" rel="noreferrer" className="cmt-img">
+          <img src={props.imageUrl} alt="添付画像" />
+        </a>
+      )}
+      {err && <p className="auth-err">{err}</p>}
+      {props.mine && (
+        <div className="cmt-own-acts">
+          <button type="button" onClick={() => setEditing(true)} disabled={busy}>
+            編集
+          </button>
+          <button type="button" onClick={() => void del()} disabled={busy}>
+            削除
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

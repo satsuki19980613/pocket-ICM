@@ -33,13 +33,24 @@ export interface FeedResult {
   created_at: string;
 }
 
-/** フィード1件（スレッド＝公開結果への投稿）。 */
+/** スレッドの種別（v3）。結果投稿＝計算結果の公開、通常投稿＝文字のみ／文字＋画像。SPEC §5.1。 */
+export type ThreadKind = 'result' | 'post';
+
+/** フィード1件（スレッド＝結果投稿 or 通常投稿）。v3: 通常投稿は `result` を持たない。 */
 export interface FeedPost {
   thread_id: string;
   created_at: string;
   author: FeedAuthor;
-  result: FeedResult;
-  /** 投稿者の先頭コメント（公開時の一言）。無ければ null。 */
+  kind: ThreadKind;
+  /** 結果投稿のみ値を持つ（通常投稿は null）。 */
+  result: FeedResult | null;
+  /** 通常投稿の本文（結果投稿は null）。 */
+  body: string | null;
+  /** 通常投稿の画像1枚（結果投稿は null）。 */
+  image_url: string | null;
+  /** 通常投稿の本文編集時刻（未編集/結果投稿は null）。 */
+  updated_at: string | null;
+  /** 投稿者の先頭コメント（公開時の一言。結果投稿のみ意味を持つ）。無ければ null。 */
   lead_comment: string | null;
   comment_count: number;
   like_count: number;
@@ -61,7 +72,17 @@ export interface ThreadDetail {
   thread_id: string;
   created_at: string;
   author: FeedAuthor;
-  result: FeedResult;
+  kind: ThreadKind;
+  /** 結果投稿のみ値を持つ（通常投稿は null）。 */
+  result: FeedResult | null;
+  /** 通常投稿の本文（結果投稿は null）。 */
+  body: string | null;
+  /** 通常投稿の画像1枚（結果投稿は null）。 */
+  image_url: string | null;
+  /** 通常投稿の本文編集時刻（未編集/結果投稿は null）。 */
+  updated_at: string | null;
+  /** 自分のスレッド（投稿）か。通常投稿の編集/削除可否に使う。 */
+  mine: boolean;
   like_count: number;
   liked_by_me: boolean;
   comments: ThreadComment[];
@@ -151,9 +172,14 @@ export function heroActionToDb(a: HeroAction | null | undefined): 'ALL_IN' | 'FO
 }
 
 // 生の埋め込み行（PostgREST）。to-one は object, to-many は array。
+// v3: result は左結合（`results!inner` を外した）なので通常投稿では null で返る。
 interface RawThreadRow {
   id: string;
   created_at: string;
+  kind: ThreadKind;
+  body: string | null;
+  image_url: string | null;
+  updated_at: string | null;
   author: FeedAuthor | null;
   result: FeedResult | null;
   comments?: unknown;
@@ -163,18 +189,26 @@ interface RawThreadRow {
 /**
  * threads 行＋補助データ → FeedPost（純）。
  * leadByThread: thread_id → 先頭コメント本文。likedThreads: 自分が♡したスレッド id 集合。
+ * 結果投稿（`kind==='result'`）で result が欠けた行は不可視データとして落とす
+ * （旧 `results!inner` が担っていたガードを引き続き純関数側でも担保する）。
+ * 通常投稿（`kind==='post'`）は result が無くても正当な行として通す。
  */
 export function mapFeedRow(
   row: RawThreadRow,
   leadByThread: Map<string, string | null>,
   likedThreads: Set<string>,
 ): FeedPost | null {
-  if (!row.author || !row.result) return null;
+  if (!row.author) return null;
+  if (row.kind === 'result' && !row.result) return null;
   return {
     thread_id: row.id,
     created_at: row.created_at,
     author: row.author,
+    kind: row.kind,
     result: row.result,
+    body: row.body,
+    image_url: row.image_url,
+    updated_at: row.updated_at,
     lead_comment: leadByThread.get(row.id) ?? null,
     comment_count: countOf(row.comments),
     like_count: countOf(row.likes),
@@ -186,10 +220,13 @@ export function mapFeedRow(
 // クエリ（RLS 下）
 // ---------------------------------------------------------------------------
 
+// v3: `results!inner` → 左結合（`!inner` を外す）。通常投稿（result_id が null）も
+// フィードに載せるため（SPEC §5.1・BETA_PLAN WP-D）。結果投稿の result 欠落ガードは
+// mapFeedRow 側（kind==='result' && !result）で引き続き担保する。
 const THREAD_SELECT =
-  'id, created_at,' +
+  'id, created_at, kind, body, image_url, updated_at,' +
   ' author:profiles!threads_author_fkey(id, handle, display_name, avatar_url),' +
-  ' result:results!inner(id, owner, spot, solution, hero_action, ev_loss, created_at),' +
+  ' result:results(id, owner, spot, solution, hero_action, ev_loss, created_at),' +
   ' comments(count), likes(count)';
 
 async function currentUid(): Promise<string | null> {
@@ -267,16 +304,17 @@ export async function getThread(threadId: string): Promise<FnResult<ThreadDetail
   const { data: t, error } = await supabase
     .from('threads')
     .select(
-      'id, created_at,' +
+      'id, created_at, kind, body, image_url, updated_at,' +
         ' author:profiles!threads_author_fkey(id, handle, display_name, avatar_url),' +
-        ' result:results!inner(id, owner, spot, solution, hero_action, ev_loss, created_at),' +
+        ' result:results(id, owner, spot, solution, hero_action, ev_loss, created_at),' +
         ' likes(count)',
     )
     .eq('id', threadId)
     .single();
   if (error || !t) return fail('スレッドを取得できませんでした');
   const row = t as unknown as RawThreadRow;
-  if (!row.author || !row.result) return fail('スレッドの内容を取得できませんでした');
+  if (!row.author) return fail('スレッドの内容を取得できませんでした');
+  if (row.kind === 'result' && !row.result) return fail('スレッドの内容を取得できませんでした');
 
   const { data: cdata, error: cerr } = await supabase
     .from('comments')
@@ -307,7 +345,12 @@ export async function getThread(threadId: string): Promise<FnResult<ThreadDetail
       thread_id: row.id,
       created_at: row.created_at,
       author: row.author,
+      kind: row.kind,
       result: row.result,
+      body: row.body,
+      image_url: row.image_url,
+      updated_at: row.updated_at,
+      mine: row.author.id === uid,
       like_count: countOf(row.likes),
       liked_by_me: likedThreads.has(threadId),
       comments,
@@ -324,54 +367,63 @@ interface RawCommentRow {
   author: FeedAuthor | null;
 }
 
+/** 通常投稿の本文の最大長（SPEC §5.1.2・DB 制約 `threads.body` と一致）。 */
+export const MAX_POST_BODY = 2000;
+
 /**
- * 計算結果をホームに公開する。results(is_public)＋threads＋（一言があれば）先頭 comment を作る。
- * 途中失敗時は作成済み result を巻き戻す（フィードに出ない孤児を残さない）。
+ * 通常投稿を作る（v3・SPEC §5.1.2）。本文（最大2000字）・画像1枚（任意）の少なくとも
+ * 一方が要る。画像は既存の `uploadThreadImage`（`thread-images` バケット・公開 URL）を使う。
+ * v2 の「計算結果を公開する」経路（旧 `publishResult`）は v3 で `supabase/records.ts` の
+ * `publishRecord` に置き換わり、呼び出し元が無いことを確認したうえでこのファイルから削除した。
  */
-export async function publishResult(input: {
-  state: BoardState;
-  result: SolveResultDto;
-  heroAction: HeroAction | null;
-  evLoss: number | null;
-  comment: string;
-}): Promise<FnResult<{ thread_id: string; result_id: string }>> {
+export async function createPost(input: {
+  body: string;
+  imageFile: File | null;
+}): Promise<FnResult<{ thread_id: string }>> {
   const uid = await currentUid();
   if (!uid) return fail('ログインしていません');
+  const body = input.body.trim();
+  if (!body && !input.imageFile) return fail('本文か画像を入力してください');
+  if (body.length > MAX_POST_BODY) return fail(`本文は${MAX_POST_BODY}字までです`);
 
-  const { data: r, error: rerr } = await supabase
-    .from('results')
-    .insert({
-      owner: uid,
-      spot: input.state,
-      solution: input.result,
-      hero_action: heroActionToDb(input.heroAction),
-      ev_loss: input.evLoss,
-      is_public: true,
-    })
-    .select('id')
-    .single();
-  if (rerr || !r) return fail('公開に失敗しました（結果の保存）');
-  const resultId = (r as { id: string }).id;
+  let imageUrl: string | null = null;
+  if (input.imageFile) {
+    const up = await uploadThreadImage(input.imageFile);
+    if (!up.ok) return fail(up.message);
+    imageUrl = up.data.url;
+  }
 
-  const { data: th, error: terr } = await supabase
+  const { data, error } = await supabase
     .from('threads')
-    .insert({ result_id: resultId, author: uid })
+    .insert({ author: uid, kind: 'post', body: body || null, image_url: imageUrl })
     .select('id')
     .single();
-  if (terr || !th) {
-    // 巻き戻し（本人所有なので RLS で削除可）。
-    await supabase.from('results').delete().eq('id', resultId);
-    return fail('公開に失敗しました（スレッドの作成）');
-  }
-  const threadId = (th as { id: string }).id;
+  if (error || !data) return fail('投稿できませんでした');
+  return { ok: true, data: { thread_id: (data as { id: string }).id } };
+}
 
-  const body = input.comment.trim();
-  if (body) {
-    await supabase.from('comments').insert({ thread_id: threadId, author: uid, body });
-    // コメント失敗は致命でない（後から追記可能）。スレッド自体は成立している。
-  }
+/** 自分の通常投稿の本文を編集する（著者のみ・RLS `threads_update` でも担保）。 */
+export async function editPost(threadId: string, body: string): Promise<FnResult<{ body: string }>> {
+  const b = body.trim();
+  if (!b) return fail('本文を入力してください');
+  if (b.length > MAX_POST_BODY) return fail(`本文は${MAX_POST_BODY}字までです`);
+  const { error } = await supabase
+    .from('threads')
+    .update({ body: b })
+    .eq('id', threadId)
+    .eq('kind', 'post');
+  if (error) return fail('投稿を編集できませんでした');
+  return { ok: true, data: { body: b } };
+}
 
-  return { ok: true, data: { thread_id: threadId, result_id: resultId } };
+/**
+ * 自分の通常投稿を削除する（著者のみ・RLS `threads_delete` でも担保）。
+ * 返信（comments）・♡（likes）は FK cascade で連動して消える（既存の結果投稿削除と同じ挙動）。
+ */
+export async function deletePost(threadId: string): Promise<FnResult<Record<string, never>>> {
+  const { error } = await supabase.from('threads').delete().eq('id', threadId).eq('kind', 'post');
+  if (error) return fail('投稿を削除できませんでした');
+  return { ok: true, data: {} };
 }
 
 /** コメント（返信）を追加。本文・画像 URL の少なくとも一方が要る（DB constraint）。 */

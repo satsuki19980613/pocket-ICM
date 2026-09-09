@@ -62,6 +62,42 @@ export function blueFractions(img: Rgba, cardRect: Rect, opts: CardStateOptions 
 }
 
 /**
+ * フレーム単位で active/folded 判定に使う指標（metric/threshold）を自動選択する（機種プロファイルに
+ * 依存しない純関数）。extractAnchored.ts のアンカー抽出経路は固定座標プロファイル（FrameProfile）を
+ * 経由しないため機種が分からない。代わりに **フレーム内の全席の blueFractions を先に集め**、その
+ * 分布から Android 系（明るい青で切れる）か iOS 系（沈んだ青で切れる）かを判別する。
+ *
+ * 実測（本番アンカー経路の cardRect, ディレクター計測 + 本実装時の再計測）:
+ *  - Android（2730×1260, GT 20 フレーム）: active strong 0.4274〜0.5883・bright 0.2999〜0.4186、
+ *    folded strong 0.0000〜0.4777・bright は**例外なく 0.0000**。→ bright でしか切れない
+ *    （folded でも strong が 0.48 まで上がりうるため strong は使えない）。
+ *  - iOS（1792×828, 2 フレーム）: active strong 0.2023/0.2561/0.2751/0.3461・bright は基本 0.0000 だが、
+ *    1 席（EC7CD106 の TR, active）だけ bright=0.0905 の残留信号が出た（アンチエイリアス起因の微小
+ *    ノイズと見られる）。folded strong 0.0000/0.0000/0.0889・bright 0.0000。
+ *    → strong は active 最小 0.2023 と folded 最大 0.0889 の間（閾値 0.15）できれいに分離できる。
+ *    bright は iOS では信号として使えない（0 が基本だが上のノイズのように 0.06 をわずかに超える席が
+ *    ある＝「1 席でも bright≥0.06」を判別の境界に使うと、この 1 席のノイズだけでフレーム全体を
+ *    誤って Android 系と判定し、bright=0 の他の active 席（このノイズ元と同フレームの TL/TC/BL）を
+ *    fold と誤判定する連鎖が起きた（実装中に発覚・実測で確認）。
+ *
+ * 判別法: 対象席（hero を除く・nameBox がある占有席）のいずれか 1 席でも **bright ≥ 0.15** を出せば
+ * Android 系と判断する。閾値は「Android の active bright 実測最小 0.2999」と「iOS の残留ノイズ実測
+ * 最大 0.0905」の中間に置き、ノイズ 1 席で誤判定しない余裕を持たせた（isActiveHand 適用時の既定
+ * 閾値 0.06 とは別物 — 0.06 はあくまで「Android 系と判った後に bright で active/folded を分ける」
+ * 閾値、0.15 は「そもそも Android 系かどうかを判別する」閾値）。Android 系と判ったら各席
+ * `active = bright >= 0.06`（現状の既定と同一＝回帰ゼロ）。判別で Android 系に届かなければ iOS 系の
+ * 沈んだ描画とみなし、各席 `active = strong >= 0.15` を使う。
+ * 対象席が 1 つも無い（フォールドウォーク等で非 hero 占有席が判定不能）場合は、判別材料が無いので
+ * 従来どおり既定の bright/0.06 にフォールバックする（＝回帰ゼロ）。
+ */
+const ANDROID_SIGNAL_BRIGHT = 0.15;
+export function pickHandActiveRule(fracs: readonly BlueFractions[]): { metric: 'bright' | 'strong'; threshold: number } {
+  if (fracs.length === 0) return { metric: 'bright', threshold: 0.06 };
+  const androidSignal = fracs.some((f) => f.bright >= ANDROID_SIGNAL_BRIGHT);
+  return androidSignal ? { metric: 'bright', threshold: 0.06 } : { metric: 'strong', threshold: 0.15 };
+}
+
+/**
  * カード領域 → hand が active か（生きているか）。明るい青が閾値以上なら active。
  * conf は閾値からの距離。folded/empty は false（両者の区別は占有＝スタック有無で行う）。
  */

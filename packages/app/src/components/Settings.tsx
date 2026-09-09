@@ -208,7 +208,23 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
             />
           </div>
         </div>
-        <p className="note">※ 公開設定はホーム（スレッド）実装後に反映されます。</p>
+      </div>
+
+      <div className="pad pt0">
+        <h2 className="scr-h sm">保存について</h2>
+        <p className="note">
+          計算した局面・結果・スクショ（端末内で圧縮した版）はサーバに保存されます。端末を
+          変えてもログインすれば記録は残ります。
+        </p>
+        <p className="note">
+          スクショは非公開です。見られるのは本人と管理者だけで、クラブの他のメンバーには
+          見えません。
+        </p>
+        <p className="note">
+          OCR がうまく読めなかった画像は、読み取り精度を改善するために保持されます。その
+          ため記録を削除しても、読めなかった画像だけはサーバに残る場合があります。
+        </p>
+        <p className="note">公開（ホームに出す）はいつでも任意で選べます。既定はオフです。</p>
       </div>
 
       <div className="pad pt0">

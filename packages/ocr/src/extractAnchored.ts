@@ -45,7 +45,7 @@ import { actionZoneRect } from './anchorAction.js';
 import { readBlinds } from './blinds.js';
 import { readPotAnchored, type PotAnchorRegion } from './potAnchor.js';
 import { goldDiscCandidates, type FracPoint } from './button.js';
-import { isActiveHand } from './cardState.js';
+import { isActiveHand, blueFractions, pickHandActiveRule, type CardStateOptions } from './cardState.js';
 import { recognizeAmount, grayFromRgba } from './numberField.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { recognizeHeroHandColor } from './cards.js';
@@ -257,6 +257,21 @@ function stackFallbackRect(img: Rgba, slot: Slot, nbCx: number, hRobust: number)
   return { x: Math.round(nbCx - sw / 2), y: Math.round(cy - sh / 2), w: sw, h: sh };
 }
 
+/**
+ * 非 hero 席のカード裏領域（名前ボックスから導出、fold 判定 isActiveHand に渡す）。名前直上の
+ * スタック帯の更に上（アバター帯）に載る。プリパス（blueFractions 収集）と本読みで同一の矩形を
+ * 使うため関数化（cardRect のロジック自体は変更しない）。
+ */
+function cardRectFromName(nb: { cx: number; top: number; h: number }): Rect {
+  const h = Math.max(6, nb.h);
+  return {
+    x: Math.round(nb.cx - 1.6 * h),
+    y: Math.round(nb.top - 6.0 * h),
+    w: Math.round(3.2 * h),
+    h: Math.round(3.6 * h),
+  };
+}
+
 /** hero(BC) の 2 枚を検出して heroHand を読む。 */
 function readHeroHand(img: Rgba, ranks: readonly Template[]): Read<string> {
   const hrect = fracRect(img, HERO_CARD_BAND);
@@ -389,6 +404,20 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   // hero 手札。
   const heroHand = readHeroHand(nimg, ranks);
 
+  // fold 判定（isActiveHand）のルール決定（§B1 追補）。extractAnchored は固定座標プロファイル
+  // （FrameProfile）を経由しないため機種が分からず、opts.handActive も誰も渡していなかった
+  // （＝常に cardState 既定の Android 較正 bright/0.06 が使われ、iOS フレームでは active 席まで
+  // fold と誤判定していた）。機種フラグを持たせる代わりに、**フレーム内の全席の blueFractions を
+  // 先に集めて** pickHandActiveRule で自動判別する（cardState.ts 参照。Android は bright でしか
+  // 切れず、iOS は bright が常に 0 で strong でしか切れないという実測に基づく）。
+  // opts.handActive が明示されたら（extract.ts のプロファイル経路に対応）そちらを優先。
+  const handActiveRule: HandActiveRule =
+    opts.handActive ??
+    pickHandActiveRule(
+      occ.filter((s) => !s.isHero && s.nameBox).map((s) => blueFractions(nimg, cardRectFromName(s.nameBox!))),
+    );
+  const handActiveOpts: CardStateOptions = { metric: handActiveRule.metric, activeFrac: handActiveRule.threshold };
+
   // 席（SLOTS 順）。
   const seats: RawSeatRead[] = seatsAdj.map((s) => {
     const isHero = s.isHero;
@@ -443,14 +472,7 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
     if (isHero) {
       if (actions) action = recognizeAction(nimg, az, actions);
     } else if (s.nameBox) {
-      const h = Math.max(6, s.nameBox.h);
-      const cardRect: Rect = {
-        x: Math.round(s.nameBox.cx - 1.6 * h),
-        y: Math.round(s.nameBox.top - 6.0 * h),
-        w: Math.round(3.2 * h),
-        h: Math.round(3.6 * h),
-      };
-      const active = isActiveHand(nimg, cardRect, opts.handActive ?? {});
+      const active = isActiveHand(nimg, cardRectFromName(s.nameBox), handActiveOpts);
       if (!active.value) action = { value: 'fold', conf: active.conf };
       else if (actions) action = recognizeAction(nimg, az, actions);
     }

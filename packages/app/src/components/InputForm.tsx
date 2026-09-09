@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Position } from '@oshihiki/core';
+import type { OcrReadout } from '@oshihiki/ocr';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HandPicker } from './HandPicker';
 import { ImageModal } from './ImageModal';
@@ -8,7 +9,8 @@ import { buildBoardState, reconcilePositions, type AnteScheme, type BoardForm } 
 /**
  * 手入力モーダル（3-1b・M3）。写真起点（icm）や確認画面の「修正」から開く。妥当なら
  * onSubmit(form) を呼んで確認画面へ。無効なら issues を表示。閉じると呼び出し元へ戻る。
- * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合しながら直せる。
+ * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合しながら直せる（readout があれば
+ * SPEC §5.2.3 の元画像×OCR出力の照合表も一緒に出す）。
  */
 export function InputForm(props: {
   form: BoardForm;
@@ -16,6 +18,10 @@ export function InputForm(props: {
   onSubmit: (form: BoardForm) => void;
   /** OCR で読み取った元画像（objectURL）。あれば「元画像を確認」ボタンを出す。 */
   imageUrl?: string | null;
+  /** OCR 出力（SPEC §5.2.3）。あれば「元画像を確認」モーダルに照合表を出す。 */
+  readout?: OcrReadout;
+  /** 元画像の寸法（照合表ヘッダの「画像サイズ」用）。 */
+  imageSize?: { w: number; h: number };
   /** モーダルを閉じる（背景クリック / ✕ / Esc）。 */
   onClose: () => void;
 }): JSX.Element {
@@ -44,7 +50,7 @@ export function InputForm(props: {
           <span className="modal-title">手入力</span>
           {props.imageUrl && (
             <button type="button" className="btn line img-check sm" onClick={() => setShowImage(true)}>
-              🖼 元画像を確認
+              {props.readout ? '🖼 元画像とOCR結果' : '🖼 元画像を確認'}
             </button>
           )}
           <button type="button" className="modal-x" aria-label="閉じる" onClick={props.onClose}>
@@ -163,7 +169,14 @@ export function InputForm(props: {
         </div>
       </div>
 
-      {showImage && props.imageUrl && <ImageModal src={props.imageUrl} onClose={() => setShowImage(false)} />}
+      {showImage && props.imageUrl && (
+        <ImageModal
+          src={props.imageUrl}
+          readout={props.readout}
+          imageSize={props.imageSize}
+          onClose={() => setShowImage(false)}
+        />
+      )}
     </div>
   );
 }

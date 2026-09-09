@@ -119,28 +119,122 @@ describe('mapFeedRow', () => {
   const author = { id: 'u1', handle: 'satsuki', display_name: 'Satsuki', avatar_url: null };
   const result = makeResult('A8o', 'SB', 11, 1, 0.122, 78.9);
 
-  it('著者・結果・件数・♡・先頭コメントを束ねる', () => {
+  it('著者・結果・件数・♡・先頭コメントを束ねる（結果投稿）', () => {
     const post = mapFeedRow(
-      { id: 't1', created_at: 'x', author, result, comments: [{ count: 5 }], likes: [{ count: 2 }] },
+      {
+        id: 't1',
+        created_at: 'x',
+        kind: 'result',
+        body: null,
+        image_url: null,
+        updated_at: null,
+        author,
+        result,
+        comments: [{ count: 5 }],
+        likes: [{ count: 2 }],
+      },
       new Map([['t1', 'SBのA8o、押し得らしい']]),
       new Set(['t1']),
     );
     expect(post).not.toBeNull();
     expect(post!.thread_id).toBe('t1');
+    expect(post!.kind).toBe('result');
+    expect(post!.result).toBe(result);
+    expect(post!.body).toBeNull();
     expect(post!.comment_count).toBe(5);
     expect(post!.like_count).toBe(2);
     expect(post!.liked_by_me).toBe(true);
     expect(post!.lead_comment).toBe('SBのA8o、押し得らしい');
   });
 
-  it('著者/結果が欠けた行は null（不可視 result の inner join 抜け等）', () => {
-    expect(mapFeedRow({ id: 't2', created_at: 'x', author: null, result }, new Map(), new Set())).toBeNull();
-    expect(mapFeedRow({ id: 't3', created_at: 'x', author, result: null }, new Map(), new Set())).toBeNull();
+  it('通常投稿（本文のみ）は result が無くても正当な行として通す', () => {
+    const post = mapFeedRow(
+      {
+        id: 't5',
+        created_at: 'x',
+        kind: 'post',
+        body: '今日のセッション振り返り',
+        image_url: null,
+        updated_at: null,
+        author,
+        result: null,
+        comments: [{ count: 1 }],
+        likes: [{ count: 0 }],
+      },
+      new Map(),
+      new Set(),
+    );
+    expect(post).not.toBeNull();
+    expect(post!.kind).toBe('post');
+    expect(post!.result).toBeNull();
+    expect(post!.body).toBe('今日のセッション振り返り');
+    expect(post!.image_url).toBeNull();
+  });
+
+  it('通常投稿（本文＋画像）も result null のまま通す', () => {
+    const post = mapFeedRow(
+      {
+        id: 't6',
+        created_at: 'x',
+        kind: 'post',
+        body: 'この局面どう思う？',
+        image_url: 'https://example.com/thread-images/u1/x.webp',
+        updated_at: '2026-09-08T00:00:00Z',
+        author,
+        result: null,
+        comments: [{ count: 0 }],
+        likes: [{ count: 0 }],
+      },
+      new Map(),
+      new Set(),
+    );
+    expect(post).not.toBeNull();
+    expect(post!.body).toBe('この局面どう思う？');
+    expect(post!.image_url).toBe('https://example.com/thread-images/u1/x.webp');
+    expect(post!.updated_at).toBe('2026-09-08T00:00:00Z');
+  });
+
+  it('著者が欠けた行は種別によらず null', () => {
+    expect(
+      mapFeedRow(
+        { id: 't2', created_at: 'x', kind: 'result', body: null, image_url: null, updated_at: null, author: null, result },
+        new Map(),
+        new Set(),
+      ),
+    ).toBeNull();
+    expect(
+      mapFeedRow(
+        { id: 't7', created_at: 'x', kind: 'post', body: 'x', image_url: null, updated_at: null, author: null, result: null },
+        new Map(),
+        new Set(),
+      ),
+    ).toBeNull();
+  });
+
+  it('結果投稿で result が欠けた行は null（不可視 result の左結合抜け等）', () => {
+    expect(
+      mapFeedRow(
+        { id: 't3', created_at: 'x', kind: 'result', body: null, image_url: null, updated_at: null, author, result: null },
+        new Map(),
+        new Set(),
+      ),
+    ).toBeNull();
   });
 
   it('先頭コメント無し/未♡は null/false', () => {
     const post = mapFeedRow(
-      { id: 't4', created_at: 'x', author, result, comments: [{ count: 0 }], likes: [{ count: 0 }] },
+      {
+        id: 't4',
+        created_at: 'x',
+        kind: 'result',
+        body: null,
+        image_url: null,
+        updated_at: null,
+        author,
+        result,
+        comments: [{ count: 0 }],
+        likes: [{ count: 0 }],
+      },
       new Map(),
       new Set(),
     );

@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Rgba } from './color.js';
 import type { Rect } from './types.js';
-import { blueFractions, isActiveHand } from './cardState.js';
+import { blueFractions, isActiveHand, pickHandActiveRule, type BlueFractions } from './cardState.js';
 
 /** 単色で塗った領域。 */
 function solid(r: number, g: number, b: number): Rgba {
@@ -59,5 +59,44 @@ describe('isActiveHand', () => {
     expect(frac.bright).toBe(0);
     expect(isActiveHand(b, full(b), { metric: 'bright' }).value).toBe(false); // 旧 Android ルール=誤 fold
     expect(isActiveHand(b, full(b), { metric: 'strong', activeFrac: 0.05 }).value).toBe(true);
+  });
+});
+
+describe('pickHandActiveRule', () => {
+  // 実測値（ディレクター計測, 本番アンカー経路の cardRect）:
+  //  Android: active strong 0.4274-0.5883 / bright 0.2999-0.4186、folded strong 0.0000-0.4777 / bright 常に 0.0000。
+  //  iOS:     active strong 0.2023-0.3461 / bright 常に 0.0000、       folded strong 0.0000-0.0889 / bright 0.0000。
+  it('いずれかの席で bright≥0.06 なら Android 系 → bright/0.06', () => {
+    const fracs: BlueFractions[] = [
+      { strong: 0.4274, bright: 0.2999 }, // active
+      { strong: 0.4777, bright: 0 },       // folded（strong は高いが bright は 0）
+      { strong: 0, bright: 0 },            // folded
+    ];
+    expect(pickHandActiveRule(fracs)).toEqual({ metric: 'bright', threshold: 0.06 });
+  });
+
+  it('全席 bright<0.06（iOS の沈んだ青）なら strong/0.15', () => {
+    const fracs: BlueFractions[] = [
+      { strong: 0.2023, bright: 0 }, // active（iOS 実測最小）
+      { strong: 0.3461, bright: 0 }, // active
+      { strong: 0.0889, bright: 0 }, // folded（iOS 実測最大）
+      { strong: 0, bright: 0 },      // folded
+    ];
+    expect(pickHandActiveRule(fracs)).toEqual({ metric: 'strong', threshold: 0.15 });
+  });
+
+  it('空配列（対象席なし）は既定の Android ルールにフォールバック（回帰ゼロ）', () => {
+    expect(pickHandActiveRule([])).toEqual({ metric: 'bright', threshold: 0.06 });
+  });
+
+  it('iOS ルールで実測の active/folded 境界を正しく分離する', () => {
+    const rule = pickHandActiveRule([
+      { strong: 0.2023, bright: 0 },
+      { strong: 0.0889, bright: 0 },
+    ]);
+    const active = solid(40, 60, 160); // strong 高 (B>R+50)・bright は B<150 なので 0 相当の想定
+    expect(isActiveHand(active, full(active), { metric: rule.metric, activeFrac: rule.threshold }).value).toBe(true);
+    const folded = solid(20, 30, 40); // strong 条件を満たさない暗色 → strong≈0
+    expect(isActiveHand(folded, full(folded), { metric: rule.metric, activeFrac: rule.threshold }).value).toBe(false);
   });
 });

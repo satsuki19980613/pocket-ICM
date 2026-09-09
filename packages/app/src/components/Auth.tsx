@@ -119,12 +119,10 @@ export function Auth(props: {
             />
           </Field>
           <Field label="パスワード" err={fieldErr.password}>
-            <input
-              className="inp"
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
             />
           </Field>
           {formErr && <p className="auth-err">{formErr}</p>}
@@ -147,13 +145,11 @@ export function Auth(props: {
             />
           </Field>
           <Field label="パスワード" err={fieldErr.password}>
-            <input
-              className="inp"
-              type="password"
-              placeholder="8文字以上"
+            <PasswordInput
               autoComplete="new-password"
+              placeholder="8文字以上"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
             />
           </Field>
           <Field label="招待キー" err={fieldErr.invite_code} keyField>
@@ -175,6 +171,45 @@ export function Auth(props: {
         </form>
       )}
     </div>
+  );
+}
+
+/**
+ * パスワード入力（表示/非表示の切替つき）。スマホでの打ち間違いが分からず入力し直しになるのを
+ * 防ぐため、目のボタンで平文表示に切り替えられる。既定は隠す。
+ * 押しても入力欄からフォーカスが外れないよう mousedown を止める。
+ */
+function PasswordInput(props: {
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete: 'current-password' | 'new-password';
+  placeholder?: string;
+}): JSX.Element {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="pwwrap">
+      <input
+        className="inp pw"
+        type={shown ? 'text' : 'password'}
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        autoComplete={props.autoComplete}
+        placeholder={props.placeholder}
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className="pwtoggle"
+        aria-label={shown ? 'パスワードを隠す' : 'パスワードを表示'}
+        aria-pressed={shown}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setShown((v) => !v)}
+      >
+        {shown ? '隠す' : '表示'}
+      </button>
+    </span>
   );
 }
 

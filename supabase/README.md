@@ -1,12 +1,14 @@
-# Supabase バックエンド セットアップ手順（M1）
+# Supabase バックエンド セットアップ手順（M1 / M8=βテスト仕上げ WP-A1）
 
-Black Ops ICM のサーバ基盤（Auth / DB / RLS / 招待キー / 上限 / 管理）。
+Black Ops ICM のサーバ基盤（Auth / DB / RLS / 招待キー / 上限 / 管理 / 画像保存 / OCR データ基盤）。
 **絶対条件: どのサービスにもクレジットカードを登録しない**（SPEC §7）。無料枠のみで運用する。
 
 このディレクトリの中身:
-- `migrations/0001〜0005_*.sql` … スキーマ / 関数 / RLS / Storage / 初期データ
-- `functions/*` … Edge Function（signup / issue-invite / revoke-invite / set-max-accounts / delete-account）
+- `migrations/0001〜0005_*.sql` … M1: スキーマ / 関数 / RLS / Storage / 初期データ
+- `migrations/0006_beta.sql` … M8(βテスト仕上げ WP-A1): 非同期計算・画像保存・OCR データ基盤・通常投稿（SPEC v3）
+- `functions/*` … Edge Function（signup / issue-invite / revoke-invite / set-max-accounts / delete-account / purge-images）
 - `scripts/gen-invite.mjs` … 初回アカウント用ブートストラップ招待キー生成
+- `scripts/m1-verify.mjs` / `scripts/m8-verify.mjs` … サーバ側の拒否・スキーマ存在の検証スクリプト
 
 ---
 
@@ -58,8 +60,13 @@ Black Ops ICM のサーバ基盤（Auth / DB / RLS / 招待キー / 上限 / 管
 3. `migrations/0003_rls.sql`
 4. `migrations/0004_storage.sql`
 5. `migrations/0005_seed.sql`
+6. `migrations/0006_beta.sql`（βテスト仕上げ。0001〜0005 適用済みの既存プロジェクトに追加で流す。
+   `if not exists` / `add column if not exists` ベースで**何度実行しても壊れない**ので、
+   最初から作る場合も 0001〜0005 の直後にそのまま続けて Run してよい）
 
 エラーなく通れば、テーブル・RLS・Storage バケット・初期設定（上限25）が揃う。
+0006 まで通すと、非同期計算用の列（`results.status` 等）・`images`/`ocr_reads` テーブル・
+`spot-images`（private）バケット・通常投稿用の `threads` 拡張も揃う。
 
 ## 5. Edge Function をデプロイ（Supabase CLI）
 
@@ -78,12 +85,20 @@ Docker は不要（deploy はネイティブバンドル）。
    ```
    supabase link --project-ref <ref>
    ```
-4. 5つの関数をデプロイ（リポジトリのルートで実行）:
+4. 6つの関数をデプロイ（リポジトリのルートで実行）:
    ```
-   supabase functions deploy signup issue-invite revoke-invite set-max-accounts delete-account
+   supabase functions deploy signup issue-invite revoke-invite set-max-accounts delete-account purge-images
    ```
    - `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` は Supabase 側で**自動注入**されるため、Secret 設定は不要。
    - JWT 検証は既定のまま（anon キーが JWT なので signup も通る／管理関数は本人セッションで通る）。
+   - `purge-images` だけは追加で **`PURGE_TOKEN`** という関数用 Secret が要る（ユーザーセッションではなく
+     GitHub Actions からの共有トークンで認可するため）。次のいずれかで設定:
+     ```
+     supabase secrets set PURGE_TOKEN=<十分にランダムな文字列>
+     ```
+     （または Dashboard の **Edge Functions → purge-images → Settings → Secrets**）。
+     生成例（PowerShell）: `[Convert]::ToBase64String((1..32|%{Get-Random -Max 256}))`
+     この値は次項の GitHub Secret `PURGE_TOKEN` と**同じ値**にすること。
 
 ## 6. ブートストラップ（初回アカウント＝管理者）
 
@@ -107,8 +122,11 @@ Docker は不要（deploy はネイティブバンドル）。
 
 リポジトリ **Settings → Secrets and variables → Actions → New repository secret**:
 - Name: `SUPABASE_URL` / Value: Project URL（`https://abcdxyz.supabase.co`）
+- Name: `PURGE_TOKEN` / Value: 上記 5. で Edge Function に設定したのと**同じ値**
+  （β仕上げで追加。未設定でも warm ping 自体は動く。`purge-images` 呼び出しだけスキップされログに出る）
 
-`.github/workflows/warm-ping.yml` が週1で ping し、7日ポーズを防ぐ。
+`.github/workflows/warm-ping.yml` が週1で ping し、7日ポーズを防ぐ。同じジョブで
+`purge-images`（画像の保持期限・総量上限に基づく削除。SPEC §7.2）も呼ぶ。
 
 ## 8. 動作確認（M1 の DoD）
 
@@ -117,6 +135,29 @@ Docker は不要（deploy はネイティブバンドル）。
 - ✅ 無効キー / 期限切れ / 定員超過（26人目）/ 非管理者の管理操作 が**サーバ側で拒否**される
 
 （検証用の curl 例は本 README 末尾 or チャットで案内）
+
+## 9. 動作確認（M8=βテスト仕上げ WP-A1 の DoD）
+
+0006 を適用し、`purge-images` をデプロイしたら:
+
+```
+node supabase/scripts/m8-verify.mjs
+```
+
+を実行する（`packages/app/.env.local` の URL / anon キーのみ使用。ログイン不要）。
+確認しているのは:
+- `results` の新列・`images`/`ocr_reads` テーブル・`threads` の新列が存在する（0006 適用済み）。
+- `images` / `ocr_reads` は未ログイン（anon）から行が見えない（RLS が効いている）。
+- `threads` / `images` への未ログイン insert は拒否される（RLS が効いている）。
+- `spot-images` バケットが存在する。
+- `purge-images` がデプロイ済みで、誤った `PURGE_TOKEN` を拒否する。
+
+**このスクリプトではカバーできない点**（ログインが要るため。WP-E の実機検証で確認する）:
+- 本人ログイン状態での `images`/`ocr_reads` の実際の insert/select 可否。
+- `spot-images` の署名 URL 経由の表示。
+- `purge-images` を**正しい** `PURGE_TOKEN` で呼んだときの実削除挙動
+  （実削除を試す場合は、期限切れ済みのテスト画像を用意した上で手動 curl 実行を推奨。
+  本番データに影響するため自動テストには組み込んでいない）。
 
 ---
 

@@ -1,9 +1,12 @@
 import type { FeedAuthor, FeedPost } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
-import { Avatar, relTime } from './feedShared';
+import { Avatar, PostBody, relTime } from './feedShared';
 import type { FeedState } from './Home';
 
-/** 他人の公開結果一覧（M6 userpub）。投稿者ヘッダ＋公開結果カード（→スレッド）。 */
+/**
+ * 他人の公開一覧（M6 userpub・v3 で通常投稿も混在）。
+ * 投稿者ヘッダ＋公開結果カード / 通常投稿（→スレッド）。
+ */
 export function UserPub(props: {
   author: FeedAuthor | null;
   state: FeedState;
@@ -40,14 +43,18 @@ export function UserPub(props: {
 
       {props.state === 'ready' && props.posts.length === 0 && (
         <div className="home-empty">
-          <p>公開された結果はまだありません。</p>
+          <p>公開された投稿はまだありません。</p>
         </div>
       )}
 
       {props.state === 'ready' &&
         props.posts.map((p) => (
           <div className="userpub-item" key={p.thread_id}>
-            <ResultCard result={p.result} onOpen={() => props.onOpenThread(p.thread_id)} />
+            {p.kind === 'result' && p.result ? (
+              <ResultCard result={p.result} onOpen={() => props.onOpenThread(p.thread_id)} />
+            ) : (
+              <PostBody body={p.body} imageUrl={p.image_url} onOpen={() => props.onOpenThread(p.thread_id)} />
+            )}
             <div className="acts">
               <span>💬 {p.comment_count}</span>
               <span>♡ {p.like_count}</span>

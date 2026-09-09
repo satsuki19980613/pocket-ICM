@@ -152,7 +152,11 @@ export function reconstructSpot(reads: RawReads): ReconstructResult {
   }
 
   issues.push(...detectOutOfScope(facts, derived.heroPos));
-  if (issues.length > 0) return { ok: false, issues };
+  // 対象外で棄却するときも facts を返す。ポジション導出自体は成功しているので、
+  // 「元画像とOCR結果」の照合ビュー（SPEC §5.2.3）が席 ID ではなくポジションで並べられる。
+  if (issues.length > 0) {
+    return { ok: false, issues, facts: new Map<Position, SeatFacts>(facts.map((f) => [f.pos, f])) };
+  }
 
   const anteAmount = reads.ante.scheme === 'none' ? 0 : reads.ante.amount.value;
 

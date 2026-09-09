@@ -6,6 +6,8 @@ import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/m
 
 const ACTION_JA: Record<string, string> = { PU: '先手プッシュ (PU)', CA: 'コール (CA)', OC: 'オーバーコール (OC)' };
 
+type Ack = { ok: boolean; message?: string };
+
 /**
  * EV の符号で色分け（CP2077 配色: 黄=+EV / 赤=−EV）。判定と一致し、モックの
  * evbox（push→黄 / fold→赤）に沿う。赤は「損失」だけに使う原則を保つ。
@@ -14,55 +16,124 @@ function evClass(ev: number): 'pos' | 'neg' {
   return ev >= 0 ? 'pos' : 'neg';
 }
 
-/** 基本の結果画面（3-1c）＋記録（3-2）。判定・EV・レンジ表・EQ・収束品質・全ノード。 */
+/**
+ * 結果画面（SPEC §5.3, v3 で挙動変更）。
+ *
+ * v3: 記録は計算開始時点で既に自動保存されているため、この画面に「記録する」ボタンや
+ * 保存フェーズ UI は無い。ここにあるのは
+ *   1. 自分の選択（ALL IN / FOLD / 未選択の3択・押した時点で `onSelectAction` を呼び即保存）
+ *   2. 公開レバー（「ホームで公開する」1本・ON でコメント欄→公開実行、OFF で公開取消）
+ * の2つだけ。`record` を渡したとき（記録タブ経由の自分の記録）だけこの2つを編集可能にし、
+ * `readOnly`（スレッド由来＝他人の公開結果や参照専用表示）のときは記録済みの値を静的に表示する。
+ */
 export function Result(props: {
   state: BoardState;
   result: SolveResultDto;
   onBack: () => void;
   ms: number;
-  /**
-   * 記録の保存ハンドラ（読み取り専用の再表示時は未指定）。published=ホーム公開フラグ（既定 false）。
-   * published=true のときはクラウド公開も行うため非同期＋成否を返す（コメント=公開時の一言）。
-   */
-  onSave?: (
-    heroAction: HeroAction,
-    published: boolean,
-    comment: string,
-  ) => Promise<{ ok: boolean; message?: string }>;
-  /** 履歴からの再表示（保存 UI を出さず、記録済みの情報を表示）。 */
-  readOnly?: boolean;
-  /** readOnly 時に表示する、記録済みの実行動と EV loss。 */
-  savedAction?: HeroAction;
-  savedEvLoss?: number;
-  savedPublished?: boolean;
   /** 戻るボタンの文言（未指定なら readOnly=記録一覧 / 通常=別のスポット）。 */
   backLabel?: string;
+
+  /** 読み取り専用（スレッド由来）。選択・公開の編集 UI を出さない。 */
+  readOnly?: boolean;
+  /** readOnly 時に表示する、記録済みの実行動・EV loss・公開状態。 */
+  savedAction?: HeroAction | null;
+  savedEvLoss?: number | null;
+  savedPublished?: boolean;
+
+  /**
+   * 記録タブ経由で開いた自分の記録（編集可能, SPEC §5.3/§5.4）。渡されたときだけ
+   * 「自分の選択」「公開レバー」を操作できるようにする。
+   */
+  record?: { heroAction: HeroAction | null; published: boolean };
+  /**
+   * 設定の「計算したら最初から公開する」（profiles.default_public）。true なら公開レバーを
+   * 最初からオンにしてコメント欄を開く（SPEC §5.3）。オンにするだけで公開はされず、
+   * 「この内容で公開する」を押すまで外には出ない。
+   */
+  defaultPublish?: boolean;
+  /** 自分の選択を保存（`setHeroAction` のサーバ配線＋ローカル反映は呼び出し側の責務）。 */
+  onSelectAction?: (action: HeroAction | null) => Promise<Ack>;
+  /**
+   * 公開レバーの実行。on=true で公開（`comment` を一言として使う）、on=false で公開取消。
+   * 呼び出し側（App.tsx）が `publishRecord`/`unpublishRecord` を配線する。
+   */
+  onTogglePublish?: (on: boolean, comment: string) => Promise<Ack>;
 }): JSX.Element {
   const { result, state } = props;
-  const [action, setAction] = useState<HeroAction | null>(null);
-  const [publish, setPublish] = useState(false);
-  const [comment, setComment] = useState('');
-  // idle → saving → saved | error（error は再試行可）。
-  const [phase, setPhase] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [errMsg, setErrMsg] = useState('');
   const headline = headlineNode(result);
   const heroSeat = state.seats.find((s) => s.pos === result.heroPos);
 
-  const canSave = !props.readOnly && !!props.onSave && !!headline;
-  const evLossPreview = headline && action ? evLossOf(headline.heroEv, action) : null;
-  const saved = phase === 'saved';
-  const saving = phase === 'saving';
+  const editable = !props.readOnly && !!props.record && !!props.onSelectAction && !!props.onTogglePublish;
 
-  async function save(): Promise<void> {
-    if (!action || !props.onSave) return;
-    setPhase('saving');
-    setErrMsg('');
-    const res = await props.onSave(action, publish, comment);
+  // ---- 自分の選択（3択: ALL IN / FOLD / 未選択） ----
+  const [action, setAction] = useState<HeroAction | null>(props.record?.heroAction ?? null);
+  const [actionPhase, setActionPhase] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [actionErr, setActionErr] = useState('');
+  const evLoss = action != null ? (headline ? evLossOf(headline.heroEv, action) : (props.savedEvLoss ?? null)) : null;
+
+  async function selectAction(a: HeroAction | null): Promise<void> {
+    if (!props.onSelectAction || actionPhase === 'saving' || a === action) return;
+    const prev = action;
+    setAction(a);
+    setActionPhase('saving');
+    setActionErr('');
+    const res = await props.onSelectAction(a);
     if (res.ok) {
-      setPhase('saved');
+      setActionPhase('idle');
     } else {
-      setErrMsg(res.message ?? '保存に失敗しました');
-      setPhase('error');
+      setAction(prev);
+      setActionErr(res.message ?? '選択の保存に失敗しました');
+      setActionPhase('error');
+    }
+  }
+
+  // ---- 公開レバー ----
+  const [published, setPublished] = useState(props.record?.published ?? false);
+  // まだ公開していない状態で ON にした直後（コメント欄が開いている＝公開の意思表示のみ、
+  // 実際の公開実行は別ボタン）。
+  const [pubOpen, setPubOpen] = useState(props.record?.published ?? props.defaultPublish ?? false);
+  const [comment, setComment] = useState('');
+  const [pubPhase, setPubPhase] = useState<'idle' | 'working' | 'error'>('idle');
+  const [pubErr, setPubErr] = useState('');
+
+  function onSwitchClick(): void {
+    if (!props.onTogglePublish || pubPhase === 'working') return;
+    if (published) {
+      void doUnpublish();
+      return;
+    }
+    // 未公開: トグルはコメント欄の開閉のみ（ここではまだサーバへ書かない）。
+    setPubOpen((v) => !v);
+  }
+
+  async function doPublish(): Promise<void> {
+    if (!props.onTogglePublish) return;
+    setPubPhase('working');
+    setPubErr('');
+    const res = await props.onTogglePublish(true, comment);
+    if (res.ok) {
+      setPublished(true);
+      setPubPhase('idle');
+    } else {
+      setPubErr(res.message ?? '公開に失敗しました');
+      setPubPhase('error');
+    }
+  }
+
+  async function doUnpublish(): Promise<void> {
+    if (!props.onTogglePublish) return;
+    setPubPhase('working');
+    setPubErr('');
+    const res = await props.onTogglePublish(false, '');
+    if (res.ok) {
+      setPublished(false);
+      setPubOpen(false);
+      setComment('');
+      setPubPhase('idle');
+    } else {
+      setPubErr(res.message ?? '公開の取り消しに失敗しました');
+      setPubPhase('error');
     }
   }
 
@@ -97,30 +168,38 @@ export function Result(props: {
         <ActionTree result={result} stacks={Object.fromEntries(state.seats.map((s) => [s.pos, s.stack]))} />
       </div>
 
-      {/* ---- 記録（自分の実行動を選んで保存） ---- */}
-      {canSave && (
+      {/* ---- この局面での自分の選択（任意・押した時点で保存, SPEC §5.3） ---- */}
+      {editable && (
         <div className="panel saverec">
           <div className="scr-h sm">この局面での自分の選択</div>
-          <div className="seg">
-            {(['PUSH', 'FOLD'] as HeroAction[]).map((a) => (
+          <div className="seg actsel">
+            {(
+              [
+                { v: 'PUSH' as HeroAction, label: 'ALL IN' },
+                { v: 'FOLD' as HeroAction, label: 'FOLD' },
+                { v: null, label: '未選択' },
+              ] as const
+            ).map((opt) => (
               <button
-                key={a}
+                key={opt.label}
                 type="button"
-                className={`segbtn ${action === a ? 'on' : ''}`}
-                onClick={() => setAction(a)}
-                disabled={saved}
+                className={`segbtn ${action === opt.v ? 'on' : ''}`}
+                onClick={() => void selectAction(opt.v)}
+                disabled={actionPhase === 'saving'}
               >
-                {a === 'PUSH' ? 'ALL IN' : 'FOLD'}
+                {opt.label}
               </button>
             ))}
           </div>
-          {evLossPreview !== null && (
-            <p className={`evloss-note ${evLossPreview > 0 ? 'loss' : 'ok'}`}>
-              {evLossPreview > 0
-                ? `EV loss −${evLossPreview.toFixed(3)} pt（最適は ${verdictOf(headline!) === 'PUSH' ? 'ALL IN' : 'FOLD'}）`
+          {evLoss !== null && (
+            <p className={`evloss-note ${evLoss > 0 ? 'loss' : 'ok'}`}>
+              {evLoss > 0
+                ? `EV loss −${evLoss.toFixed(3)} pt（最適は ${headline && verdictOf(headline) === 'PUSH' ? 'ALL IN' : 'FOLD'}）`
                 : 'EV loss 0（最適な選択）'}
             </p>
           )}
+          {actionPhase === 'error' && <p className="auth-err">{actionErr}</p>}
+
           <div className="tog">
             <div>
               ホームで公開する
@@ -130,57 +209,54 @@ export function Result(props: {
               type="button"
               className="sw"
               role="switch"
-              aria-checked={publish}
+              aria-checked={published || pubOpen}
               aria-label="ホームで公開する"
-              onClick={() => setPublish((p) => !p)}
-              disabled={saved || saving}
+              onClick={onSwitchClick}
+              disabled={pubPhase === 'working'}
             />
           </div>
-          {publish && (
-            <textarea
-              className="pub-comment"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="一言そえる（例: 3人残りだと思ったより広く押していい）"
-              maxLength={2000}
-              rows={2}
-              disabled={saved || saving}
-            />
+          {published && <p className="evloss-note ok">公開中です。オフにすると公開を取り消します。</p>}
+          {!published && pubOpen && (
+            <div className="pub-confirm">
+              <textarea
+                className="pub-comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="一言そえる（例: 3人残りだと思ったより広く押していい）"
+                maxLength={2000}
+                rows={2}
+                disabled={pubPhase === 'working'}
+              />
+              <button
+                type="button"
+                className="btn wide"
+                onClick={() => void doPublish()}
+                disabled={pubPhase === 'working'}
+              >
+                {pubPhase === 'working' ? '公開中…' : 'この内容で公開する'}
+              </button>
+            </div>
           )}
-          {phase === 'error' && <p className="auth-err">{errMsg}</p>}
-          <button
-            type="button"
-            className="btn wide"
-            onClick={() => void save()}
-            disabled={!action || saved || saving}
-          >
-            {saving
-              ? publish
-                ? '公開中…'
-                : '記録中…'
-              : saved
-                ? `記録しました ✓${publish ? '（公開）' : ''}`
-                : publish
-                  ? '記録して公開する'
-                  : '記録する'}
-          </button>
+          {pubPhase === 'error' && <p className="auth-err">{pubErr}</p>}
         </div>
       )}
 
-      {/* ---- 履歴からの再表示（記録済み情報） ---- */}
-      {props.readOnly && props.savedAction && (
+      {/* ---- 読み取り専用（スレッド由来・記録済み情報の静的表示） ---- */}
+      {props.readOnly && props.savedAction !== undefined && (
         <div className="panel saverec">
           <div className="scr-h sm">記録した選択</div>
           <div className="row">
             <span>自分の選択</span>
-            <b>{props.savedAction === 'PUSH' ? 'ALL IN' : 'FOLD'}</b>
+            <b>{props.savedAction ? (props.savedAction === 'PUSH' ? 'ALL IN' : 'FOLD') : '未選択'}</b>
           </div>
-          <div className="row">
-            <span>EV loss（pt）</span>
-            <b className={props.savedEvLoss && props.savedEvLoss > 0 ? 'warn' : 'ok'}>
-              {(props.savedEvLoss ?? 0) > 0 ? `−${(props.savedEvLoss ?? 0).toFixed(3)}` : '0'}
-            </b>
-          </div>
+          {props.savedAction && (
+            <div className="row">
+              <span>EV loss（pt）</span>
+              <b className={props.savedEvLoss && props.savedEvLoss > 0 ? 'warn' : 'ok'}>
+                {(props.savedEvLoss ?? 0) > 0 ? `−${(props.savedEvLoss ?? 0).toFixed(3)}` : '0'}
+              </b>
+            </div>
+          )}
           <div className="row">
             <span>公開状態</span>
             <b>
@@ -223,7 +299,7 @@ export function Result(props: {
       </div>
 
       <button type="button" className="btn ghost wide" onClick={props.onBack}>
-        {props.backLabel ?? (props.readOnly ? '記録一覧に戻る' : '別のスポットを入力')}
+        {props.backLabel ?? (props.readOnly ? 'スレッドに戻る' : '記録一覧に戻る')}
       </button>
     </div>
   );

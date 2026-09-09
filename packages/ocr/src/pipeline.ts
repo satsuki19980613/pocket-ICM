@@ -13,13 +13,14 @@
  * 完全に検証できる。
  */
 
-import type { BoardState } from '@oshihiki/core';
+import type { BoardState, Position } from '@oshihiki/core';
 import { parseBoardState, checkBoardStateSemantics } from '@oshihiki/core';
 import type { RawReads } from './types.js';
 import { streetGate } from './gate.js';
-import { reconstructSpot } from './spotReconstruction.js';
+import { reconstructSpot, type SeatFacts } from './spotReconstruction.js';
 import { aggregateConfidence, type ChecksumResult } from './confidence.js';
 import { applyChipConsistency, type ChipConsistencyResult } from './chipConsistency.js';
+import { buildReadout, type OcrReadout } from './readout.js';
 
 export interface OcrValidation {
   readonly ok: boolean;
@@ -35,6 +36,27 @@ export interface OcrValidation {
   readonly chipCheck?: ChipConsistencyResult;
   /** チェックサム/整合性で補正・強調した席（診断用）。 */
   readonly correctedSeatId?: string;
+  /**
+   * 画像 × OCR 出力の照合ビュー用の固定スキーマ（SPEC §5.2.3・WP-A2）。
+   * gate 失敗・対象外・復元失敗を含む**全経路で必ず入る**（失敗画像こそ照合したいため）。
+   */
+  readonly readout: OcrReadout;
+}
+
+/** SeatFacts のマップ（Position keyed）→ 物理席 id → Position の対応表。readout の pos 反映用。 */
+function posByIdFromFacts(facts: ReadonlyMap<Position, SeatFacts>): Map<string, string> {
+  const byId = new Map<string, string>();
+  for (const f of facts.values()) byId.set(f.id, f.pos);
+  return byId;
+}
+
+/** ChipConsistencyResult → readout 用の要約（notes は 1 行にまとめる）。 */
+function chipCheckForReadout(chipCheck: ChipConsistencyResult): NonNullable<OcrReadout['chipCheck']> {
+  return {
+    applied: chipCheck.applied,
+    ...(chipCheck.notes.length > 0 ? { note: chipCheck.notes.join(' / ') } : {}),
+    ...(chipCheck.correctedSeatId !== undefined ? { correctedSeatId: chipCheck.correctedSeatId } : {}),
+  };
 }
 
 export interface OcrPipelineOptions {
@@ -45,9 +67,15 @@ export interface OcrPipelineOptions {
 }
 
 export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): OcrValidation {
+  const threshold = opts.confidenceThreshold;
   const gate = streetGate(reads.street);
   if (!gate.ok) {
-    return { ok: false, issues: gate.issues, lowConfidenceFields: [] };
+    return {
+      ok: false,
+      issues: gate.issues,
+      lowConfidenceFields: [],
+      readout: buildReadout(reads, { issues: gate.issues, ...(threshold !== undefined ? { threshold } : {}) }),
+    };
   }
 
   // 総チップ保存チェック（クラブマッチ）: 未読 1 席の復元／最低信頼席での差分調整。
@@ -55,20 +83,55 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
   // reconstruct され、低信頼フラグで確認画面に強調される。
   const { reads: cReads, result: chipCheck } = applyChipConsistency(reads);
   reads = cReads;
+  const chipCheckReadout = chipCheckForReadout(chipCheck);
 
   const recon = reconstructSpot(reads);
   if (!recon.ok || !recon.state || !recon.facts) {
-    return { ok: false, issues: recon.issues, lowConfidenceFields: [] };
+    // 対象外棄却（レイズ/リンプ/ウォーク）ではポジション導出は成功しているので、
+    // facts があれば pos を照合ビューに載せる（席 ID より読み手に伝わる）。
+    const failPosById = recon.facts ? posByIdFromFacts(recon.facts) : undefined;
+    return {
+      ok: false,
+      issues: recon.issues,
+      lowConfidenceFields: [],
+      readout: buildReadout(reads, {
+        issues: recon.issues,
+        chipCheck: chipCheckReadout,
+        ...(failPosById ? { posById: failPosById } : {}),
+        ...(threshold !== undefined ? { threshold } : {}),
+      }),
+    };
   }
+  const posById = posByIdFromFacts(recon.facts);
 
   // core の構造・意味論検証（保険）。
   const parsed = parseBoardState(recon.state);
   if (!parsed.ok || !parsed.value) {
-    return { ok: false, issues: parsed.issues, lowConfidenceFields: [] };
+    return {
+      ok: false,
+      issues: parsed.issues,
+      lowConfidenceFields: [],
+      readout: buildReadout(reads, {
+        issues: parsed.issues,
+        posById,
+        chipCheck: chipCheckReadout,
+        ...(threshold !== undefined ? { threshold } : {}),
+      }),
+    };
   }
   const sem = checkBoardStateSemantics(parsed.value);
   if (!sem.ok) {
-    return { ok: false, issues: sem.issues, lowConfidenceFields: [] };
+    return {
+      ok: false,
+      issues: sem.issues,
+      lowConfidenceFields: [],
+      readout: buildReadout(reads, {
+        issues: sem.issues,
+        posById,
+        chipCheck: chipCheckReadout,
+        ...(threshold !== undefined ? { threshold } : {}),
+      }),
+    };
   }
 
   const facts = [...recon.facts.values()];
@@ -93,5 +156,12 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     checksum: conf.checksum,
     chipCheck,
     ...(correctedPos ? { correctedSeatId: correctedPos } : {}),
+    readout: buildReadout(reads, {
+      posById,
+      lowConfidenceFields: low,
+      chipCheck: chipCheckReadout,
+      checksumOk: conf.checksum.ok,
+      ...(threshold !== undefined ? { threshold } : {}),
+    }),
   };
 }

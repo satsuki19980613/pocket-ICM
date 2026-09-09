@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
+import type { OcrReadout } from '@oshihiki/ocr';
 import { potChecksumDelta } from '@oshihiki/core';
 import { ImageModal } from './ImageModal';
 
 /**
  * 条件確認（3-1c・M3）。読み取った内容を項目別に読み上げ、各行の「修正」で手入力
  * モーダルを開く。OCR 低信頼フィールドは CHECK バッジで強調。ポット検算も表示。
- * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合できる。
+ * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合できる（readout があれば
+ * SPEC §5.2.3 の元画像×OCR出力の照合表も一緒に出す）。
  */
 export function Confirm(props: {
   state: BoardState;
@@ -14,6 +16,10 @@ export function Confirm(props: {
   lowConfidenceFields?: string[];
   /** OCR で読み取った元画像（objectURL）。あれば「元画像を確認」ボタンを出す。 */
   imageUrl?: string | null;
+  /** OCR 出力（SPEC §5.2.3）。あれば「元画像を確認」モーダルに照合表を出す。 */
+  readout?: OcrReadout;
+  /** 元画像の寸法（照合表ヘッダの「画像サイズ」用）。 */
+  imageSize?: { w: number; h: number };
   /** 手入力モーダルを開く（項目別「修正」・全体「修正」共通）。 */
   onEdit: () => void;
   /**
@@ -47,7 +53,7 @@ export function Confirm(props: {
         <h2 className="scr-h">読み取った内容</h2>
         {props.imageUrl && (
           <button type="button" className="btn line img-check" onClick={() => setShowImage(true)}>
-            🖼 元画像を確認
+            {props.readout ? '🖼 元画像とOCR結果' : '🖼 元画像を確認'}
           </button>
         )}
       </div>
@@ -144,7 +150,14 @@ export function Confirm(props: {
         </button>
       </div>
 
-      {showImage && props.imageUrl && <ImageModal src={props.imageUrl} onClose={() => setShowImage(false)} />}
+      {showImage && props.imageUrl && (
+        <ImageModal
+          src={props.imageUrl}
+          readout={props.readout}
+          imageSize={props.imageSize}
+          onClose={() => setShowImage(false)}
+        />
+      )}
     </div>
   );
 }

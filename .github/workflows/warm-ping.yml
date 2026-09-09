@@ -2,6 +2,10 @@
 # 必要な GitHub Secret: SUPABASE_URL（例: https://xxxx.supabase.co）
 #   Settings → Secrets and variables → Actions → New repository secret。
 # REST に対して無認証で叩くだけ（401 が返っても DB は起きる = warm 目的は達成）。
+#
+# 【v3 追加】同じ週1実行で画像削除ジョブ（purge-images）も叩く（SPEC §7.2/§12）。
+# 追加で必要な Secret: PURGE_TOKEN（Edge Function `purge-images` の env と同じ値）。
+# SUPABASE_URL / PURGE_TOKEN のどちらか未設定ならスキップしてログのみ（warm ping 自体は壊さない）。
 name: warm-ping
 
 on:
@@ -21,3 +25,16 @@ jobs:
           fi
           code=$(curl -s -o /dev/null -w '%{http_code}' "${{ secrets.SUPABASE_URL }}/rest/v1/" || echo 000)
           echo "HTTP $code（DB が warm になれば目的達成）"
+
+      - name: Purge expired/over-limit images (purge-images)
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.PURGE_TOKEN }}" ]; then
+            echo "SUPABASE_URL または PURGE_TOKEN secret 未設定。purge-images はスキップ。"
+            exit 0
+          fi
+          code=$(curl -s -o /tmp/purge-images.json -w '%{http_code}' -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/purge-images" \
+            -H "Authorization: Bearer ${{ secrets.PURGE_TOKEN }}" \
+            -H "Content-Type: application/json" || echo 000)
+          echo "HTTP $code"
+          cat /tmp/purge-images.json 2>/dev/null || true

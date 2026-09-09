@@ -16,6 +16,33 @@ export function relTime(iso: string, now: number = Date.now()): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+/**
+ * 通常投稿の本文＋画像（v3・SPEC §5.1）。Home フィードカード・userpub 一覧の要約表示に使う
+ * （タップでスレッドを開く。ResultCard と同じ「カード自体がボタン」の作法）。
+ * スレッド詳細の見出し（自分の投稿の編集・削除つき）は Thread.tsx が別途組む
+ * （既存コメントの編集 UI と同じ作法に合わせるため、こちらでは持たない）。
+ */
+export function PostBody(props: { body: string | null; imageUrl: string | null; onOpen?: () => void }): JSX.Element {
+  const inner = (
+    <>
+      {props.body && <p className="post-body-text">{props.body}</p>}
+      {props.imageUrl && (
+        <span className="post-img">
+          <img src={props.imageUrl} alt="投稿画像" />
+        </span>
+      )}
+    </>
+  );
+  if (props.onOpen) {
+    return (
+      <button type="button" className="post-body" onClick={props.onOpen}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className="post-body">{inner}</div>;
+}
+
 /** アバター（画像 URL があれば画像、無ければ handle の頭文字）。 */
 export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX.Element {
   const initial = props.author.handle.trim().charAt(0).toUpperCase() || '?';

@@ -1,7 +1,28 @@
 import { useEffect, useState } from 'react';
-import { getAdminOverview, listInvites, type AdminOverview, type InviteRow } from '../supabase/admin';
+import {
+  getAdminOverview,
+  listInvites,
+  listImageStats,
+  listOcrFailures,
+  type AdminOverview,
+  type InviteRow,
+} from '../supabase/admin';
 import { issueInvite, revokeInvite, setMaxAccounts } from '../supabase/api';
-import { canRevoke, effectiveStatus, seatsRemaining, statusLabelJa } from '../admin/format';
+import {
+  canRevoke,
+  effectiveStatus,
+  seatsRemaining,
+  statusLabelJa,
+  summarizeStorage,
+  formatBytes,
+  summarizeOcrFailures,
+  displayModeLabelJa,
+  type StorageSummary,
+  type OcrFailureSummary,
+} from '../admin/format';
+
+/** OCR 失敗の集計対象期間（日数）。SPEC §4.2「直近」の既定値。 */
+const OCR_FAILURE_WINDOW_DAYS = 30;
 
 /**
  * 管理画面（M7・さつき専用, is_admin のみ）。登録状況／上限編集／招待キーの
@@ -13,6 +34,11 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
+  const [storage, setStorage] = useState<StorageSummary | null>(null);
+  const [storageErr, setStorageErr] = useState<string | null>(null);
+  const [ocrFail, setOcrFail] = useState<OcrFailureSummary | null>(null);
+  const [ocrErr, setOcrErr] = useState<string | null>(null);
+
   const [maxVal, setMaxVal] = useState('');
   const [maxBusy, setMaxBusy] = useState(false);
   const [maxMsg, setMaxMsg] = useState<string | null>(null);
@@ -23,13 +49,23 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
   async function refresh(): Promise<void> {
-    const [ov, inv] = await Promise.all([getAdminOverview(), listInvites()]);
+    const [ov, inv, imgs, ocr] = await Promise.all([
+      getAdminOverview(),
+      listInvites(),
+      listImageStats(),
+      listOcrFailures(OCR_FAILURE_WINDOW_DAYS),
+    ]);
     if (ov.ok) {
       setOverview(ov.data);
       setMaxVal(String(ov.data.max_accounts));
     } else setLoadErr(ov.message);
     if (inv.ok) setInvites(inv.data);
     else setLoadErr((prev) => prev ?? inv.message);
+
+    if (imgs.ok) setStorage(summarizeStorage(imgs.data));
+    else setStorageErr(imgs.message);
+    if (ocr.ok) setOcrFail(summarizeOcrFailures(ocr.data));
+    else setOcrErr(ocr.message);
   }
 
   useEffect(() => {
@@ -173,6 +209,81 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
             );
           })}
         </ul>
+      </div>
+
+      <div className="pad pt0">
+        <h2 className="scr-h sm">ストレージ使用量</h2>
+        {storageErr && <p className="auth-err">{storageErr}</p>}
+        {storage && (
+          <>
+            <div className="statrow">
+              <div className="stat">
+                <span className="statlbl">総量 / 上限</span>
+                <b className="statval">{formatBytes(storage.totalBytes)}</b>
+              </div>
+              <div className="stat">
+                <span className="statlbl">上限までの余裕</span>
+                <b className="statval">{formatBytes(storage.headroomBytes)}</b>
+              </div>
+            </div>
+            <div className="readout">
+              <div className="row">
+                <span>成功画像（90日で自動削除）</span>
+                <b>
+                  {formatBytes(storage.successBytes)}（{storage.successCount}枚）
+                </b>
+              </div>
+              <div className="row">
+                <span>保護画像（OCR失敗/低信頼・無期限保持）</span>
+                <b className={storage.protectedWarn ? 'warn' : ''}>
+                  {formatBytes(storage.protectedBytes)}（{storage.protectedCount}枚）
+                </b>
+              </div>
+            </div>
+            {storage.protectedWarn && (
+              <p className="auth-err">
+                保護画像だけで {formatBytes(storage.protectedWarnBytes)} を超えています。
+                精度改善の資産としてサーバ上では自動削除されません。ローカルへ退避
+                （`pullFailures.ts`）してから手動で整理してください。
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="pad pt0">
+        <h2 className="scr-h sm">OCR 失敗（直近{OCR_FAILURE_WINDOW_DAYS}日）</h2>
+        {ocrErr && <p className="auth-err">{ocrErr}</p>}
+        {ocrFail && (
+          <>
+            <div className="statrow">
+              <div className="stat">
+                <span className="statlbl">失敗・低信頼の件数</span>
+                <b className="statval loss">{ocrFail.total}</b>
+              </div>
+              <div className="stat">
+                <span className="statlbl">表示モード別</span>
+                <b className="statval">
+                  {ocrFail.byDisplayMode.map((m) => `${displayModeLabelJa(m.mode)} ${m.count}`).join(' / ') || '—'}
+                </b>
+              </div>
+            </div>
+            {ocrFail.byIssueCode.length > 0 && (
+              <div className="readout">
+                {ocrFail.byIssueCode.map((c) => (
+                  <div key={c.code} className="row">
+                    <span>{c.code}</span>
+                    <b>{c.count}件</b>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="note">
+              画像そのものはここには出しません。詳細解析はローカルで `pullFailures.ts`
+              を実行して行います（docs/OCR_ANALYSIS.md）。
+            </p>
+          </>
+        )}
       </div>
 
       <div className="pad pt0">

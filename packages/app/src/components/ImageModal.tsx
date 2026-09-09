@@ -8,19 +8,24 @@ import { buildOcrReadoutView } from './ocrReadoutView';
  * 画像タップで原寸（コンテナ内スクロール）に切り替え。背景クリック / ✕ / Esc で閉じる。
  *
  * `readout` を渡したときだけ、画像の下に OCR 出力の照合表を出す（渡さなければ従来どおり画像だけ＝
- * 後方互換）。数値の桁揃え・CHECK 判定・日本語ラベル化は `ocrReadoutView.ts`（純関数）に追い出し、
- * ここでは表示するだけにする。
+ * 後方互換）。Director 指摘（情報過多）を受け、照合表は SEATS（ポジション/hero・D バッジ/スタック/
+ * bet）＋総チップ保存チェックの注記＋読み取れなかった理由（issues）だけに絞っている。ヘッダ表
+ * （ストリート/ブラインド等）と信頼度（conf）の % 表記は出さない。数値の桁揃え・CHECK 判定は
+ * `ocrReadoutView.ts`（純関数）に追い出し、ここでは表示するだけにする。
  */
 export function ImageModal(props: {
   src: string;
   onClose: () => void;
   /** OCR 出力（SPEC §5.2.3）。渡されたときだけ照合表を出す。 */
   readout?: OcrReadout;
-  /** 元画像の寸法（ヘッダの「画像サイズ」表示用）。readout と併用。 */
+  /**
+   * 元画像の寸法。以前はヘッダの「画像サイズ」表示に使っていたが、情報過多につき
+   * ヘッダ自体を廃止したため現在は未使用（呼び出し側 props との互換のためだけ残す）。
+   */
   imageSize?: { w: number; h: number };
 }): JSX.Element {
   const [zoom, setZoom] = useState(false);
-  const view = props.readout ? buildOcrReadoutView(props.readout, { imageSize: props.imageSize }) : null;
+  const view = props.readout ? buildOcrReadoutView(props.readout) : null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -69,43 +74,18 @@ export function ImageModal(props: {
 
           {view && (
             <div className="imgmodal-readout">
-              <h2 className="scr-h sm">OCR読み取り</h2>
-              <div className="readout">
-                {view.header.map((h) => (
-                  <div key={h.label} className={`row${h.low ? ' low' : ''}`}>
-                    <span className="lb">{h.label}</span>
-                    <span className="vl">
-                      {h.value}
-                      {h.confPct && <b className="conf">{h.confPct}</b>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <h2 className="scr-h sm">Seats</h2>
+              {/* 見出しは無し（Director 指摘：見なくても Seats の表だとわかる）。
+                  表示するのはポジション・hero/D バッジ・スタック・bet のみ（読み取り精度の
+                  % は内部の low 判定にだけ使い、表示はしない）。 */}
               <div className="seats-ro imgmodal-seats-ro">
                 {view.seats.map((s) => (
                   <div key={s.id} className={`seatrow-ro${s.isHero ? ' hero' : ''}`}>
                     <span className={`posbadge sm pos-${s.posLabel}`}>{s.posLabel}</span>
                     {s.isHero && <span className="imgmodal-tag hero">hero</span>}
                     {s.isButton && <span className="imgmodal-tag dbtn">D</span>}
-                    <span className={`imgmodal-field${s.occupancyLow ? ' lowconf' : ''}`}>
-                      {s.occupancyText}
-                      <b className="conf">{s.occupancyConfPct}</b>
-                    </span>
-                    <span className={`imgmodal-field${s.actionLow ? ' lowconf' : ''}`}>
-                      {s.actionText}
-                      <b className="conf">{s.actionConfPct}</b>
-                    </span>
-                    <span className={`stk${s.stackLow ? ' lowconf' : ''}`}>
-                      {s.stackText}
-                      <b className="conf">{s.stackConfPct}</b>
-                    </span>
+                    <span className={`stk${s.stackLow ? ' lowconf' : ''}`}>{s.stackText}</span>
                     {s.betText && (
-                      <span className={`betchip${s.betLow ? ' lowconf' : ''}`}>
-                        bet {s.betText}
-                        <b className="conf">{s.betConfPct}</b>
-                      </span>
+                      <span className={`betchip${s.betLow ? ' lowconf' : ''}`}>bet {s.betText}</span>
                     )}
                   </div>
                 ))}

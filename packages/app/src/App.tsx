@@ -39,6 +39,7 @@ import {
   IDLE_JOB,
   canStartSolve,
   completeJob,
+  createStartLatch,
   failJob,
   startJob,
   type SolveJob,
@@ -267,6 +268,12 @@ export function App(): JSX.Element {
   // 計算ジョブ。App のトップレベル state で持つことで、画面遷移（コンポーネントの
   // アンマウント）で消えない（SPEC §5.7 の2・6: 計算中も他タブを自由に操作できる）。
   const [solveJob, setSolveJob] = useState<SolveJob>(IDLE_JOB);
+  // solve()/onRetryRecord() の連打対策（同期ラッチ, Task2）。solveJob は state のため
+  // 「setSolveJob(startJob(...)) が実際に反映されるまで（createSolvingRecord の await 後）」
+  // の間は running を観測できない。その隙間を塞ぐため、state を介さない同期フラグで
+  // クリック入口から即座に二重起動を弾く。計算が終わる（成功/失敗どちらでも）まで保持し、
+  // 必ず try/finally で解除する（解除漏れ＝永久に計算できなくなる最悪のバグ）。
+  const startingRef = useRef(createStartLatch());
   // 完了/失敗トースト（同時に1つ）。
   const [toast, setToast] = useState<ToastState | null>(null);
   // 再送（resyncPending）の多重起動ガード。refreshRecords から呼ぶため再入しうる。
@@ -798,76 +805,90 @@ export function App(): JSX.Element {
   async function solve(): Promise<void> {
     if (!state) return;
     if (!canStartSolve(solveJob)) return; // 同時1件の制約（IcmInput 側でも弾くが二重防御）。
-    // 念のための防御（入口で弾いているが、7人以上が届いても求解しない）。
-    if (state.playersLeft > MAX_PLAYERS) {
-      setErrFromPhoto(false);
-      setIssues([OVER_SCOPE_MSG]);
-      setScreen('error');
-      return;
-    }
-
-    const finalState = state;
-    const clientId = crypto.randomUUID();
-    const imageId = pendingImageId;
-    const ocrReadId = pendingOcrReadId;
-    const originalState = ocrOriginalState;
-    clearOcrPending(); // 一発勝負（このスポット限り）。次のスポットへ持ち越さない。
-
-    // OCR 由来なら、利用者が確認画面で直した差分を正解ラベルとして残す（§12.1）。
-    if (ocrReadId && originalState) {
-      void attachFinalState(ocrReadId, finalState, diffStates(originalState, finalState)).catch(() => undefined);
-    }
-
-    const localRec = startRecord({
-      clientId,
-      state: finalState,
-      heroHand: finalState.heroHand,
-      heroPos: finalState.heroPos,
-      playersLeft: finalState.playersLeft,
-      imageId,
-      ocrReadId,
-    });
-
-    const created = await createSolvingRecord({
-      clientId,
-      spot: finalState,
-      imageId,
-      ocrReadId,
-      heroHand: finalState.heroHand,
-      heroPos: finalState.heroPos,
-      playersLeft: finalState.playersLeft,
-    });
-    const serverId = created.ok ? created.data.id : undefined;
-    const rec: SpotRecord = { ...localRec, serverId, pendingSync: !created.ok };
-
+    if (!startingRef.current.acquire()) return; // 連打対策の同期ラッチ（Task2）。取れなければ即終了。
+    let started = false; // true になったら runSolve 側の finally が解除を引き継ぐ。
     try {
-      await putRecord(rec);
-    } catch {
-      /* IndexedDB 不可の環境でも続行（サーバに残っていれば記録は失われない）。 */
+      // 念のための防御（入口で弾いているが、7人以上が届いても求解しない）。
+      if (state.playersLeft > MAX_PLAYERS) {
+        setErrFromPhoto(false);
+        setIssues([OVER_SCOPE_MSG]);
+        setScreen('error');
+        return;
+      }
+
+      const finalState = state;
+      const clientId = crypto.randomUUID();
+      const imageId = pendingImageId;
+      const ocrReadId = pendingOcrReadId;
+      const originalState = ocrOriginalState;
+      clearOcrPending(); // 一発勝負（このスポット限り）。次のスポットへ持ち越さない。
+
+      // OCR 由来なら、利用者が確認画面で直した差分を正解ラベルとして残す（§12.1）。
+      if (ocrReadId && originalState) {
+        void attachFinalState(ocrReadId, finalState, diffStates(originalState, finalState)).catch(() => undefined);
+      }
+
+      const localRec = startRecord({
+        clientId,
+        state: finalState,
+        heroHand: finalState.heroHand,
+        heroPos: finalState.heroPos,
+        playersLeft: finalState.playersLeft,
+        imageId,
+        ocrReadId,
+      });
+
+      const created = await createSolvingRecord({
+        clientId,
+        spot: finalState,
+        imageId,
+        ocrReadId,
+        heroHand: finalState.heroHand,
+        heroPos: finalState.heroPos,
+        playersLeft: finalState.playersLeft,
+      });
+      const serverId = created.ok ? created.data.id : undefined;
+      const rec: SpotRecord = { ...localRec, serverId, pendingSync: !created.ok };
+
+      try {
+        await putRecord(rec);
+      } catch {
+        /* IndexedDB 不可の環境でも続行（サーバに残っていれば記録は失われない）。 */
+      }
+      await refreshRecords();
+
+      setSolveJob(startJob(rec.id));
+      setScreen('history'); // solving 画面は廃止。記録タブへ遷移し先頭に「計算中」を出す。
+
+      started = true;
+      void runSolve(rec, finalState, serverId).finally(() => startingRef.current.release());
+    } finally {
+      if (!started) startingRef.current.release(); // 早期 return・例外時はここで解除する。
     }
-    await refreshRecords();
-
-    setSolveJob(startJob(rec.id));
-    setScreen('history'); // solving 画面は廃止。記録タブへ遷移し先頭に「計算中」を出す。
-
-    void runSolve(rec, finalState, serverId);
   }
 
   /** 記録タブの「再計算」（失敗/中断した記録を解き直す, SPEC §5.4）。 */
   async function onRetryRecord(rec: SpotRecord): Promise<void> {
     if (!canStartSolve(solveJob)) return; // 同時1件の制約。
-    if (rec.serverId) {
-      await retryRecord(rec.serverId).catch(() => undefined);
-    }
-    const restarted: SpotRecord = { ...rec, status: 'solving', error: undefined, result: null };
+    if (!startingRef.current.acquire()) return; // 連打対策の同期ラッチ（Task2）。取れなければ即終了。
+    let started = false; // true になったら runSolve 側の finally が解除を引き継ぐ。
     try {
-      await putRecord(restarted);
-    } catch {
-      /* noop */
+      if (rec.serverId) {
+        await retryRecord(rec.serverId).catch(() => undefined);
+      }
+      const restarted: SpotRecord = { ...rec, status: 'solving', error: undefined, result: null };
+      try {
+        await putRecord(restarted);
+      } catch {
+        /* noop */
+      }
+      await refreshRecords();
+      setSolveJob(startJob(restarted.id));
+      started = true;
+      void runSolve(restarted, restarted.state, rec.serverId).finally(() => startingRef.current.release());
+    } finally {
+      if (!started) startingRef.current.release(); // 早期 return・例外時はここで解除する。
     }
-    await refreshRecords();
-    setSolveJob(startJob(restarted.id));
-    void runSolve(restarted, restarted.state, rec.serverId);
   }
 
   /** 下段タブの遷移。 */
@@ -1079,7 +1100,6 @@ export function App(): JSX.Element {
           onDelete={(rec) => void onDeleteRecord(rec)}
           onRetry={(rec) => void onRetryRecord(rec)}
           jobRunning={jobRunning}
-          onBack={() => setScreen('icm')}
         />
       )}
 

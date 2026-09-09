@@ -97,15 +97,16 @@ body::before {
   min-height: 100dvh;
   /* 半透明にして背後の流動マーブル（.marble）を薄く透かす。負 z-index の .marble は
      祖先の不透明背景に隠れるため、ここは必ず rgba（透け）にする。 */
-  background: rgba(12, 13, 10, 0.4);
+  background: rgba(12, 13, 10, 0.28);
   border-left: 1px solid #14150e;
   border-right: 1px solid #14150e;
 }
 
 /* =========================================================================
-   流動マーブル背景 — ブランド＆ポジション色が薄く混ざり、ゆっくり流れる下地。
-   2 レイヤー（::before/::after）を逆方向にドリフトさせ screen 合成で混色。
-   近黒キャンバス上で低アルファのため“薄く”読める。reduced-motion で静止（上部一括）。
+   流動マーブル背景 — ブランド＆ポジション色が混ざり、ゆっくり大きく流れる下地。
+   2 レイヤー（::before/::after）を別周期・逆方向にドリフトさせ screen 合成で混色。
+   「ゆっくり・大きく」を狙い、周期は長め（27〜34s）のまま振れ幅（平行移動/回転/拡大）を
+   大きく取る。速度を上げると酔うので上げない。reduced-motion で静止（上部一括）。
    ========================================================================= */
 .marble {
   position: fixed;
@@ -119,38 +120,43 @@ body::before {
 .marble::after {
   content: '';
   position: absolute;
-  inset: -35%;
+  /* 回転・拡大で端が見えないよう画面より大きく取る。ただし広げすぎると radial-gradient
+     の中心（18%〜84%）が画面外へ逃げて“ほぼ無地”になるため、回転20deg・拡大1.32 が
+     端を出さない下限として -30% に留める。 */
+  inset: -30%;
   will-change: transform;
-  transform-origin: center;
+  transform-origin: 50% 50%;
 }
 .marble::before {
   background:
-    radial-gradient(38% 42% at 20% 20%, rgba(252, 238, 10, 0.22), transparent 60%),
-    radial-gradient(40% 42% at 82% 16%, rgba(58, 230, 255, 0.24), transparent 60%),
-    radial-gradient(42% 46% at 70% 58%, rgba(255, 154, 213, 0.22), transparent 62%),
-    radial-gradient(44% 46% at 24% 72%, rgba(201, 168, 255, 0.22), transparent 62%),
-    radial-gradient(36% 40% at 50% 94%, rgba(252, 238, 10, 0.14), transparent 62%);
-  animation: marbleA 46s ease-in-out infinite alternate;
+    radial-gradient(34% 38% at 18% 18%, rgba(252, 238, 10, 0.52), transparent 62%),
+    radial-gradient(36% 38% at 84% 14%, rgba(58, 230, 255, 0.54), transparent 62%),
+    radial-gradient(38% 42% at 72% 60%, rgba(255, 154, 213, 0.50), transparent 64%),
+    radial-gradient(40% 42% at 22% 74%, rgba(201, 168, 255, 0.50), transparent 64%),
+    radial-gradient(32% 36% at 52% 96%, rgba(252, 238, 10, 0.34), transparent 64%);
+  animation: marbleA 34s ease-in-out infinite alternate;
 }
 .marble::after {
   background:
-    radial-gradient(40% 44% at 74% 36%, rgba(255, 59, 59, 0.17), transparent 60%),
-    radial-gradient(44% 48% at 20% 46%, rgba(143, 180, 255, 0.22), transparent 62%),
-    radial-gradient(38% 42% at 58% 10%, rgba(121, 235, 199, 0.20), transparent 60%),
-    radial-gradient(46% 48% at 88% 78%, rgba(255, 159, 107, 0.20), transparent 62%),
-    radial-gradient(40% 44% at 38% 64%, rgba(58, 230, 255, 0.14), transparent 62%);
+    radial-gradient(36% 40% at 76% 34%, rgba(255, 59, 59, 0.38), transparent 62%),
+    radial-gradient(40% 44% at 18% 44%, rgba(143, 180, 255, 0.48), transparent 64%),
+    radial-gradient(34% 38% at 58% 8%, rgba(121, 235, 199, 0.44), transparent 62%),
+    radial-gradient(42% 44% at 90% 80%, rgba(255, 159, 107, 0.44), transparent 64%),
+    radial-gradient(36% 40% at 36% 66%, rgba(58, 230, 255, 0.34), transparent 64%);
   mix-blend-mode: screen;
-  animation: marbleB 63s ease-in-out infinite alternate;
+  animation: marbleB 27s ease-in-out infinite alternate;
 }
 @keyframes marbleA {
-  0%   { transform: translate(-4%, -3%) rotate(0deg) scale(1.06); }
-  50%  { transform: translate(3%, 4%) rotate(7deg) scale(1.16); }
-  100% { transform: translate(-2%, 2%) rotate(-6deg) scale(1.09); }
+  0%   { transform: translate(-9%, -7%) rotate(-6deg) scale(1.05); }
+  35%  { transform: translate(6%, -4%) rotate(9deg) scale(1.28); }
+  70%  { transform: translate(8%, 9%) rotate(20deg) scale(1.12); }
+  100% { transform: translate(-6%, 6%) rotate(-11deg) scale(1.32); }
 }
 @keyframes marbleB {
-  0%   { transform: translate(3%, 2%) rotate(0deg) scale(1.12); }
-  50%  { transform: translate(-4%, -3%) rotate(-9deg) scale(1.02); }
-  100% { transform: translate(2%, -2%) rotate(6deg) scale(1.14); }
+  0%   { transform: translate(8%, 5%) rotate(4deg) scale(1.30); }
+  40%  { transform: translate(-9%, -8%) rotate(-16deg) scale(1.05); }
+  75%  { transform: translate(-3%, 8%) rotate(12deg) scale(1.24); }
+  100% { transform: translate(7%, -6%) rotate(-5deg) scale(1.10); }
 }
 
 /* ---- HUD ヘッダー ---- */
@@ -1326,22 +1332,8 @@ button.cell { cursor: pointer; }
 .imgmodal-body img { display: block; width: 100%; height: auto; cursor: zoom-in; }
 .imgmodal-body.zoom img { width: auto; max-width: none; cursor: zoom-out; }
 
-/* ---- 元画像 × OCR 出力の照合表（SPEC §5.2.3・WP-B1） ---- */
+/* ---- 元画像 × OCR 出力の照合表（SPEC §5.2.3・WP-B1。SEATS のみに絞り情報量を削減済み） ---- */
 .imgmodal-readout { padding: var(--s4); border-top: 1px solid var(--line); }
-.imgmodal-readout .scr-h.sm { margin-bottom: var(--s2); }
-.imgmodal-readout .scr-h.sm:not(:first-child) { margin-top: var(--s4); }
-.imgmodal-readout .readout { margin-bottom: 0; }
-/* 信頼度バッジ（値の右に小さく添える）。低信頼は .lowconf と組み合わせて黄で強調。 */
-.conf {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 400;
-  color: var(--dim2);
-  margin-left: 6px;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-}
-.lowconf .conf { color: inherit; }
 /* 席テーブルは 375px 幅でも横スクロールしないよう折り返す（既存 .seatrow-ro は1行前提のため
    このモーダル内だけ挙動を変える）。 */
 .imgmodal-seats-ro .seatrow-ro { flex-wrap: wrap; row-gap: 6px; }
@@ -1360,9 +1352,6 @@ button.cell { cursor: pointer; }
 /* 注意: モディファイアは .btn ではなく .dbtn にする（グローバルな .btn ボタン
    コンポーネントと名前衝突し、黄塗り帯化するため実機確認済み）。 */
 .imgmodal-tag.dbtn { color: var(--cyan); border-color: rgba(58, 230, 255, 0.4); }
-/* 状態・アクションのセル（スタック/ベットは既存 .stk / .betchip を流用）。 */
-.imgmodal-field { font-size: 12px; color: var(--fg); white-space: nowrap; }
-.imgmodal-field.lowconf { padding: 1px 5px; }
 .imgmodal-chipcheck { margin: var(--s3) 0 0; font-size: 12px; color: var(--cyan); line-height: 1.6; }
 .imgmodal-readout .check-h { margin-top: var(--s4); }
 
@@ -1958,3 +1947,43 @@ button.cell { cursor: pointer; }
 .post-compose-count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim2); }
 
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* =========================================================================
+   ⓘ インフォメーションマーク & 説明モーダル（InfoModal.tsx）
+   常設の注意書きは本文を埋めるため、見出し横の ⓘ に畳んで必要なときだけ開く。
+   ========================================================================= */
+.infomark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(58, 230, 255, 0.5);
+  border-radius: 50%;
+  background: none;
+  color: var(--cyan);
+  font-family: var(--disp);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.infomark:hover { background: rgba(58, 230, 255, 0.12); }
+.info-modal .modal-body.info-body { padding: var(--s4); }
+.info-body p { margin: 0 0 var(--s3); font-size: 12.5px; color: var(--dim); line-height: 1.8; }
+.info-body p:last-child { margin-bottom: 0; }
+.info-body h3 {
+  margin: var(--s4) 0 var(--s2);
+  font-family: var(--disp);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+}
+.info-body h3:first-child { margin-top: 0; }
+/* 見出し行に ⓘ を並べる（見出しが無い場合は ⓘ だけを左端に置く）。 */
+.h-row { display: flex; align-items: center; gap: var(--s2); }
+.h-row .scr-h { margin: 0; }
+.confirm-head .infomark { margin-right: auto; }

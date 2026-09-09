@@ -7,6 +7,7 @@ import {
 } from '../supabase/profile';
 import { signOut, deleteAccount } from '../supabase/api';
 import { validatePassword } from '../auth/validate';
+import { InfoMark, InfoModal } from './InfoModal';
 
 /**
  * 設定画面（M7・モック s-profile 準拠）。表示名／パスワード変更・公開既定トグル・
@@ -46,6 +47,9 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+
+  // 説明モーダル（保存・公開・削除まわりの注意書きをここへ畳む）
+  const [showInfo, setShowInfo] = useState(false);
 
   async function savePassword(): Promise<void> {
     setPwDone(false);
@@ -116,6 +120,10 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
       <div className="avpick">
         <div className="avbig">{initial}</div>
         <div className="lbl dim">アイコン変更は準備中</div>
+      </div>
+
+      <div className="pad pt0 h-row">
+        <InfoMark label="設定について" onClick={() => setShowInfo(true)} />
       </div>
 
       {loadErr && <p className="auth-err" style={{ margin: '12px 14px' }}>{loadErr}</p>}
@@ -194,10 +202,7 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
         <h2 className="scr-h sm">公開のしかた</h2>
         <div className="readout">
           <div className="tog tog-pad">
-            <div>
-              計算したら最初から公開する
-              <small>切っておくと、1件ずつ自分で公開を選べます</small>
-            </div>
+            <div>計算したら最初から公開する</div>
             <button
               type="button"
               className="sw"
@@ -208,23 +213,6 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
             />
           </div>
         </div>
-      </div>
-
-      <div className="pad pt0">
-        <h2 className="scr-h sm">保存について</h2>
-        <p className="note">
-          計算した局面・結果・スクショ（端末内で圧縮した版）はサーバに保存されます。端末を
-          変えてもログインすれば記録は残ります。
-        </p>
-        <p className="note">
-          スクショは非公開です。見られるのは本人と管理者だけで、クラブの他のメンバーには
-          見えません。
-        </p>
-        <p className="note">
-          OCR がうまく読めなかった画像は、読み取り精度を改善するために保持されます。その
-          ため記録を削除しても、読めなかった画像だけはサーバに残る場合があります。
-        </p>
-        <p className="note">公開（ホームに出す）はいつでも任意で選べます。既定はオフです。</p>
       </div>
 
       <div className="pad pt0">
@@ -252,7 +240,6 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
             </button>
           )}
         </div>
-        <p className="note">削除すると、記録・公開したスレッド・画像もすべて消えます。取り消せません。</p>
       </div>
 
       {profile?.is_admin && (
@@ -269,6 +256,21 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
           ← 計算に戻る
         </button>
       </div>
+
+      {showInfo && (
+        <InfoModal title="設定について" onClose={() => setShowInfo(false)}>
+          <h3>公開のしかた</h3>
+          {/* 日本語は JSX の改行が空白として入るため、1段落＝1行で書く。 */}
+          <p>計算結果の公開はいつでも任意です。既定はオフで、切っておくと1件ずつ自分で公開を選べます。</p>
+          <h3>保存について</h3>
+          <p>計算した局面・結果・スクショ（端末内で圧縮した版）はサーバに保存されます。端末を変えてもログインすれば記録は残ります。</p>
+          <h3>スクリーンショットの扱い</h3>
+          <p>スクショは非公開です。見られるのは本人と管理者だけで、クラブの他のメンバーには見えません。</p>
+          <p>OCR がうまく読めなかった画像は、読み取り精度を改善するために保持されます。そのため記録を削除しても、読めなかった画像だけはサーバに残る場合があります。</p>
+          <h3>アカウントの削除</h3>
+          <p>削除すると、記録・公開したスレッド・画像もすべて消えます。取り消せません。</p>
+        </InfoModal>
+      )}
     </div>
   );
 }

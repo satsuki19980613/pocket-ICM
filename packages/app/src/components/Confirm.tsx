@@ -3,6 +3,7 @@ import type { BoardState } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
 import { potChecksumDelta } from '@oshihiki/core';
 import { ImageModal } from './ImageModal';
+import { InfoMark, InfoModal } from './InfoModal';
 
 /**
  * 条件確認（3-1c・M3）。読み取った内容を項目別に読み上げ、各行の「修正」で手入力
@@ -31,6 +32,7 @@ export function Confirm(props: {
 }): JSX.Element {
   const { state } = props;
   const [showImage, setShowImage] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const low = new Set(props.lowConfidenceFields ?? []);
   const hasLow = low.size > 0;
   const anteText = state.ante.scheme === 'none' ? 'なし' : `${state.ante.scheme} ${state.ante.amount}bb`;
@@ -50,7 +52,7 @@ export function Confirm(props: {
   return (
     <div className="panel confirm">
       <div className="confirm-head">
-        <h2 className="scr-h">読み取った内容</h2>
+        <InfoMark label="この画面の説明" onClick={() => setShowInfo(true)} />
         {props.imageUrl && (
           <button type="button" className="btn line img-check" onClick={() => setShowImage(true)}>
             {props.readout ? '🖼 元画像とOCR結果' : '🖼 元画像を確認'}
@@ -76,9 +78,6 @@ export function Confirm(props: {
               </button>
             ))}
           </div>
-          <p className="pc-note">
-            ⚠️ テーブルの実際の人数と合っていますか？ フォールドした席のスタックが読み取れないと、その席が抜けて人数が少なく出ることがあります。違う人数を選ぶと席を補います（補った席のスタックは下の Stacks でご確認ください）。
-          </p>
         </div>
       )}
 
@@ -117,12 +116,6 @@ export function Confirm(props: {
         </div>
       </div>
 
-      {hasLow && (
-        <p className="lowconf-note">
-          ⚠️ CHECK の付いた項目は自動読取の信頼度が低めです。値をご確認ください（「修正」から直せます）。
-        </p>
-      )}
-
       <h2 className="scr-h sm" style={{ marginTop: 'var(--s4)' }}>
         Stacks
       </h2>
@@ -138,8 +131,6 @@ export function Confirm(props: {
           </div>
         ))}
       </div>
-
-      <p className="confirm-note">違っていたら「修正」から直せます。直した内容がそのまま計算に使われます。</p>
 
       <div className="btnrow">
         <button type="button" className="btn ghost" onClick={props.onEdit}>
@@ -157,6 +148,27 @@ export function Confirm(props: {
           imageSize={props.imageSize}
           onClose={() => setShowImage(false)}
         />
+      )}
+
+      {showInfo && (
+        <InfoModal title="この画面について" onClose={() => setShowInfo(false)}>
+          {showPlayersCheck && (
+            <>
+              <h3>検出人数について</h3>
+              <p>
+                フォールドした席のスタックが読み取れないと、その席が抜けて人数が少なく出ることがあります。テーブルの実際の人数と合っているかご確認ください。違う人数を選ぶと席を補います（補った席のスタックは下の Stacks でご確認ください）。
+              </p>
+            </>
+          )}
+          {hasLow && (
+            <>
+              <h3>CHECK の付いた項目</h3>
+              <p>自動読取の信頼度が低めです。値をご確認ください。</p>
+            </>
+          )}
+          <h3>修正のしかた</h3>
+          <p>違っていたら「修正」から直せます。直した内容がそのまま計算に使われます。</p>
+        </InfoModal>
       )}
     </div>
   );

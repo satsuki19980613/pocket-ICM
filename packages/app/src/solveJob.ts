@@ -64,3 +64,38 @@ export function abortJob(job: SolveJob): SolveJob {
 export function resetJob(): SolveJob {
   return IDLE_JOB;
 }
+
+/**
+ * 「計算開始中」を示す同期ラッチ（Task2: 「この内容で計算する」/「再計算」の二重起動防止）。
+ *
+ * `canStartSolve(solveJob)` は React state を見るため、`setSolveJob(startJob(...))` が
+ * 実際に呼ばれる（＝ネットワーク往復 `createSolvingRecord` を await した後）までは
+ * running を観測できない。その隙間で連打されると2回目のクリックも古い state（idle）を
+ * 見て通過してしまう。このラッチは state を介さない同期的なフラグなので、クリック
+ * ハンドラの入口で `acquire()` を呼べば連打の2回目以降を即座に（再レンダリングを待たず）
+ * 弾ける。
+ *
+ * 保持期間は「計算が終わるまで」（成功・失敗どちらでも）。呼び出し側は必ず
+ * try/finally で `release()` を呼ぶこと（解除漏れは永久に計算できなくなる最悪のバグ）。
+ */
+export interface StartLatch {
+  /** ラッチを取得できたら true（未取得の間だけ取得できる＝同時に1つまで）。 */
+  acquire(): boolean;
+  /** ラッチを解放する。既に解放済みでも安全（何もしない）。 */
+  release(): void;
+}
+
+/** 新しい `StartLatch` を作る。初期状態は未取得（`acquire()` できる）。 */
+export function createStartLatch(): StartLatch {
+  let locked = false;
+  return {
+    acquire(): boolean {
+      if (locked) return false;
+      locked = true;
+      return true;
+    },
+    release(): void {
+      locked = false;
+    },
+  };
+}

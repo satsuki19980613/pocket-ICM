@@ -20,7 +20,6 @@ export function RecordsView(props: {
   onRetry: (rec: SpotRecord) => void;
   /** 計算ジョブが進行中か。true の間は「再計算」を無効化する（同時1件の制約）。 */
   jobRunning: boolean;
-  onBack: () => void;
 }): JSX.Element {
   const { records } = props;
   const stats = aggregate(records);
@@ -136,10 +135,6 @@ export function RecordsView(props: {
           })}
         </div>
       )}
-
-      <button type="button" className="btn ghost wide" onClick={props.onBack}>
-        戻る
-      </button>
     </div>
   );
 }

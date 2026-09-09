@@ -1,15 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- full-bleed bg for maskable safe zone; content kept within center 80% -->
-  <rect width="512" height="512" fill="#0c1618"/>
-  <!-- targeting reticle (inset for circular/squircle masks) -->
-  <circle cx="256" cy="256" r="126" fill="none" stroke="#34e3d0" stroke-width="12"/>
-  <circle cx="256" cy="256" r="94" fill="none" stroke="#34e3d0" stroke-width="4" opacity="0.4"/>
-  <g stroke="#34e3d0" stroke-width="12" stroke-linecap="round">
-    <line x1="256" y1="108" x2="256" y2="146"/>
-    <line x1="256" y1="366" x2="256" y2="404"/>
-    <line x1="108" y1="256" x2="146" y2="256"/>
-    <line x1="366" y1="256" x2="404" y2="256"/>
+  <!-- maskable: 背景は全面、マークは中心 80%（安全領域＝直径 410）に収める。
+       意匠は icon.svg と同一（ログイン画面のロゴ）。板の対角が安全円に収まる
+       倍率が 0.75。 -->
+  <rect width="512" height="512" fill="#0c0d0a"/>
+  <g transform="translate(64 64) scale(0.75)">
+    <path d="M64 64 H388 L448 124 V448 H124 L64 388 Z" fill="#fcee0a"/>
+    <path d="M87 340 L256 172 H425 L256 340 Z" fill="#1a1900"/>
   </g>
-  <circle cx="256" cy="256" r="26" fill="#f6b04e"/>
-  <circle cx="256" cy="256" r="26" fill="none" stroke="#0c1618" stroke-width="6"/>
 </svg>

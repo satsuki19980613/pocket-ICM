@@ -16,9 +16,9 @@ export default defineConfig({
         short_name: 'Black Ops ICM',
         description: 'ポーカーチェイス クラブマッチ push/fold ICM 復習ツール',
         lang: 'ja',
-        // サイバーパンク HUD 基調（--void 相当のフェルト・グラファイト）。
-        theme_color: '#0c1618',
-        background_color: '#0c1618',
+        // アプリ面と同じ近黒グラファイト（styles.css の --bg）。スプラッシュもここで塗られる。
+        theme_color: '#0c0d0a',
+        background_color: '#0c0d0a',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

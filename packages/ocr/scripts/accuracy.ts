@@ -15,6 +15,7 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
 import { extractRawReads, extractRawReadsAuto, type ExtractTemplates } from '../src/extract.js';
 import { extractAnchored } from '../src/extractAnchored.js';
+import { pickSeatAnchorGrid } from '../src/seatAnchorGrids.js';
 import { IOS_6MAX } from '../src/frameProfileIos.js';
 import { FULL_FRAME } from '../src/contentRect.js';
 import { resampleRgba } from '../src/resize.js';
@@ -119,7 +120,9 @@ for (const [frame, gt] of Object.entries(GT.frames)) {
       : extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
   } else {
     try {
-      reads = extractAnchored(rgba, templates, {});
+      // 本番 prefill と同一のアスペクト別グリッド選択（検証パリティ）。
+      const seatAnchors = pickSeatAnchorGrid(rgba.w / rgba.h);
+      reads = extractAnchored(rgba, templates, seatAnchors ? { seatAnchors } : {});
     } catch {
       const isAndroid = rgba.w >= 2400;
       reads = isAndroid

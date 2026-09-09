@@ -15,6 +15,7 @@ import {
   extractAnchored,
   extractRawReadsAuto,
   runOcrPipeline,
+  pickSeatAnchorGrid,
   CHIPS_6MAX,
   IOS_6MAX,
   FULL_FRAME,
@@ -60,7 +61,10 @@ export function ocrPrefillFromRgba(
   // ことを実測（§B9 基準①②③）。旧固定座標経路は **crash 安全網**として throw 時のみ使う（挙動不変）。
   let reads: RawReads;
   try {
-    reads = extractAnchored(img, templates, {});
+    // 機種別の静的アンカーグリッド（アスペクト帯で選択）。既知の破綻帯（超ワイド ~2.44）のみ
+    // 検出重心をグリッド座標で確定し、それ以外は undefined＝現行の検出のまま（回帰ゼロ）。
+    const seatAnchors = pickSeatAnchorGrid(img.w / img.h);
+    reads = extractAnchored(img, templates, seatAnchors ? { seatAnchors } : {});
   } catch {
     const isAndroid = img.w >= 2400;
     reads = isAndroid

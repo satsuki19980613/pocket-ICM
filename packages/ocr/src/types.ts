@@ -93,4 +93,12 @@ export interface RawReads {
   readonly seats: readonly RawSeatRead[];
   /** 抽出層が判別した数値表示モード（記録・信頼度用, 任意）。 */
   readonly displayMode?: DisplayMode;
+  /**
+   * 解決した SB/BB/アンティ（**チップ**）＋レベル番号。ヘッダの BB が読めたときに設定される
+   * （保存則ベース: 読んだ BB を基準にする）。公式「通常」表にタイト一致すれば level=1..16、
+   * 表に無い別スピード（例 480/960/240）は読み値採用で **level=0**。総チップ保存則
+   * （場の総 BB = 90,000 ÷ bb）による整合性チェック（chipConsistency）の基準に使う。
+   * 未設定＝BB 読めず/非クラブマッチ扱いでチェックは無効（＝従来挙動）。
+   */
+  readonly blindChips?: { readonly sb: number; readonly bb: number; readonly ante: number; readonly level: number };
 }

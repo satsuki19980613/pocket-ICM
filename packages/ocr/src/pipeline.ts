@@ -19,6 +19,7 @@ import type { RawReads } from './types.js';
 import { streetGate } from './gate.js';
 import { reconstructSpot } from './spotReconstruction.js';
 import { aggregateConfidence, type ChecksumResult } from './confidence.js';
+import { applyChipConsistency, type ChipConsistencyResult } from './chipConsistency.js';
 
 export interface OcrValidation {
   readonly ok: boolean;
@@ -30,6 +31,10 @@ export interface OcrValidation {
   readonly lowConfidenceFields: string[];
   /** ポット・チェックサム結果（gate 失敗時は undefined）。 */
   readonly checksum?: ChecksumResult;
+  /** 総チップ保存チェック結果（クラブマッチ・レベル確定時のみ applied）。 */
+  readonly chipCheck?: ChipConsistencyResult;
+  /** チェックサム/整合性で補正・強調した席（診断用）。 */
+  readonly correctedSeatId?: string;
 }
 
 export interface OcrPipelineOptions {
@@ -44,6 +49,12 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
   if (!gate.ok) {
     return { ok: false, issues: gate.issues, lowConfidenceFields: [] };
   }
+
+  // 総チップ保存チェック（クラブマッチ）: 未読 1 席の復元／最低信頼席での差分調整。
+  // blindChips が無ければ no-op（reads 不変＝従来挙動・回帰ゼロ）。復元/調整した席は下流で
+  // reconstruct され、低信頼フラグで確認画面に強調される。
+  const { reads: cReads, result: chipCheck } = applyChipConsistency(reads);
+  reads = cReads;
 
   const recon = reconstructSpot(reads);
   if (!recon.ok || !recon.state || !recon.facts) {
@@ -66,11 +77,21 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     ...(opts.checksumTol !== undefined ? { checksumTol: opts.checksumTol } : {}),
   });
 
+  // 補正した席は確認画面で必ず強調（復元/調整＝要目視）。生スロット id を Position キーへ変換。
+  const correctedPos = chipCheck.correctedSeatId
+    ? facts.find((f) => f.id === chipCheck.correctedSeatId)?.pos
+    : undefined;
+  const low = correctedPos
+    ? [...new Set([...conf.lowConfidenceFields, `${correctedPos}.stack`])].sort()
+    : conf.lowConfidenceFields;
+
   return {
     ok: true,
     issues: [],
     state: parsed.value,
-    lowConfidenceFields: conf.lowConfidenceFields,
+    lowConfidenceFields: low,
     checksum: conf.checksum,
+    chipCheck,
+    ...(correctedPos ? { correctedSeatId: correctedPos } : {}),
   };
 }

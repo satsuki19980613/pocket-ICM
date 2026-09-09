@@ -50,6 +50,7 @@ import { recognizeAmount, grayFromRgba } from './numberField.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { recognizeHeroHandColor } from './cards.js';
 import type { HandActiveRule } from './frameProfile.js';
+import { resolveBlindChips } from './blindLevels.js';
 
 export interface AnchorTemplates {
   readonly digits: readonly Template[];
@@ -73,6 +74,13 @@ export interface AnchorOptions {
   readonly potRegion?: PotAnchorRegion;
   /** BB 読みの scoreFloor（既定 0.45, stack の飾り片除去）。 */
   readonly scoreFloor?: number;
+  /**
+   * 機種別・席名中心の静的グリッド（フラクショナル）。指定した席は、検出した黄色名重心の
+   * 代わりにこの座標で nameBox 中心を確定する（装飾混入で重心が名前中心を外す機種の是正,
+   * seatAnchorGrids.ts）。占有席のみ適用（空席は不変）。undefined の席・未指定時は現行の
+   * 検出重心のまま（＝回帰ゼロ）。
+   */
+  readonly seatAnchors?: Partial<Record<Slot, { readonly x: number; readonly y: number }>>;
 }
 
 /** 左上ヘッダのブラインド数値部 "330/660"（フラクショナル）。CHIPS_6MAX 較正値を流用。 */
@@ -275,11 +283,25 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   // 使う正規化画像と同一（nameBox はこの正規化画像座標）。
   const { img: nimg } = normalizeForAnchors(img);
   const enr = enumerateSeats(img);
-  const occ = enr.seats.filter((s) => s.occupied);
 
   // ロバストな名前高（占有席 nameBox 高の中央値）。手番グロー席・iOS 小名で個々の nb.h が過小に
   // 出るため、フォールバック stack 帯の尺度に使う（個々の壊れた nb.h に依存させない）。
-  const robustNameH = median(occ.map((s) => s.nameBox?.h ?? 0).filter((h) => h > 0)) || 20;
+  const robustNameH = median(enr.seats.filter((s) => s.occupied).map((s) => s.nameBox?.h ?? 0).filter((h) => h > 0)) || 20;
+
+  // 機種別静的グリッド（seatAnchors）が指定された占有席は、検出重心の代わりにグリッド座標で
+  // nameBox 中心を確定する（装飾混入で重心が名前中心を外す機種の是正）。高さは robustNameH で
+  // 統一（汚染された個別 nb.h に依存しない）。未指定席・空席は検出結果のまま＝回帰ゼロ。
+  const seatsAdj: readonly SeatSlot[] = opts.seatAnchors
+    ? enr.seats.map((s) => {
+        const g = opts.seatAnchors![s.slot];
+        if (!s.occupied || !g) return s;
+        const cx = g.x * nimg.w;
+        const cy = g.y * nimg.h;
+        const h = robustNameH;
+        return { ...s, nameBox: { cx, cy, top: cy - h / 2, bottom: cy + h / 2, h } };
+      })
+    : enr.seats;
+  const occ = seatsAdj.filter((s) => s.occupied);
 
   // 各占有席のスタック探索矩形（名前ボックスから導出）。nameBox が無い占有席（黄色名を外した
   // 席）は矩形を作れず stack=NaN のまま（occupancy は保持＝席は落とさない）。
@@ -313,6 +335,14 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   const bbChips = Number.isFinite(blindsRaw.bb.value) && blindsRaw.bb.value > 0 ? blindsRaw.bb.value : 1;
   const bbNorm = norm(blindsRaw.bb, bbChips).value; // BB 換算での BB（=1, allin bet の下駄に使う）。
   const anteChips = recognizeAmount(nimg, fracRect(nimg, HEADER_ANTE), digits);
+  // ブラインド解決（クラブマッチ・保存則ベース）。読んだ BB を基準に blindChips を露出し、下流の総チップ
+  // 保存チェック（chipConsistency）の基準にする。公式「通常」表にタイト一致すれば厳密値で小誤読を補正、
+  // 一致しない別スピード（例 480/960/240）は読み値をそのまま採用（960 を 1100 へ誤スナップしない）。
+  // 既存の正規化（bbChips）は変えない＝スタック/ポットの値は不変（回帰ゼロ）。
+  // **BB 表示モード限定**: chips 表示はヘッダの数値が別物で BB がゴミ値に化けうる（実測 88106）ため、
+  // 解決すると誤ってブラインドを 0.5/1.0 へ上書きし reconstruction を壊す。chips は取り込み対象外
+  // （§5.2 で棄却）なので rb=null＝従来の sanitizeBlinds のまま（回帰ゼロ）。BB が読めなければ null。
+  const rb = mode === 'bb' ? resolveBlindChips(blindsRaw.sb.value, blindsRaw.bb.value, anteChips.value) : null;
 
   // pot（§B5）: BB 表示は中央ピルを BB アンカーで、chips は中央矩形の生読み→正規化。
   let pot: Read<number>;
@@ -360,7 +390,7 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   const heroHand = readHeroHand(nimg, ranks);
 
   // 席（SLOTS 順）。
-  const seats: RawSeatRead[] = enr.seats.map((s) => {
+  const seats: RawSeatRead[] = seatsAdj.map((s) => {
     const isHero = s.isHero;
     if (!s.occupied) {
       return {
@@ -460,13 +490,22 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
     };
   });
 
+  // ブラインド（BB 換算）。ブラインドが解決できたら **正規化ブラインドは厳密値**（クラブマッチは
+  // SB=BB/2 で確定・BB 換算では常に sb=0.5 / bb=1.0）に上書きし、ヘッダ数値の誤読（実測 2.44 で sb≒0.60）を
+  // 根治する（さつき: SB/BB は決まっている）。rb.sb/rb.bb は常に 0.5。解決不可（BB 読めず）は従来の
+  // sanitizeBlinds（回帰ゼロ）。conf 0.9 で確認画面の低信頼強調からも外す。
+  const blinds = rb
+    ? { sb: { value: rb.sb / rb.bb, conf: 0.9 }, bb: { value: 1, conf: 0.9 } }
+    : sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips));
+
   return {
     street: { value: 'preflop', conf: 0.8 }, // アンカー抽出はプリフロップ終了フレーム前提（§A）。
-    blinds: sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips)),
+    blinds,
     ante: { scheme: opts.anteScheme ?? 'all', amount: norm(anteChips, bbChips) },
     pot,
     heroHand,
     seats,
     displayMode: mode,
+    ...(rb ? { blindChips: { sb: rb.sb, bb: rb.bb, ante: rb.ante, level: rb.level } } : {}),
   };
 }

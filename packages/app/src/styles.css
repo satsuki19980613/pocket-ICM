@@ -15,7 +15,7 @@
   color-scheme: dark;
 
   /* ---- サーフェス（グラファイト, 明度差は数%） ---- */
-  --bg2: #050604;        /* キャンバス最深部 */
+  --bg2: #17181b;        /* 背景の最深部（.bgfield のベース下端・html の下地） */
   --bg: #0c0d0a;         /* アプリ面 */
   --surface: #15160f;    /* パネル */
   --surface-2: #1c1e13;  /* 入力・段上げ */
@@ -60,8 +60,9 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* 最深部のキャンバスは html に置く。body は透明にして、z-index:-1 の .marble が
-   body ボックスに隠れないようにする（負 z-index は祖先の不透明背景の後ろに回る）。 */
+/* 最深部の下地は html に置く。body は透明にして、負 z-index の背景レイヤー
+   （.bgfield / .rain）が body ボックスに隠れないようにする
+   （負 z-index は祖先の不透明背景の後ろに回る）。 */
 html { background: var(--bg2); }
 html, body {
   margin: 0;
@@ -95,160 +96,41 @@ body::before {
   margin: 0 auto;
   padding: var(--s4) var(--s3) var(--s6);
   min-height: 100dvh;
-  /* 半透明にして背後の流動マーブル（.marble）を薄く透かす。負 z-index の .marble は
-     祖先の不透明背景に隠れるため、ここは必ず rgba（透け）にする。 */
-  background: rgba(12, 13, 10, 0.34);
+  /* 半透明にして背後の下地とデジタルレインを透かす。負 z-index のレイヤーは祖先の
+     不透明背景に隠れるため、ここは必ず rgba（透け）にする。濃さは本文の可読性で決める。 */
+  background: rgba(10, 11, 12, 0.20);
   border-left: 1px solid #14150e;
   border-right: 1px solid #14150e;
 }
 
 /* =========================================================================
-   流動マーブル背景（煙） — Marble.tsx が .marble > .mb×6 を描く。
-   ブロブ1個につき translate / scale / rotate を**別プロパティ・別周期**で回す。
-   周期は互いに素に近い値をばらして選んであるので、合成された動きはほぼ繰り返さない。
-   輪郭は radial-gradient の長い減衰だけで消す（全画面 filter: blur は毎フレーム再計算に
-   なり低スペック端末で重いので使わない）。reduced-motion では上部の一括ルールで静止。
+   背景（Background.tsx） — グラファイトの下地 ＋ 0/1 デジタルレイン。
+   以前の流動マーブル（煙）は撤去。単色べた塗りだと安っぽいので、上からの淡い持ち上げ・
+   下への締め・四隅のビネットを重ねて濃淡を作る。静止なので描画コストは掛からない。
    ========================================================================= */
-.marble {
+.bgfield {
   position: fixed;
   inset: 0;
   z-index: -2;
-  overflow: hidden;
   pointer-events: none;
-  background: var(--bg2);
+  background:
+    /* 四隅を軽く落として中央を浮かせる（潰しすぎると黒に戻るので浅めに） */
+    radial-gradient(150% 105% at 50% 40%, transparent 42%, rgba(0, 0, 0, 0.30) 100%),
+    /* 斜めの淡いシーン（金属板のような照り。1%台なので模様には見えない） */
+    linear-gradient(115deg, rgba(255, 255, 255, 0.035) 0%, transparent 38%, rgba(255, 255, 255, 0.02) 62%, transparent 100%),
+    /* 上端のハイライト（光源が上にある想定） */
+    radial-gradient(125% 66% at 50% -14%, #45474c 0%, #313338 36%, transparent 74%),
+    /* 下へ向かって沈むベース（ニュートラルなグラファイト） */
+    linear-gradient(180deg, #2f3135 0%, #222429 48%, var(--bg2) 100%);
 }
-/* 0/1 デジタルレイン（DigitalRain.tsx）。マーブルの上・アプリ面の下に敷く前景。 */
+
+/* 0/1 デジタルレイン（DigitalRain.tsx）。下地の上・アプリ面の下に敷く前景。 */
 .rain {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   display: block;
-}
-
-.mb {
-  position: absolute;
-  display: block;
-  border-radius: 50%;
-  will-change: transform;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-direction: alternate;
-  animation-fill-mode: both;
-}
-
-/* ---- 個々のブロブ（色・大きさ・置き場所・周期）----
-   置き場所は「画面の何%にコアを置くか」で決める（left は calc(X% - 半径) ）。
-   vmax 基準の固定 left だと縦長画面でコアが画面外へ逃げ、薄い裾しか見えなくなる。 */
-.mb1 {
-  width: 78vmax; height: 78vmax; left: calc(15% - 39vmax); top: calc(10% - 39vmax);
-  background: radial-gradient(circle, rgba(252, 238, 10, 0.56) 0%, rgba(252, 238, 10, 0.20) 40%, transparent 75%);
-  animation-name: roamA, breatheA, spinA;
-  animation-duration: 53s, 37s, 89s;
-  animation-delay: -7s, -13s, -31s;
-}
-.mb2 {
-  width: 70vmax; height: 70vmax; left: calc(85% - 35vmax); top: calc(18% - 35vmax);
-  background: radial-gradient(circle, rgba(58, 230, 255, 0.56) 0%, rgba(58, 230, 255, 0.20) 40%, transparent 75%);
-  animation-name: roamB, breatheB, spinB;
-  animation-duration: 61s, 43s, 79s;
-  animation-delay: -23s, -5s, -11s;
-}
-.mb3 {
-  width: 84vmax; height: 84vmax; left: calc(70% - 42vmax); top: calc(55% - 42vmax);
-  background: radial-gradient(circle, rgba(255, 154, 213, 0.50) 0%, rgba(255, 154, 213, 0.18) 40%, transparent 75%);
-  animation-name: roamC, breatheA, spinB;
-  animation-duration: 47s, 59s, 97s;
-  animation-delay: -17s, -29s, -3s;
-}
-.mb4 {
-  width: 72vmax; height: 72vmax; left: calc(20% - 36vmax); top: calc(72% - 36vmax);
-  background: radial-gradient(circle, rgba(201, 168, 255, 0.52) 0%, rgba(201, 168, 255, 0.19) 40%, transparent 75%);
-  animation-name: roamD, breatheB, spinA;
-  animation-duration: 67s, 41s, 83s;
-  animation-delay: -37s, -19s, -47s;
-}
-.mb5 {
-  width: 64vmax; height: 64vmax; left: calc(50% - 32vmax); top: calc(35% - 32vmax);
-  background: radial-gradient(circle, rgba(255, 159, 107, 0.44) 0%, rgba(255, 159, 107, 0.16) 40%, transparent 75%);
-  animation-name: roamE, breatheA, spinB;
-  animation-duration: 43s, 71s, 101s;
-  animation-delay: -11s, -41s, -23s;
-}
-.mb6 {
-  width: 68vmax; height: 68vmax; left: calc(90% - 34vmax); top: calc(90% - 34vmax);
-  background: radial-gradient(circle, rgba(121, 235, 199, 0.44) 0%, rgba(121, 235, 199, 0.16) 40%, transparent 75%);
-  animation-name: roamB, breatheB, spinA;
-  animation-duration: 59s, 47s, 73s;
-  animation-delay: -31s, -7s, -53s;
-}
-
-/* ---- 漂う経路（ウェイポイントを不揃いに置いて直線的に見せない）---- */
-@keyframes roamA {
-  0%   { translate: -6vmax  4vmax; }
-  18%  { translate:  9vmax -7vmax; }
-  37%  { translate: 14vmax  6vmax; }
-  55%  { translate:  2vmax 13vmax; }
-  71%  { translate: -11vmax 9vmax; }
-  88%  { translate: -8vmax -6vmax; }
-  100% { translate:  5vmax -12vmax; }
-}
-@keyframes roamB {
-  0%   { translate:  8vmax -5vmax; }
-  22%  { translate: -7vmax -11vmax; }
-  41%  { translate: -13vmax 3vmax; }
-  63%  { translate: -2vmax 12vmax; }
-  79%  { translate: 10vmax  8vmax; }
-  100% { translate: 15vmax -3vmax; }
-}
-@keyframes roamC {
-  0%   { translate:  3vmax 10vmax; }
-  16%  { translate: -9vmax  5vmax; }
-  33%  { translate: -12vmax -8vmax; }
-  52%  { translate:  4vmax -13vmax; }
-  68%  { translate: 13vmax -4vmax; }
-  84%  { translate:  7vmax  9vmax; }
-  100% { translate: -5vmax 14vmax; }
-}
-@keyframes roamD {
-  0%   { translate: -10vmax -8vmax; }
-  25%  { translate:  6vmax -12vmax; }
-  44%  { translate: 12vmax  2vmax; }
-  61%  { translate:  1vmax 11vmax; }
-  83%  { translate: -13vmax 6vmax; }
-  100% { translate: -4vmax -10vmax; }
-}
-@keyframes roamE {
-  0%   { translate: 11vmax  7vmax; }
-  19%  { translate:  0vmax 14vmax; }
-  38%  { translate: -12vmax 4vmax; }
-  57%  { translate: -6vmax -10vmax; }
-  74%  { translate:  8vmax -13vmax; }
-  100% { translate: 14vmax -1vmax; }
-}
-
-/* ---- 膨らみ縮み（煙が湧いて散る感じ）---- */
-@keyframes breatheA {
-  0%   { scale: 0.82; }
-  34%  { scale: 1.14; }
-  67%  { scale: 0.94; }
-  100% { scale: 1.22; }
-}
-@keyframes breatheB {
-  0%   { scale: 1.18; }
-  29%  { scale: 0.88; }
-  62%  { scale: 1.26; }
-  100% { scale: 0.96; }
-}
-
-/* ---- ゆっくり回す（勾配の非対称を回して “ねじれ” を出す）---- */
-@keyframes spinA {
-  from { rotate: -24deg; }
-  to   { rotate: 31deg; }
-}
-@keyframes spinB {
-  from { rotate: 27deg; }
-  to   { rotate: -19deg; }
 }
 
 /* ---- HUD ヘッダー ---- */

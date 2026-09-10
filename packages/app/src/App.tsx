@@ -10,7 +10,7 @@ import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
 import { ErrorView } from './components/ErrorView';
-import { Marble } from './components/Marble';
+import { Background } from './components/Background';
 import { RecordsView } from './components/RecordsView';
 import { Toast } from './components/Toast';
 // Drill（訓練）は SPEC §5.6 により一旦 Coming Soon。DrillView 実装はコード上温存（未配線）。
@@ -945,7 +945,7 @@ export function App(): JSX.Element {
   if (session === undefined) {
     return (
       <div className="app">
-        <Marble />
+        <Background />
         <div className="panel solving">
           <div className="spinner" />
           <p>読み込み中…</p>
@@ -958,7 +958,7 @@ export function App(): JSX.Element {
   if (session === null) {
     return (
       <div className="app">
-        <Marble />
+        <Background />
         <Auth configured={isConfigured} />
       </div>
     );
@@ -971,7 +971,7 @@ export function App(): JSX.Element {
 
   return (
     <div className={`app${showTabs ? ' has-tabs' : ''}`}>
-      <Marble />
+      <Background />
       <header className="topbar">
         {back ? (
           <button type="button" className="tb-back" aria-label="戻る" onClick={back}>

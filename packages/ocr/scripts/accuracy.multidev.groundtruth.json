@@ -41,7 +41,7 @@
       "expect": {"ok":true, "heroPos":"CO", "playersLeft":4}
     },
     "index.html(iPhone SE)2.png": {
-      "note": "4-max bb (SE1 と同一局面のBB表示)。**合成モック**なのでチップ保存則を満たさず not_club_match で棄却される＝棄却が正。幾何較正用の素材として read フィールドの採点にのみ使う",
+      "note": "4-max bb (SE1 と同一局面のBB表示)。合成モックのためチップ保存則は満たさないが、ブラインド 100/200/50 が公式表 lv1 に一致するので受理される（さつき指示 2026-09-10）。幾何較正用",
       "blinds": {"sb":0.5,"bb":1}, "ante":0.25, "pot":2.5, "heroHand":"77",
       "seats": {
         "TL": {"occ":"occupied","action":"none","stack":29.8,"bet":0,"button":true},
@@ -51,7 +51,7 @@
         "BC": {"occ":"occupied","action":"none","stack":29.8,"bet":0,"hero":true},
         "BL": {"occ":"empty"}
       },
-      "expect": { "ok": false, "reasonHint": "not_club_match" }
+      "expect": { "ok": true, "heroPos": "CO", "playersLeft": 4 }
     },
     "index.html(iPhone XR)4.png": {
       "note": "3-max chips, TC=D オールイン, hero=BC SB がシャブに直面", "displayMode": "chips",

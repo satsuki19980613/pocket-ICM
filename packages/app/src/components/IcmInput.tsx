@@ -10,8 +10,9 @@ import { useRef } from 'react';
  *        hero=BB かつ未レイズ（ウォーク）を棄却
  *   5. `MAX_PLAYERS = 6`（App.tsx）
  *   6. `extractAnchored`（packages/ocr/src/extractAnchored.ts）… 画面全体のランドマーク前提
- *   7. `chipConsistency`（packages/ocr/src/chipConsistency.ts）… 場のチップ総量が
- *      6人×15,000=90,000 と 15% 以上食い違えば `not-club-skip` → pipeline が棄却
+ *   7. `chipConsistency`（packages/ocr/src/chipConsistency.ts）… ブラインドが公式表に
+ *      一致しない（level=0）**かつ**場のチップ総量が 6人×15,000=90,000 と 15% 以上
+ *      食い違うときだけ `not-club-skip` → pipeline が棄却
  */
 export const READ_CONDITIONS: { title: string; hint: string }[] = [
   { title: 'プリフロップの画面', hint: 'フロップ以降・ストリート表示が読めないものは対象外です' },
@@ -25,7 +26,7 @@ export const READ_CONDITIONS: { title: string; hint: string }[] = [
   { title: '切り抜いていない全画面のスクショ', hint: '一部を切り抜くとスタックやポジションが読み取れません' },
   {
     title: 'クラブマッチの局面',
-    hint: 'ランクマッチなど他モードは対象外です（賞金の配分が違うため計算が合いません）',
+    hint: 'ブラインド構造が公式のもの（通常／ゆっくり／もっとゆっくり）である必要があります',
   },
 ];
 

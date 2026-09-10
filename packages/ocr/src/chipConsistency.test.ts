@@ -147,7 +147,21 @@ describe('chipConsistency', () => {
     expect(out.seats.map((s) => s.stack.value)).toEqual([11.5, 31.9, 22.3, 14.4, 1.5]);
   });
 
-  it('クラブマッチの総チップと 15% 以上食い違えば not-club-skip（棄却させる）', () => {
+  it('登録済みストラクチャに一致（level>0）なら総チップが合わなくても弾かない', () => {
+    // さつき指示 2026-09-10: 公式表（通常/ゆっくり/もっとゆっくり）に当てはまるフレームは
+    // 総チップ保存が成立しなくても棄却しない。チェックが無効化されるだけ（補正もしない）。
+    const r = reads([
+      { id: 'UTG', v: 5 }, { id: 'CO', v: 5 }, { id: 'BU', v: 5 },
+      { id: 'SB', v: 5, c: 0.3 }, { id: 'BB', v: 5 },
+    ]);
+    const withLevel: RawReads = { ...r, blindChips: { sb: 480, bb: 960, ante: 240, level: 9 } };
+    const { reads: out, result } = applyChipConsistency(withLevel);
+    expect(result.mode).not.toBe('not-club-skip');
+    expect(result.applied).toBe(false); // 補正もしない（差が大きすぎる）
+    expect(out.seats.map((s) => s.stack.value)).toEqual([5, 5, 5, 5, 5]);
+  });
+
+  it('表に無い構造（level=0）で総チップと 15% 以上食い違えば not-club-skip（棄却させる）', () => {
     // 合計 25 + 2.75 = 27.75 / 理論 93.75 → 70% 乖離。別モードのスクショか重大誤読。
     const r = reads([
       { id: 'UTG', v: 5 }, { id: 'CO', v: 5 }, { id: 'BU', v: 5 },

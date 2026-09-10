@@ -158,7 +158,7 @@
       "expect": { "ok": true, "heroPos": "SB", "playersLeft": 5 }
     },
     "Screenshot_20260902-124600.png": {
-      "note": "2p HU BB建て。**クラブマッチではない**（総チップ 29.5+19.7+2.0=51.2BB×780 ≒ 40,000 = 2人×20,000。クラブマッチは 6人×15,000=90,000）。ポットはアンティ200×2+390+780 と 2 人ぶんで一致。棄却が正（not_club_match）。読み自体は正しいので read フィールドは従来どおり採点する",
+      "note": "2p HU BB建て, hero SB(=BTN) first-in 未オープン。ブラインド 390/780/200 は公式「通常」lv5 に一致するため受理する（さつき指示 2026-09-10: 登録済みストラクチャに当てはまるものは弾かない）。なお場のチップ総量は 29.5+19.7+2.0=51.2BB×780 ≒ 40,000 で 6人×15,000=90,000 とは合わない（総チップ保存チェックは無効化されるだけ）",
       "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.2564, "pot": 2.0, "heroHand": "K5s",
       "seats": {
         "TL": { "occ": "empty" },
@@ -168,7 +168,7 @@
         "BC": { "occ": "occupied", "action": "none", "stack": 19.7, "bet": 0.5, "hero": true, "button": true },
         "BL": { "occ": "empty" }
       },
-      "expect": { "ok": false, "reasonHint": "not_club_match" }
+      "expect": { "ok": true, "heroPos": "SB", "playersLeft": 2 }
     },
     "Screenshot_20260902-114544.png": {
       "note": "5p BB建て 200/400, hero CO first-in (UTG fold)。既知: BL stack 29.4→19.4 低conf",

@@ -18,3 +18,9 @@ verify_jwt = true
 
 [functions.delete-account]
 verify_jwt = true
+
+# purge-images はユーザーセッションではなく GitHub Actions からの共有トークン（PURGE_TOKEN）で
+# 認可する（cron 専用ジョブ）。Bearer に入るのは JWT ではないので、ゲートウェイの JWT 検証は切る。
+# 認可は関数内の PURGE_TOKEN 一致チェックで担保する（未設定なら 500、不一致なら 401）。
+[functions.purge-images]
+verify_jwt = false

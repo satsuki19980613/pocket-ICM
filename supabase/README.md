@@ -91,6 +91,9 @@ Docker は不要（deploy はネイティブバンドル）。
    ```
    - `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` は Supabase 側で**自動注入**されるため、Secret 設定は不要。
    - JWT 検証は既定のまま（anon キーが JWT なので signup も通る／管理関数は本人セッションで通る）。
+     ただし **`purge-images` は `verify_jwt = false`**（config.toml に記載済み）。GitHub Actions は
+     Bearer に JWT ではなく共有トークンを載せるため、検証を切らないと**ゲートウェイが 401 を返して
+     関数まで届かない**（認可は関数内の PURGE_TOKEN 一致チェックで担保する）。
    - `purge-images` だけは追加で **`PURGE_TOKEN`** という関数用 Secret が要る（ユーザーセッションではなく
      GitHub Actions からの共有トークンで認可するため）。次のいずれかで設定:
      ```

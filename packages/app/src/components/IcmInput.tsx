@@ -8,7 +8,8 @@ import { useRef } from 'react';
  *   2. `prefill.ts` の `reads.displayMode !== 'bb'` 判定・`CHIPS_MODE_ISSUE`
  *   3-4. `detectOutOfScope`（packages/ocr/src/spotReconstruction.ts）… raise / 非オールイン call /
  *        hero=BB かつ未レイズ（ウォーク）を棄却
- *   5. `MAX_PLAYERS = 6`（App.tsx）
+ *   5. `MAX_PLAYERS = 6`（App.tsx）… 実装の保険としては残すが、ポーカーチェイス自体が
+ *      6人までなので**チェックリストには出さない**（さつき指示 2026-09-10）
  *   6. `extractAnchored`（packages/ocr/src/extractAnchored.ts）… 画面全体のランドマーク前提
  *   7. `chipConsistency`（packages/ocr/src/chipConsistency.ts）… ブラインドが公式表に
  *      一致しない（level=0）**かつ**場のチップ総量が 6人×15,000=90,000 と 15% 以上
@@ -22,10 +23,9 @@ export const READ_CONDITIONS: { title: string; hint: string }[] = [
     hint: 'レイズ・ミニレイズ・3bet・リンプ（非オールインへのコール）が入った局面は対象外です',
   },
   { title: '自分の判断がある場面', hint: '全員フォールドで BB に手番が回ったウォークは対象外です' },
-  { title: '2〜6人の局面', hint: '7人以上には対応していません' },
   { title: '切り抜いていない全画面のスクショ', hint: '一部を切り抜くとスタックやポジションが読み取れません' },
   {
-    title: 'クラブマッチの局面',
+    title: 'Sit & Go の局面',
     hint: 'ブラインド構造が公式のもの（通常／ゆっくり／もっとゆっくり）である必要があります',
   },
 ];

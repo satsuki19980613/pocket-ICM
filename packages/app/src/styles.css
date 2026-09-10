@@ -97,7 +97,7 @@ body::before {
   min-height: 100dvh;
   /* 半透明にして背後の流動マーブル（.marble）を薄く透かす。負 z-index の .marble は
      祖先の不透明背景に隠れるため、ここは必ず rgba（透け）にする。 */
-  background: rgba(12, 13, 10, 0.28);
+  background: rgba(12, 13, 10, 0.34);
   border-left: 1px solid #14150e;
   border-right: 1px solid #14150e;
 }
@@ -112,11 +112,20 @@ body::before {
 .marble {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   overflow: hidden;
   pointer-events: none;
   background: var(--bg2);
 }
+/* 0/1 デジタルレイン（DigitalRain.tsx）。マーブルの上・アプリ面の下に敷く前景。 */
+.rain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+
 .mb {
   position: absolute;
   display: block;

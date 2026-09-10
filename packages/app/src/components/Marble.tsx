@@ -1,3 +1,5 @@
+import { DigitalRain } from './DigitalRain';
+
 /**
  * 背景の流動マーブル（煙）。最深部の固定レイヤーで、アプリ面（半透明）越しに透ける。
  *
@@ -15,10 +17,13 @@
  */
 export function Marble(): JSX.Element {
   return (
-    <div className="marble" aria-hidden="true">
-      {[1, 2, 3, 4, 5, 6].map((n) => (
-        <span key={n} className={`mb mb${n}`} />
-      ))}
-    </div>
+    <>
+      <div className="marble" aria-hidden="true">
+        {[1, 2, 3, 4, 5, 6].map((n) => (
+          <span key={n} className={`mb mb${n}`} />
+        ))}
+      </div>
+      <DigitalRain />
+    </>
   );
 }

@@ -15,7 +15,8 @@ export type Screen =
   | 'result'
   | 'error'
   | 'history'
-  | 'drill'
+  | 'training'
+  | 'slumbot'
   | 'settings'
   | 'admin';
 
@@ -33,7 +34,7 @@ export function screenDepth(screen: Screen, ctx: NavContext = NAV_CONTEXT_ROOT):
     case 'home':
       return 0;
     case 'icm':
-    case 'drill':
+    case 'training':
     case 'history':
     case 'settings':
     case 'thread':
@@ -43,6 +44,9 @@ export function screenDepth(screen: Screen, ctx: NavContext = NAV_CONTEXT_ROOT):
     case 'confirm':
     case 'error':
     case 'admin':
+    // Training ハブ（深さ1）から潜る機能画面。
+    // ランキングは画面ではなく重なり（backLayers）なのでここには無い。
+    case 'slumbot':
       return 2;
     case 'result':
       // 記録タブ（深さ1）からもスレッド（深さ1）からも、その1つ下。

@@ -6,6 +6,9 @@ Black Ops ICM のサーバ基盤（Auth / DB / RLS / 招待キー / 上限 / 管
 このディレクトリの中身:
 - `migrations/0001〜0005_*.sql` … M1: スキーマ / 関数 / RLS / Storage / 初期データ
 - `migrations/0006_beta.sql` … M8(βテスト仕上げ WP-A1): 非同期計算・画像保存・OCR データ基盤・通常投稿（SPEC v3）
+- `migrations/0007_hu_stats.sql` … Training ▸ Slumbot HU の通算成績とランキング（SPEC §7.4.3）。
+  0001〜0006 適用済みの既存プロジェクトに追加で流す。`hu_stats` テーブル（owner / hands / net_chips）と
+  加算用 RPC `hu_add_result(int, bigint)` ができる。テーブルへの直接書き込みは RLS で拒否される。
 - `functions/*` … Edge Function（signup / issue-invite / revoke-invite / set-max-accounts / delete-account / purge-images）
 - `scripts/gen-invite.mjs` … 初回アカウント用ブートストラップ招待キー生成
 - `scripts/m1-verify.mjs` / `scripts/m8-verify.mjs` … サーバ側の拒否・スキーマ存在の検証スクリプト

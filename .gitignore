@@ -42,3 +42,5 @@ packages/*/.env.local
 
 # Supabase CLI ローカル状態
 supabase/.temp/
+# wrangler dev のローカル状態（workerd のキャッシュ等）。
+.wrangler/

@@ -18,7 +18,7 @@ type Phase = 'config' | 'loading' | 'answering' | 'revealed' | 'summary';
 const ACT_JA: Record<HeroAction, string> = { PUSH: 'ALL IN', FOLD: 'FOLD' };
 
 /**
- * Drill（§7.4 トレーニング）画面。ランタイム出題→ポーカーテーブル→FOLD/ALL IN→開示→次へ。
+ * Training（§7.4 トレーニング）画面。ドリル（AOF 出題）モード。ランタイム出題→ポーカーテーブル→FOLD/ALL IN→開示→次へ。
  * 求解は単一 Worker が直列化するので、回答中に「次の手札」を裏で先読み求解しておく
  * （さつき承認: 速い卓 2〜4 人に限定＋パイプライン）。
  */
@@ -93,7 +93,7 @@ export function DrillView(props: { onExit: () => void }): JSX.Element {
     return (
       <div className="drill-wrap">
         <div className="panel">
-          <div className="scr-h sm">ドリル設定</div>
+          <div className="scr-h sm">トレーニング設定</div>
           <label className="lbl">出題する残り人数</label>
           <div className="seg">
             {[2, 3, 4].map((n) => (
@@ -113,7 +113,7 @@ export function DrillView(props: { onExit: () => void }): JSX.Element {
         </div>
         {failed && <div className="panel err-view"><ul className="issues"><li>局面の生成に失敗しました。もう一度お試しください。</li></ul></div>}
         <button type="button" className="btn wide" disabled={counts.length === 0} onClick={() => void begin()}>
-          ドリル開始
+          トレーニング開始
         </button>
         <button type="button" className="btn ghost wide" onClick={props.onExit}>
           戻る

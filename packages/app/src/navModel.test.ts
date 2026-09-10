@@ -8,7 +8,7 @@ import { screenDepth, type Screen } from './navModel';
  */
 const PARENT: Record<Exclude<Screen, 'home'>, Screen> = {
   icm: 'home',
-  drill: 'home',
+  training: 'home',
   history: 'home',
   settings: 'home',
   thread: 'home',
@@ -16,6 +16,7 @@ const PARENT: Record<Exclude<Screen, 'home'>, Screen> = {
   confirm: 'icm',
   error: 'icm',
   admin: 'settings',
+  slumbot: 'training',
   result: 'history', // スレッド経由でも戻り先は深さ1の thread なので同じ
 };
 

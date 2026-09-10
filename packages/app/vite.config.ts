@@ -33,6 +33,10 @@ export default defineConfig({
         // 新デプロイ時に旧バージョンの precache を確実に破棄する（旧UIが居座らないように）。
         // registerType:'autoUpdate' は skipWaiting/clientsClaim を有効化＝新SWが即座に支配。
         cleanupOutdatedCaches: true,
+        // Slumbot 中継（/api/slumbot/*）は Service Worker に一切触らせない。
+        // POST なので precache 対象外だが、ナビゲーション fallback で index.html を
+        // 返されると通信エラーの原因が分からなくなるため明示的に除外する。
+        navigateFallbackDenylist: [/^\/api\//],
         // 4人テーブル(f16, ~11MB)・3-wayオールイン結果テーブル(u16, ~21MB)は precache しない
         // （インストールを重くしない）。初回の4人求解／5〜6人求解で fetch →
         // runtimeCaching(CacheFirst)でキャッシュ＝以後オフライン可。
@@ -66,5 +70,15 @@ export default defineConfig({
   server: {
     // モノレポ: solver/artifacts の .bin/.meta を ?url で参照するため上位を許可。
     fs: { allow: ['../..'] },
+    // 開発時の Slumbot 中継。本番は Cloudflare Worker（worker/index.ts）が同じ形で受ける。
+    // 上流は OPTIONS プリフライトを拒否するため、ブラウザから直接は叩けない。
+    proxy: {
+      '/api/slumbot': {
+        target: 'https://slumbot.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path: string) => path.replace(/^\/api\/slumbot/, '/slumbot/api'),
+      },
+    },
   },
 });

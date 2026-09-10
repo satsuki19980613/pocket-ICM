@@ -13,8 +13,11 @@ import { ErrorView } from './components/ErrorView';
 import { Background } from './components/Background';
 import { RecordsView } from './components/RecordsView';
 import { Toast } from './components/Toast';
-// Drill（訓練）は SPEC §5.6 により一旦 Coming Soon。DrillView 実装はコード上温存（未配線）。
-import { ComingSoon } from './components/ComingSoon';
+// Training（訓練）タブ。ハブ画面から各機能へ送り出す（SPEC §7.4）。
+// AOF ドリル（DrillView）はハブ上で Coming Soon 扱いのまま（実装はコード上温存）。
+import { TrainingHub } from './components/TrainingHub';
+import { SlumbotView } from './components/SlumbotView';
+import { RankingModal } from './components/RankingModal';
 import { Home, type FeedState } from './components/Home';
 import { Thread } from './components/Thread';
 import { UserPub } from './components/UserPub';
@@ -108,13 +111,14 @@ const TITLES: Record<Screen, string> = {
   result: '計算結果',
   error: '条件確認',
   history: '記録',
-  drill: 'Training',
+  training: 'Training',
+  slumbot: 'Slumbot HU',
   settings: '設定',
   admin: 'クラブ管理',
 };
 
 /** 下段タブを出す画面（トップレベル）。フロー中は隠す。 */
-const TAB_SCREENS: Screen[] = ['home', 'icm', 'drill', 'history', 'settings'];
+const TAB_SCREENS: Screen[] = ['home', 'icm', 'training', 'history', 'settings'];
 
 /** 画面 → アクティブなタブ（history は「記録」タブ、settings は「設定」タブ）。 */
 function tabForScreen(s: Screen): TabKey | null {
@@ -123,8 +127,9 @@ function tabForScreen(s: Screen): TabKey | null {
       return 'home';
     case 'icm':
       return 'icm';
-    case 'drill':
-      return 'drill';
+    case 'training':
+    case 'slumbot':
+      return 'training';
     case 'history':
       return 'records';
     case 'settings':
@@ -287,6 +292,9 @@ export function App(): JSX.Element {
   const [pubFrom, setPubFrom] = useState<Screen>('home');
   // 通常投稿コンポーザ（v3・ホームの FAB から開く。計算は ICM タブに一本化, SPEC §5.1.2）。
   const [composerOpen, setComposerOpen] = useState(false);
+  // ランキング（Training 系画面のヘッダ右上 ▲）。画面遷移にすると対局中のハンドが
+  // 消えるので、重なりとして開く（端末の戻るで閉じるのは backLayers が面倒を見る）。
+  const [rankingOpen, setRankingOpen] = useState(false);
 
   /**
    * 記録タブの再取得（SPEC §9.4）。まずローカルキャッシュを描き、サーバ取得が済み次第
@@ -899,8 +907,8 @@ export function App(): JSX.Element {
       case 'icm':
         setScreen('icm');
         break;
-      case 'drill':
-        setScreen('drill');
+      case 'training':
+        setScreen('training');
         break;
       case 'records':
         void refreshRecords();
@@ -920,6 +928,8 @@ export function App(): JSX.Element {
         return () => setScreen('icm');
       case 'admin':
         return () => setScreen('settings');
+      case 'slumbot':
+        return () => setScreen('training');
       case 'thread':
         return () => setScreen('home');
       case 'userpub':
@@ -1019,11 +1029,13 @@ export function App(): JSX.Element {
   const back = backFor(screen);
   const activeTab = tabForScreen(screen);
   const jobRunning = solveJob.status === 'running';
+  // ランキングは Training 系の画面だけ。ヘッダ左右の幅をそろえてタイトルを中央に保つ。
+  const showRanking = screen === 'training' || screen === 'slumbot';
 
   return (
     <div className={`app${showTabs ? ' has-tabs' : ''}`}>
       <Background />
-      <header className="topbar">
+      <header className={`topbar${showRanking ? ' has-rank' : ''}`}>
         {back ? (
           <button type="button" className="tb-back" aria-label="戻る" onClick={back}>
             ‹
@@ -1032,7 +1044,14 @@ export function App(): JSX.Element {
           <span className="tb-sp" />
         )}
         <h1 className="tb-title">{TITLES[screen]}</h1>
-        <span className="tb-sp" />
+        {showRanking ? (
+          <button type="button" className="tb-rank" onClick={() => setRankingOpen(true)}>
+            <span className="tb-rank-ic">▲</span>
+            RANKING
+          </button>
+        ) : (
+          <span className="tb-sp" />
+        )}
       </header>
 
       {screen === 'home' && (
@@ -1156,12 +1175,13 @@ export function App(): JSX.Element {
         />
       )}
 
-      {screen === 'drill' && (
-        <ComingSoon
-          title="Training"
-          body="ランダム出題でオールイン判断を鍛えるモードを準備中です。"
-        />
+      {screen === 'training' && (
+        <TrainingHub onOpenSlumbot={() => setScreen('slumbot')} />
       )}
+
+      {screen === 'slumbot' && <SlumbotView onExit={() => setScreen('training')} />}
+
+      {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 
       {screen === 'settings' && (
         <Settings onBack={() => setScreen('icm')} onOpenAdmin={() => setScreen('admin')} />

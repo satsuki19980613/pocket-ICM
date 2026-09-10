@@ -54,6 +54,7 @@
 
   /* ---- 面取りクリップ（CP2077 プレート） ---- */
   --chamfer: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  --chamfer-sm: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 
   --ease: cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -596,6 +597,38 @@ select.inp { appearance: none; cursor: pointer; }
   text-align: center;
 }
 .tb-sp { width: 24px; flex: none; }
+/* ヘッダ右上のランキング（Training 系画面のみ）。左の ‹ と同じ幅で天秤を取る。 */
+/* ヘッダ右上の RANKING（Training 系画面のみ）。記号だけでは意味が伝わらないので文字を出す。 */
+.tb-rank {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  /* 左のスロット幅（.topbar.has-rank .tb-back）と同じにして、タイトルを真ん中に保つ。 */
+  width: 76px;
+  justify-content: center;
+  background: rgba(252, 238, 10, 0.08);
+  border: 1px solid rgba(252, 238, 10, 0.5);
+  clip-path: var(--chamfer-sm);
+  color: var(--yellow);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 150ms var(--ease);
+}
+.tb-rank-ic { font-size: 8px; }
+.tb-rank:hover { background: rgba(252, 238, 10, 0.16); box-shadow: 0 0 10px rgba(252, 238, 10, 0.3); }
+/* 指で押せる範囲だけ少し広げる（レイアウトは動かさない）。 */
+.tb-rank::after { content: ''; position: absolute; inset: -8px; }
+/* 左右の枠を同じ幅にして、タイトルを画面の真ん中に保つ。 */
+.topbar.has-rank .tb-back,
+.topbar.has-rank .tb-sp { width: 76px; }
+.topbar.has-rank .tb-back { text-align: left; justify-items: start; }
 
 .tabs {
   position: fixed;
@@ -1226,7 +1259,10 @@ button.cell { cursor: pointer; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  /* 下段タブ(60)と FAB(61) より前。トースト(70)と元画像モーダル(80)には譲る。
+     タブが出ている画面（Training ハブ等）でモーダルを開くと、50 のままだと
+     タブバーがシートの下端に被さってしまう。 */
+  z-index: 65;
   background: rgba(3, 4, 2, 0.72);
   display: flex;
   align-items: flex-end;
@@ -1998,3 +2034,586 @@ button.cell { cursor: pointer; }
 .h-row { display: flex; align-items: center; gap: var(--s2); }
 .h-row .scr-h { margin: 0; }
 .confirm-head .infomark { margin-right: auto; }
+
+/* =====================================================================
+   Training タブ（SPEC §7.4）
+   ハブ → Slumbot HU / AOF ドリル(準備中) / ランキング
+   ===================================================================== */
+
+/* ---- ハブ（機能メニュー） ---- */
+.tr-menu { display: flex; flex-direction: column; gap: var(--s2); }
+.tr-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  padding: var(--s4) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--chamfer);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  transition: all 150ms var(--ease);
+}
+.tr-card:hover:not(:disabled) { border-color: var(--cyan); background: rgba(58, 230, 255, 0.05); }
+.tr-card:disabled { cursor: default; opacity: 0.55; }
+.tr-glyph { flex: none; width: 26px; text-align: center; font-size: 21px; color: var(--yellow); }
+.tr-card.soon .tr-glyph { color: var(--dim2); }
+.tr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tr-title { font-family: var(--disp); font-size: 16px; font-weight: 700; letter-spacing: 0.03em; }
+.tr-sub { font-size: 11.5px; color: var(--dim2); line-height: 1.5; }
+.tr-go { flex: none; font-size: 20px; color: var(--dim2); }
+.tr-badge {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  padding: 3px 6px;
+  border: 1px solid var(--line-2);
+  color: var(--dim2);
+}
+.tr-mine { margin-top: var(--s4); }
+.statval.loss { color: var(--red); }
+
+/* 卓のトリム用アイスブルー。ブランド三色（黄/赤/シアン）とは別に、
+   ガラス面のエッジ（＝光が回り込んだ縁）を表すためだけに使う。 */
+.sb-wrap {
+  --trim: #bfe6ff;
+  --trim-soft: rgba(150, 210, 255, 0.42);
+}
+
+/* 卓を画面の高さいっぱいに伸ばし、操作ボタンが常に画面の底に来るようにする。
+   引く 103px は .app の上下パディングとヘッダ（.topbar）の実測ぶん。 */
+.sb-wrap {
+  display: flex;
+  flex-direction: column;
+  /* dvh 非対応ブラウザ向けのフォールバックを先に置く。 */
+  min-height: calc(100vh - 103px);
+  /* 下段タブを出さない画面なので、ホームバーぶんはここで自前に確保する。 */
+  min-height: calc(100dvh - 103px - env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sb-wrap > .sb-hud,
+.sb-wrap > .sb-sizer,
+.sb-wrap > .sb-actions,
+.sb-wrap > .sb-result,
+.sb-wrap > .btnrow {
+  flex: none;
+}
+/* 卓との間に最低限の間隔を残す（余りは卓の margin-bottom:auto が吸う）。 */
+.sb-wrap > .sb-sizer,
+.sb-wrap > .sb-actions,
+.sb-wrap > .sb-result {
+  margin-top: var(--s3);
+}
+.sb-sizer + .sb-actions { margin-top: 0; }
+
+/* ---- Slumbot HU: セッション HUD ---- */
+.sb-hud {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 9px var(--s3);
+  margin-bottom: var(--s2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.sb-hud .dh-item { flex: 1; }
+.sb-hud .dh-item b.up { color: var(--yellow); }
+.sb-hud .dh-item b.down { color: var(--red); }
+.sb-gear {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sb-gear:hover { border-color: var(--cyan); background: rgba(58, 230, 255, 0.08); }
+
+/* ---- Slumbot HU: 卓（ヘッズアップなので上下 2 席だけ） ---- */
+.sb-felt {
+  position: relative;
+  width: 100%;
+  /* ストリートやプリセットの行数で伸び縮みしないよう、高さはビューポートだけから決める。
+     引く 424px は「ヘッダ＋HUD＋プリセット最大3行（ポストフロップ13個）＋スライダー
+     ＋ボタン＋上下の余白」の実測ぶん。余った空間は margin-bottom:auto が吸うので、
+     卓の位置と大きさはストリートに関係なく常に動かない。 */
+  height: clamp(270px, calc(100dvh - 424px), 420px);
+  flex: none;
+  margin-bottom: auto;
+  /* 真円/楕円。内側のリングはこれを縮小コピーするので、縁と形が必ず一致する。 */
+  border-radius: 50%;
+  /* ラシャではなく「青いガラスのディスプレイ」。半透明にして背後のデジタルレインを
+     透かし、backdrop-filter でその像をぼかす＝厚みのあるガラスに見せる。 */
+  border: 1px solid rgba(190, 232, 255, 0.5);
+  background:
+    /* 上端から差し込む映り込み */
+    linear-gradient(176deg, rgba(255, 255, 255, 0.1), transparent 30%),
+    /* 画面のバックライト */
+    radial-gradient(48% 38% at 50% 42%, rgba(58, 230, 255, 0.17), transparent 72%),
+    /* ガラスの厚み（奥ほど深い青） */
+    radial-gradient(
+      118% 94% at 50% 34%,
+      rgba(46, 128, 196, 0.22) 0%,
+      rgba(22, 70, 134, 0.24) 42%,
+      rgba(10, 32, 74, 0.3) 76%,
+      rgba(6, 18, 44, 0.36) 100%
+    );
+  backdrop-filter: blur(5px) saturate(1.3);
+  -webkit-backdrop-filter: blur(5px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 0 46px rgba(58, 230, 255, 0.1),
+    inset 0 -18px 40px rgba(0, 0, 0, 0.22),
+    0 0 30px rgba(58, 230, 255, 0.24),
+    0 0 0 6px rgba(10, 16, 24, 0.75),
+    0 0 0 7px var(--trim-soft),
+    0 12px 34px rgba(0, 0, 0, 0.55);
+}
+/* ガラス面に刻まれたベットライン。inset で内側に寄せると縁と曲率が合わなくなるので、
+   同じ形を transform で縮小して重ねる＝必ず縁と相似な同心リングになる。 */
+.sb-felt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transform: scale(0.86);
+  border: 1px solid rgba(190, 232, 255, 0.2);
+  box-shadow: inset 0 0 40px rgba(3, 12, 30, 0.32), 0 0 14px rgba(58, 230, 255, 0.1);
+  pointer-events: none;
+}
+/* ガラスを斜めに走る反射だけ（画素グリッドは廃止）。 */
+.sb-felt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    114deg,
+    transparent 24%,
+    rgba(255, 255, 255, 0.06) 40%,
+    transparent 52%
+  );
+}
+
+.sb-seat {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.sb-seat.bot { top: 11%; }
+.sb-seat.hero { top: 89%; }
+
+.sb-plate {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px 10px;
+  background: rgba(4, 10, 22, 0.82);
+  border: 1px solid rgba(190, 232, 255, 0.4);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  clip-path: var(--chamfer);
+}
+.sb-seat.hero .sb-plate { border-color: var(--yellow); box-shadow: 0 0 10px rgba(252, 238, 10, 0.25); }
+.sb-seat.active .sb-plate { border-color: var(--yellow); animation: turnpulse 1.5s infinite; }
+.sb-pos {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 2px;
+  color: #16150d;
+}
+.sb-pos.p-sb { background: var(--sb); }
+.sb-pos.p-bb { background: var(--bb-c); }
+.sb-stack { font-family: var(--mono); font-size: 12px; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* 出したチップ（卓の中心側に置く） */
+.sb-bet {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: rgba(58, 230, 255, 0.14);
+  border: 1px solid rgba(58, 230, 255, 0.5);
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* チップは短いので席の横に。長い吹き出しと場所を分ける。 */
+.sb-bet { left: calc(100% + 8px); top: 58%; transform: translateY(-50%); }
+
+/* 直前のアクション（相手の手を読ませる）。
+   席の上下に中央寄せで置く。横に出すと "ALL IN 199.5bb" のような長いラベルが
+   320px 幅の端末で画面外へはみ出す（並列レビューで指摘）。 */
+.sb-bubble {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+}
+.sb-seat.bot .sb-bubble { top: calc(100% + 4px); }
+.sb-seat.hero .sb-bubble { bottom: calc(100% + 4px); }
+.sb-bubble.thinking { color: var(--cyan); border-color: rgba(58, 230, 255, 0.45); background: rgba(58, 230, 255, 0.08); }
+.sb-dots::after { content: '...'; animation: sb-dots 1.1s ease-in-out infinite; }
+@keyframes sb-dots { 0% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+
+/* 配っている間（次のハンド待ち）。卓の枠だけ残して中身を差し替える。 */
+.sb-dealing { display: flex; align-items: center; justify-content: center; }
+.sb-deal { display: flex; flex-direction: column; align-items: center; gap: var(--s2); text-align: center; }
+.sb-deal p { margin: 0; font-size: 12.5px; color: var(--dim); }
+.sb-deal p.sub { font-size: 11px; color: var(--dim2); }
+.sb-gear-sp { flex: none; width: 34px; }
+
+/* 卓の中央（ポット・ボード・ストリート） */
+.sb-mid {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.sb-potline { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+.sb-pot-lbl { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--trim); }
+.sb-pot-val {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(58, 230, 255, 0.6), 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+.sb-spr { font-family: var(--mono); font-size: 10px; color: var(--dim2); }
+.sb-board { display: flex; gap: 4px; }
+.sb-slot {
+  width: 30px;
+  height: 42px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(190, 232, 255, 0.4);
+  background: rgba(4, 14, 32, 0.42);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.sb-street {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: rgba(252, 238, 10, 0.72);
+}
+
+/* hero の手札だけ大きく（唯一の高輝度フォーカス） */
+.pt-card.sb-big { width: 38px; height: 53px; }
+.pt-card.sb-big .pt-rank { font-size: 20px; }
+.pt-card.sb-big .pt-suit { font-size: 16px; }
+
+/* ---- Slumbot HU: ハンド結果 ---- */
+.sb-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s3);
+  margin-bottom: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--chamfer);
+}
+.sb-result.win { border-color: rgba(252, 238, 10, 0.5); }
+.sb-result.lose { border-color: rgba(255, 59, 59, 0.45); }
+.sb-result-lbl { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; color: var(--dim2); }
+.sb-result-val { font-family: var(--disp); font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sb-result.win .sb-result-val { color: var(--yellow); }
+.sb-result.lose .sb-result-val { color: var(--red); }
+.sb-result-unit { font-size: 14px; color: var(--dim); margin-left: 3px; }
+
+/* ---- Slumbot HU: ベットサイズ選択 ---- */
+.sb-sizer { margin-bottom: var(--s3); }
+.sb-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 5px;
+  margin-bottom: var(--s3);
+}
+.sb-preset {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  padding: 8px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-family: var(--disp);
+  cursor: pointer;
+  transition: all 120ms var(--ease);
+}
+.sb-preset-v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sb-preset-u { font-size: 9.5px; color: var(--dim2); }
+.sb-preset.on { background: rgba(58, 230, 255, 0.12); border-color: var(--cyan); color: var(--cyan); }
+.sb-preset.on .sb-preset-u { color: var(--cyan); }
+.sb-preset:disabled { opacity: 0.4; cursor: default; }
+
+.sb-slide { display: flex; align-items: center; gap: var(--s3); }
+.sb-range {
+  flex: 1;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.sb-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(58, 230, 255, 0.5);
+  cursor: pointer;
+}
+.sb-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: pointer;
+}
+.sb-range:disabled { opacity: 0.4; }
+.sb-stepper { flex: none; display: flex; align-items: center; gap: 2px; }
+.sb-step {
+  width: 34px;
+  height: 34px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sb-step:disabled { opacity: 0.35; cursor: default; }
+.sb-amount { min-width: 62px; text-align: center; font-family: var(--disp); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sb-amount-u { font-size: 10px; color: var(--dim2); margin-left: 2px; }
+
+/* ---- Slumbot HU: アクションボタン ---- */
+.sb-actions { display: flex; gap: var(--s2); }
+.sb-act {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 14px 4px;
+  border: 1px solid;
+  clip-path: var(--chamfer);
+  font-family: var(--disp);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: filter 120ms var(--ease);
+}
+.sb-act:hover:not(:disabled) { filter: brightness(1.15); }
+.sb-act:disabled { opacity: 0.35; cursor: default; }
+.sb-act-sub { font-family: var(--mono); font-size: 11px; font-weight: 400; letter-spacing: 0.02em; opacity: 0.85; }
+.sb-act.fold { background: rgba(255, 59, 59, 0.1); border-color: var(--red); color: var(--red); }
+.sb-act.check,
+.sb-act.call { background: rgba(58, 230, 255, 0.12); border-color: var(--cyan); color: var(--cyan); }
+.sb-act.raise { background: var(--yellow); border-color: var(--yellow); color: var(--yellow-ink); }
+
+/* ---- Slumbot HU: 設定モーダル ---- */
+.bs-tabs { flex: none; display: flex; border-bottom: 1px solid var(--line); }
+.bs-tab {
+  flex: 1;
+  padding: 12px 0;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bs-tab.on { color: var(--fg); border-bottom-color: var(--yellow); }
+.bs-body { padding-bottom: var(--s6); }
+.bs-h { display: flex; align-items: baseline; gap: var(--s2); margin: var(--s5) 0 var(--s2); font-family: var(--disp); font-size: 13px; font-weight: 700; }
+.bs-handle .bs-h { margin-top: 0; }
+.bs-h-val { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.bs-seg { display: flex; gap: var(--s1); }
+
+/* 調整単位（目盛り付きの離散スライダー） */
+.bs-units { position: relative; display: flex; justify-content: space-between; padding-top: 9px; }
+.bs-units::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 15px;
+  height: 2px;
+  background: var(--line-2);
+}
+.bs-unit-dot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.bs-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--line-2); border: 2px solid var(--bg); }
+.bs-unit-dot.filled .bs-dot { background: var(--cyan); }
+.bs-unit-dot.on .bs-dot {
+  width: 17px;
+  height: 17px;
+  margin: -3px 0;
+  background: var(--fg);
+  box-shadow: 0 0 8px rgba(58, 230, 255, 0.55);
+}
+.bs-dot-l { font-family: var(--mono); font-size: 10px; color: var(--dim2); }
+.bs-unit-dot.on .bs-dot-l { color: var(--fg); }
+
+/* カテゴリごとのプリセット編集 */
+.bs-cat { margin-top: var(--s5); }
+.bs-cat-head { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: var(--s2); }
+.bs-cat-name { font-family: var(--disp); font-size: 13.5px; font-weight: 700; }
+.bs-reset { margin-left: auto; padding: 2px 0; background: none; border: 0; color: var(--cyan); font-size: 11px; cursor: pointer; }
+.bs-add { display: flex; align-items: center; gap: 6px; margin-bottom: var(--s2); }
+.bs-num {
+  width: 88px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.bs-unit-seg { display: flex; }
+.bs-unit {
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--dim2);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+.bs-unit + .bs-unit { border-left: 0; }
+.bs-unit.on { background: var(--surface-3); color: var(--fg); border-color: var(--line-2); }
+.bs-unit-fixed { padding: 8px 4px; font-family: var(--mono); font-size: 12px; color: var(--dim2); }
+.bs-addbtn {
+  margin-left: auto;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid rgba(58, 230, 255, 0.4);
+  color: var(--cyan);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bs-addbtn:disabled { border-color: var(--line); color: var(--dim2); opacity: 0.6; cursor: default; }
+.bs-err { margin: 0 0 var(--s2); font-size: 11.5px; color: var(--red); }
+.bs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bs-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 6px 8px;
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.45);
+  color: var(--fg);
+  font-family: var(--disp);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bs-chip-u { font-size: 9.5px; color: var(--dim); }
+.bs-chip-x { margin-left: 3px; font-size: 11px; color: var(--red); }
+.bs-chip.max { background: var(--surface-2); border-color: var(--line-2); color: var(--dim); cursor: default; }
+.bs-count { margin-top: 6px; text-align: right; font-family: var(--mono); font-size: 10.5px; color: var(--dim2); }
+
+/* ゲーム設定タブ */
+.bs-fixed { padding: var(--s3); background: var(--surface); border: 1px solid var(--line); }
+.bs-fixed-h { margin-bottom: var(--s2); font-family: var(--disp); font-size: 12px; font-weight: 700; color: var(--dim); }
+.bs-fixed-list { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.bs-fixed-list > div { display: flex; gap: var(--s3); }
+.bs-fixed-list dt { flex: none; width: 86px; font-size: 12px; color: var(--dim2); }
+.bs-fixed-list dd { margin: 0; font-size: 12px; color: var(--fg); font-family: var(--mono); }
+.bs-note { margin: var(--s2) 0 0; font-size: 11px; color: var(--dim2); line-height: 1.6; }
+.bs-toggle { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s4); font-size: 13px; cursor: pointer; }
+.bs-toggle input { width: 18px; height: 18px; accent-color: var(--yellow); }
+
+/* ---- ランキング ---- */
+.rk-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s2) var(--s2);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--dim2);
+  text-transform: uppercase;
+}
+.rk-h-rank { flex: none; width: 22px; }
+.rk-h-name { flex: 1; margin-left: 26px; }
+.rk-h-hands { flex: none; width: 46px; text-align: right; }
+.rk-h-net { flex: none; width: 76px; text-align: right; }
+.rk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rk-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 9px var(--s2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.rk-row.me { border-color: var(--yellow); background: rgba(252, 238, 10, 0.06); }
+.rk-rank { flex: none; width: 22px; text-align: center; font-family: var(--disp); font-size: 15px; font-weight: 700; color: var(--dim2); }
+.rk-rank.r1 { color: var(--yellow); }
+.rk-rank.r2 { color: #d8dcc4; }
+.rk-rank.r3 { color: #d6913f; }
+.rk-row .av { flex: none; width: 26px; height: 26px; font-size: 11px; }
+.rk-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rk-name b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rk-handle { font-family: var(--mono); font-size: 10px; color: var(--dim2); }
+.rk-hands { flex: none; width: 46px; text-align: right; font-family: var(--mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.rk-net { flex: none; width: 76px; text-align: right; font-family: var(--disp); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rk-net.up { color: var(--yellow); }
+.rk-net.down { color: var(--red); }
+.rk-unit { font-size: 9.5px; color: var(--dim2); margin-left: 2px; }
+.rk-note { margin-top: var(--s4); }
+.rk-body { padding-bottom: var(--s5); }
+.rk-body .rk-head { padding-top: var(--s1); }

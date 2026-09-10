@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getMyProfile,
   updateDefaultPublic,
@@ -6,15 +6,17 @@ import {
   type MyProfile,
 } from '../supabase/profile';
 import { signOut, deleteAccount } from '../supabase/api';
+import { uploadAvatar, removeAvatar } from '../supabase/avatar';
 import { validatePassword } from '../auth/validate';
 import { InfoMark, InfoModal } from './InfoModal';
 
 /**
  * 設定画面（M7・モック s-profile 準拠）。表示名／パスワード変更・公開既定トグル・
  * ログアウト・アカウント削除。すべて RLS 下で本人のみ。
- * ※ handle 変更（synthetic email 付け替え・Edge Function 要）と avatar アップロード（Storage）は
- *   本セッションでは対象外＝読み取り専用／準備中表示。ログイン成功/削除後は App の
- *   onAuthStateChange がゲート（認証画面）へ戻す。
+ * アイコンは端末内で正方形に切り出して 256px へ縮小・再圧縮してから `avatars` バケットへ上げる
+ * （`supabase/avatar.ts`）。元の解像度のままは上げない。
+ * ※ handle 変更（synthetic email 付け替え・Edge Function 要）は対象外＝読み取り専用。
+ *   ログイン成功/削除後は App の onAuthStateChange がゲート（認証画面）へ戻す。
  */
 export function Settings(props: { onBack: () => void; onOpenAdmin: () => void }): JSX.Element {
   const [profile, setProfile] = useState<MyProfile | null>(null);
@@ -50,6 +52,44 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
 
   // 説明モーダル（保存・公開・削除まわりの注意書きをここへ畳む）
   const [showInfo, setShowInfo] = useState(false);
+
+  // アイコン
+  const avatarRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarErr, setAvatarErr] = useState<string | null>(null);
+
+  async function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 同じファイルを続けて選び直せるようにする。
+    if (!file) return;
+    setAvatarErr(null);
+    setAvatarBusy(true);
+    try {
+      const r = await uploadAvatar(file);
+      if (!r.ok) {
+        setAvatarErr(r.message);
+        return;
+      }
+      setProfile((prev) => (prev ? { ...prev, avatar_url: r.data.avatar_url } : prev));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function onRemoveAvatar(): Promise<void> {
+    setAvatarErr(null);
+    setAvatarBusy(true);
+    try {
+      const r = await removeAvatar();
+      if (!r.ok) {
+        setAvatarErr(r.message);
+        return;
+      }
+      setProfile((prev) => (prev ? { ...prev, avatar_url: null } : prev));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function savePassword(): Promise<void> {
     setPwDone(false);
@@ -118,8 +158,21 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
   return (
     <div className="settings">
       <div className="avpick">
-        <div className="avbig">{initial}</div>
-        <div className="lbl dim">アイコン変更は準備中</div>
+        <div className="avbig">
+          {profile?.avatar_url ? <img src={profile.avatar_url} alt="" /> : initial}
+        </div>
+        <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => void onPickAvatar(e)} />
+        <div className="avpick-actions">
+          <button type="button" className="edit" disabled={!profile || avatarBusy} onClick={() => avatarRef.current?.click()}>
+            {avatarBusy ? '変更中…' : profile?.avatar_url ? 'アイコンを変える' : 'アイコンを設定する'}
+          </button>
+          {profile?.avatar_url && (
+            <button type="button" className="edit dim" disabled={avatarBusy} onClick={() => void onRemoveAvatar()}>
+              削除
+            </button>
+          )}
+        </div>
+        {avatarErr && <p className="auth-err avpick-err">{avatarErr}</p>}
       </div>
 
       <div className="pad pt0 h-row">

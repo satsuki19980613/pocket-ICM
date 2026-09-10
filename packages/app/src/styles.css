@@ -461,6 +461,12 @@ select.inp { appearance: none; cursor: pointer; }
   text-transform: uppercase;
 }
 .avpick .lbl.dim { color: var(--dim2); }
+/* アイコン画像は面取り枠いっぱいに（切り出しは端末内で正方形にしてから上げている）。 */
+.avbig img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avpick-actions { display: flex; align-items: center; gap: var(--s4); margin-top: 12px; }
+.avpick-err { margin: 10px 0 0; }
+/* 「削除」は実際に押せる操作。.edit.dim の既定（cursor:default＝準備中ラベル用）を打ち消す。 */
+.avpick-actions .edit.dim { cursor: pointer; }
 .edit.dim { color: var(--dim2); cursor: default; }
 /* 設定の readout 行は Confirm と同じ .readout/.row を流用（境界線あり） */
 .settings .readout .row { border-bottom: 1px solid var(--line); }

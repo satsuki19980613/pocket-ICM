@@ -1,4 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+
+import { useBackLayer } from './BackLayer';
 
 /**
  * 画面上の説明文をたたむための ⓘ マークと、その説明モーダル。
@@ -16,13 +18,8 @@ export function InfoMark(props: { label: string; onClick: () => void }): JSX.Ele
 }
 
 export function InfoModal(props: { title: string; onClose: () => void; children: ReactNode }): JSX.Element {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [props]);
+  // 端末の戻る／Esc で閉じる（最前面のものだけが閉じるよう App の登録簿が面倒を見る）。
+  useBackLayer(props.onClose);
 
   return (
     <div

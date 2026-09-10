@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FeedAuthor, ThreadComment, ThreadDetail } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
 import { Avatar, relTime } from './feedShared';
+import { useBackLayer } from './BackLayer';
 
 type Ack = { ok: boolean; message?: string };
 
@@ -100,6 +101,9 @@ function PostHead(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
+  // 編集中の端末の戻る／Esc は「取消」（スレッドから出てしまわない）。
+  useBackLayer(() => setEditing(false), editing);
+
   async function saveEdit(): Promise<void> {
     setBusy(true);
     setErr('');
@@ -178,6 +182,9 @@ function CommentRow(props: {
   const [draft, setDraft] = useState(c.body ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  // 編集中の端末の戻る／Esc は「取消」（スレッドから出てしまわない）。
+  useBackLayer(() => setEditing(false), editing);
 
   async function saveEdit(): Promise<void> {
     setBusy(true);

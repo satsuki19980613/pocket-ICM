@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { MAX_POST_BODY } from '../supabase/feed';
+import { useBackLayer } from './BackLayer';
 
 type Ack = { ok: boolean; message?: string };
 
@@ -45,15 +46,11 @@ export function PostComposer(props: {
     }
   }
 
+  // 端末の戻る／Esc で閉じる。
+  useBackLayer(props.onClose);
+
   return (
-    <div
-      className="modal-backdrop"
-      onClick={props.onClose}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') props.onClose();
-      }}
-      role="presentation"
-    >
+    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
       <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="投稿する">
         <div className="modal-head">
           <span className="modal-title">投稿する</span>

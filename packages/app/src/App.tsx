@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
@@ -22,6 +22,9 @@ import { PostComposer } from './components/PostComposer';
 import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
 import { Admin } from './components/Admin';
+import { backLayers } from './backLayers';
+import { createBackController } from './navHistory';
+import { screenDepth, type Screen } from './navModel';
 import { buildBoardState, defaultForm, reconcilePositions, type BoardForm } from './formModel';
 import { solveInWorker } from './solverClient';
 import type { SolveResultDto } from './solverProtocol';
@@ -77,18 +80,7 @@ import {
   type ThreadDetail,
 } from './supabase/feed';
 
-type Screen =
-  | 'home'
-  | 'thread'
-  | 'userpub'
-  | 'icm'
-  | 'confirm'
-  | 'result'
-  | 'error'
-  | 'history'
-  | 'drill'
-  | 'settings'
-  | 'admin';
+// 画面の種類と階層の深さは navModel.ts（端末の戻るの翻訳に使うため App から分離）。
 
 /**
  * 結果画面の由来。record=記録タブ・完了トースト経由の再表示（自分の記録・選択と公開を編集可）、
@@ -291,6 +283,8 @@ export function App(): JSX.Element {
   const [pubAuthor, setPubAuthor] = useState<FeedAuthor | null>(null);
   const [pubPosts, setPubPosts] = useState<FeedPost[]>([]);
   const [pubState, setPubState] = useState<FeedState>('loading');
+  // 公開結果一覧をどこから開いたか（戻り先。ホーム経由とスレッド経由で階層が変わる）。
+  const [pubFrom, setPubFrom] = useState<Screen>('home');
   // 通常投稿コンポーザ（v3・ホームの FAB から開く。計算は ICM タブに一本化, SPEC §5.1.2）。
   const [composerOpen, setComposerOpen] = useState(false);
 
@@ -483,6 +477,8 @@ export function App(): JSX.Element {
   async function openAuthor(author: FeedAuthor): Promise<void> {
     setPubAuthor(author);
     setPubState('loading');
+    // 一覧の中でさらに別の投稿者を開いても、最初の入口（ホーム/スレッド）を戻り先に保つ。
+    if (screen !== 'userpub') setPubFrom(screen);
     setScreen('userpub');
     const r = await listFeed({ authorId: author.id });
     if (r.ok) {
@@ -927,7 +923,8 @@ export function App(): JSX.Element {
       case 'thread':
         return () => setScreen('home');
       case 'userpub':
-        return () => setScreen('home');
+        // 入口へ戻す（スレッドから開いたのにホームへ飛ばされる、を防ぐ）。
+        return () => setScreen(pubFrom === 'thread' && thread ? 'thread' : 'home');
       case 'result':
         return () => {
           if (resultOrigin?.kind === 'thread') {
@@ -940,6 +937,60 @@ export function App(): JSX.Element {
         return null;
     }
   }
+
+  /**
+   * 端末の「戻る」1回ぶん。上に重なっているモーダルから順に閉じ、無ければ画面を1階層戻す。
+   * ルートのタブ画面（ホーム）まで戻ったら何もしない＝次の戻るでアプリ終了（Android 標準）。
+   */
+  function stepBack(): void {
+    if (backLayers.closeTop()) return;
+    const b = backFor(screen);
+    if (b) {
+      b();
+      return;
+    }
+    if (screen !== 'home') navTab('home'); // タブ画面 → ホーム（起点）へ。
+  }
+
+  // popstate は最新の stepBack を呼ぶ必要があるが、リスナは張り直したくないので ref 経由。
+  const stepBackRef = useRef(stepBack);
+  stepBackRef.current = stepBack;
+
+  // アプリ内の階層の深さ。これと同じ数だけ履歴にダミーを積む（navHistory.ts）。
+  const layerCount = useSyncExternalStore(
+    backLayers.subscribe,
+    backLayers.getCount,
+    backLayers.getCount,
+  );
+  const navDepth = session
+    ? screenDepth(screen, { pubFromThread: pubFrom === 'thread' }) + layerCount
+    : 0; // 未ログイン（認証画面）は常にルート。
+
+  // 端末の戻る（popstate）と Esc を購読する。Esc は最前面の重なりだけを閉じる
+  // （各モーダルが個別に window を購読すると、入れ子のとき同時に閉じてしまう）。
+  const backCtl = useRef<ReturnType<typeof createBackController> | null>(null);
+  useEffect(() => {
+    const ctl = createBackController(window.history);
+    backCtl.current = ctl;
+    const onPop = (): void => {
+      if (ctl.handlePop()) stepBackRef.current();
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && backLayers.closeTop()) e.preventDefault();
+    };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('keydown', onKey);
+      backCtl.current = null;
+    };
+  }, []);
+
+  // 深さが変わるたびに履歴を追従させる（深くなれば push、浅くなれば戻す）。
+  useEffect(() => {
+    backCtl.current?.sync(navDepth);
+  }, [navDepth]);
 
   // セッション判定中は最小のローディング（チラつき防止）。
   if (session === undefined) {

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { OcrReadout } from '@oshihiki/ocr';
 import { buildOcrReadoutView } from './ocrReadoutView';
+import { useBackLayer } from './BackLayer';
 
 /**
  * 元画像の確認モーダル（M3 補助 → SPEC §5.2.3 で「元画像 × OCR 出力」の照合ビューへ拡張）。
@@ -27,13 +28,8 @@ export function ImageModal(props: {
   const [zoom, setZoom] = useState(false);
   const view = props.readout ? buildOcrReadoutView(props.readout) : null;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [props]);
+  // 端末の戻る／Esc で閉じる（最前面のものだけが閉じるよう App の登録簿が面倒を見る）。
+  useBackLayer(props.onClose);
 
   return (
     <div

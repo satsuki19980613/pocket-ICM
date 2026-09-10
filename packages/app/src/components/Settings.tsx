@@ -9,6 +9,7 @@ import { signOut, deleteAccount } from '../supabase/api';
 import { uploadAvatar, removeAvatar } from '../supabase/avatar';
 import { validatePassword } from '../auth/validate';
 import { InfoMark, InfoModal } from './InfoModal';
+import { useBackLayer } from './BackLayer';
 
 /**
  * 設定画面（M7・モック s-profile 準拠）。表示名／パスワード変更・公開既定トグル・
@@ -52,6 +53,17 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
 
   // 説明モーダル（保存・公開・削除まわりの注意書きをここへ畳む）
   const [showInfo, setShowInfo] = useState(false);
+
+  function cancelPw(): void {
+    setEditPw(false);
+    setPw1('');
+    setPw2('');
+    setPwErr(null);
+  }
+
+  // 開いている入力・確認は、端末の戻る／Esc で「取消」相当にする（設定画面から出てしまわない）。
+  useBackLayer(cancelPw, editPw);
+  useBackLayer(() => setConfirmDelete(false), confirmDelete);
 
   // アイコン
   const avatarRef = useRef<HTMLInputElement>(null);
@@ -221,12 +233,7 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
                   <button
                     type="button"
                     className="edit dim"
-                    onClick={() => {
-                      setEditPw(false);
-                      setPw1('');
-                      setPw2('');
-                      setPwErr(null);
-                    }}
+                    onClick={cancelPw}
                   >
                     取消
                   </button>

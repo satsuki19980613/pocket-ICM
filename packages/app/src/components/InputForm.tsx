@@ -4,6 +4,7 @@ import type { OcrReadout } from '@oshihiki/ocr';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HandPicker } from './HandPicker';
 import { ImageModal } from './ImageModal';
+import { useBackLayer } from './BackLayer';
 import { buildBoardState, reconcilePositions, type AnteScheme, type BoardForm } from '../formModel';
 
 /**
@@ -36,15 +37,11 @@ export function InputForm(props: {
 
   const preview = buildBoardState(form);
 
+  // 端末の戻る／Esc で閉じる（最前面のものだけ＝元画像モーダルが開いていればそちらが先）。
+  useBackLayer(props.onClose);
+
   return (
-    <div
-      className="modal-backdrop"
-      onClick={props.onClose}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') props.onClose();
-      }}
-      role="presentation"
-    >
+    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
       <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="手入力">
         <div className="modal-head">
           <span className="modal-title">手入力</span>

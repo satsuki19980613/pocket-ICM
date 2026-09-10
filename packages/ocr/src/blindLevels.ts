@@ -8,14 +8,16 @@
  *     **読み取った BB をそのまま基準**にする（＝保存則ベース）。公式レベル表は「小さな誤読の補正」に
  *     だけタイトに併用する。
  *
- * 重要（複数スピード・実測 2026-09-09）: クラブマッチには**複数のブラインド構造（スピード）**が存在する。
- *   - 実機 142308 は SB/BB 100/200・アンティ50 ＝下の公式表（「通常」）レベル1（総 450BB×200=90,000 で保存）。
- *   - 実機 185057 は SB/BB 480/960・アンティ240 ＝**この表に無い別スピード**（総 93.75BB×960=90,000 で保存）。
- * どちらも 90,000 で保存＝いずれも本物のクラブマッチ。よって**単一表に固定スナップしてはいけない**
- * （960 を近い 1100 へ誤スナップすると保存が壊れる）。表にタイト一致しない BB は**読み値をそのまま採用**し、
- * 保存則（90,000÷BB）で全スピードを自動対応する。SB は全構造で BB/2（実測不変）、アンティ≒0.25×BB。
- *
- * 下の CLUB_MATCH_LEVELS は公式「通常」16 レベル（ゲーム内ストラクチャ表・さつき提供 2026-09-09）。
+ * 重要（複数スピード）: クラブマッチには**複数のブラインド構造（スピード）**が存在する。
+ * 2026-09-10 にさつきから「ゆっくり」「もっとゆっくり」の公式ストラクチャ表を受領し、
+ * 「通常」と合わせて **3 表すべてを登録**した（それ以前は「通常」しか無く、他は読み値採用だった）。
+ *   - 通常: 16 レベル（200/50 〜 60000/15000）
+ *   - ゆっくり: 32 レベル（200/50 〜 60000/15000）… 実機 185057 の 480/960/240 はこの lv9
+ *   - もっとゆっくり: 59 レベル（200/50 〜 60000/15000）
+ * SB は全構造で BB/2（実測不変）。アンティは概ね 0.25×BB だが**式では作れない**
+ * （例: もっとゆっくり BB 300 の ante は 75 ではなく 70）。必ず表の値を使う。
+ * どの表にもタイト一致しない BB は**読み値をそのまま採用**し、保存則（90,000÷BB）で扱う。
+ * 総チップは常に 6 人 × 15,000＝90,000（さつき確定 2026-09-10）で、スピードによらない。
  */
 
 /** クラブマッチ 1 レベル（チップ）。SB は常に BB/2。 */
@@ -24,19 +26,26 @@ export interface BlindLevel {
   readonly bb: number;
   readonly sb: number;
   readonly ante: number;
+  /** どの構造（スピード）のレベルか。 */
+  readonly speed: BlindSpeed;
 }
 
 /** クラブマッチ開始総チップ（6 人 × 15,000）。1 テーブル保存＝場の総チップは常にこれ。 */
 export const CLUB_MATCH_TOTAL_CHIPS = 90000;
 
-/** 解決済みブラインド（チップ）。level=0 は「表に無い別スピード＝読み値採用」。 */
+/** 解決済みブラインド（チップ）。level=0 は「どの公式表にも当たらない＝読み値採用」。 */
 export interface ResolvedBlinds {
   readonly sb: number;
   readonly bb: number;
   readonly ante: number;
-  /** 公式「通常」表のレベル番号。表にタイト一致しないスピードは 0。 */
+  /** 一致した公式表のレベル番号。どの表にも当たらなければ 0。 */
   readonly level: number;
+  /** 一致した表のスピード。どれにも当たらなければ無し。 */
+  readonly speed?: BlindSpeed;
 }
+
+/** ブラインド構造（スピード）。クラブマッチ作成時に選ぶ。 */
+export type BlindSpeed = 'normal' | 'slow' | 'veryslow';
 
 /** 公式「通常」表 [BB, ante]（チップ）。SB=BB/2。ゲーム内ストラクチャ表そのまま（さつき提供）。 */
 const BB_ANTE: readonly (readonly [bb: number, ante: number])[] = [
@@ -45,42 +54,90 @@ const BB_ANTE: readonly (readonly [bb: number, ante: number])[] = [
   [60000, 15000],
 ];
 
-/** クラブマッチ「通常」のブラインドレベル表（チップ）。他スピードは表を持たず読み値＋保存則で扱う。 */
-export const CLUB_MATCH_LEVELS: readonly BlindLevel[] = BB_ANTE.map(([bb, ante], i) => ({
-  level: i + 1,
-  bb,
-  sb: bb / 2,
-  ante,
-}));
+/**
+ * 公式「ゆっくり」表 [BB, ante]（チップ・32 レベル）。さつき提供の構造表 ゆっくりFIX-1.png より。
+ * 実機フィクスチャの 660/330/170・800/400/200・960/480/240 はこの表のレベル 7/8/9 に一致する
+ * （それまで「表に無い別スピード」として読み値採用していたもの）。
+ */
+const BB_ANTE_SLOW: readonly (readonly [bb: number, ante: number])[] = [
+  [200, 50], [240, 60], [300, 75], [360, 90], [440, 110], [540, 140], [660, 170], [800, 200],
+  [960, 240], [1200, 300], [1440, 360], [1700, 430], [2000, 500], [2400, 600], [2900, 730],
+  [3500, 880], [4200, 1100], [5000, 1300], [6000, 1500], [7200, 1800], [8700, 2200], [10000, 2500],
+  [12000, 3000], [14000, 3500], [17000, 4300], [20000, 5000], [24000, 6000], [29000, 7300],
+  [35000, 8800], [42000, 11000], [50000, 13000], [60000, 15000],
+];
 
 /**
- * 読み取り BB（チップ）を公式「通常」表へ**タイトに**スナップする。相対距離が gate（既定 2%）以内の
- * レベルがあればそれを返す。無ければ null（＝別スピード扱い＝読み値採用）。gate をタイトにするのは、
- * 別スピードの正しい読み（例 960）を近いレベル（1100・12.7%）へ誤スナップして保存を壊さないため。
+ * 公式「もっとゆっくり」表 [BB, ante]（チップ・59 レベル）。さつき提供の構造表 もっとゆっくりver2.png より。
+ * アンティは 0.25×BB の丸めに見えるが**厳密ではない**（例: BB 300 の ante は 75 ではなく 70）。
+ * 式で生成せず表の値をそのまま持つこと。
+ */
+const BB_ANTE_VERY_SLOW: readonly (readonly [bb: number, ante: number])[] = [
+  [200, 50], [220, 55], [240, 60], [260, 65], [300, 70], [320, 80], [360, 90], [400, 100],
+  [440, 110], [480, 120], [540, 140], [600, 150], [660, 170], [740, 190], [820, 210], [900, 230],
+  [1000, 250], [1100, 280], [1200, 300], [1320, 330], [1500, 380], [1700, 430], [1900, 480],
+  [2100, 530], [2300, 580], [2500, 630], [2800, 700], [3100, 780], [3400, 860], [3700, 930],
+  [4100, 1000], [4500, 1100], [5000, 1300], [5500, 1400], [6100, 1500], [6700, 1700], [7400, 1900],
+  [8100, 2000], [9000, 2300], [10000, 2500], [11000, 2800], [12000, 3000], [13000, 3300],
+  [14000, 3500], [15000, 3800], [17000, 4300], [19000, 4800], [21000, 5300], [23000, 5800],
+  [25000, 6300], [28000, 7000], [31000, 7800], [34000, 8500], [38000, 9500], [42000, 11000],
+  [46000, 12000], [50000, 13000], [55000, 14000], [60000, 15000],
+];
+
+function toLevels(rows: readonly (readonly [bb: number, ante: number])[], speed: BlindSpeed): readonly BlindLevel[] {
+  return rows.map(([bb, ante], i) => ({ level: i + 1, bb, sb: bb / 2, ante, speed }));
+}
+
+/** クラブマッチ「通常」のブラインドレベル表（チップ）。 */
+export const CLUB_MATCH_LEVELS: readonly BlindLevel[] = toLevels(BB_ANTE, 'normal');
+/** クラブマッチ「ゆっくり」のブラインドレベル表（チップ）。 */
+export const CLUB_MATCH_LEVELS_SLOW: readonly BlindLevel[] = toLevels(BB_ANTE_SLOW, 'slow');
+/** クラブマッチ「もっとゆっくり」のブラインドレベル表（チップ）。 */
+export const CLUB_MATCH_LEVELS_VERY_SLOW: readonly BlindLevel[] = toLevels(BB_ANTE_VERY_SLOW, 'veryslow');
+
+/** 3 スピードすべてのレベル（スナップ候補の母集団）。 */
+export const ALL_CLUB_MATCH_LEVELS: readonly BlindLevel[] = [
+  ...CLUB_MATCH_LEVELS,
+  ...CLUB_MATCH_LEVELS_SLOW,
+  ...CLUB_MATCH_LEVELS_VERY_SLOW,
+];
+
+/**
+ * 読み取り BB（チップ）を公式表（3 スピード）へ**タイトに**スナップする。相対距離が gate（既定 2%）
+ * 以内のレベルがあれば返す。無ければ null（＝表に無い構造＝読み値採用）。
  *
- * gate は当初 6% だったが、実測で**別スピード 400/800 を表の 780（相対 2.6%）へ誤スナップ**しており
+ * gate をタイトにするのは、正しい読みを近い別レベルへ誤スナップして総チップ保存を壊さないため。
+ * 当初 6% だったが、実測で**「ゆっくり」の 800 を「通常」の 780（相対 2.6%）へ誤スナップ**しており
  * （GT: Screenshot_20260901-142955 / -143002）、総チップ保存の理論値が 112.5 → 115.4 とずれて
  * 「2.9bb 不足」に見え、スタックを 2.9bb も書き換えかねない状態だった。2% へ絞ると同フレームは
- * 800 のまま解決され、実チップが保存している GT 8 枚すべてで残差が ±0.10bb 以内に収まる
- * （Android/iPhone とも精度の回帰はゼロ）。表のレベル間隔は ~40% あるので、2% でも
- * 「小さな誤読の補正」という本来の役割は果たせる。
+ * 800 のまま解決され、実チップが保存している GT 8 枚すべてで残差が ±0.10bb 以内に収まる。
+ *
+ * 3 スピードを併せると BB が 1.2〜3.8% しか離れていない組（8600/8700, 6000/6100, 19600/20000 等）や、
+ * **BB が同じで ante だけ違う組**（300 → ゆっくり 75 / もっとゆっくり 70、13000 → 通常 3200 /
+ * もっとゆっくり 3300）が出る。そこで候補が複数あるときは**読み取った ante で決める**
+ * （ante は BB より小さく誤読しやすいので重みは軽くし、BB 距離を主・ante 距離を従とする）。
  */
-export function snapByBb(bbChips: number, gate = 0.02): BlindLevel | null {
+export function snapByBb(bbChips: number, gate = 0.02, anteChips = NaN): BlindLevel | null {
   if (!Number.isFinite(bbChips) || bbChips <= 0) return null;
+  const useAnte = Number.isFinite(anteChips) && anteChips > 0;
   let best: BlindLevel | null = null;
-  let bestRel = Infinity;
-  for (const lv of CLUB_MATCH_LEVELS) {
-    const rel = Math.abs(lv.bb - bbChips) / lv.bb;
-    if (rel < bestRel) { bestRel = rel; best = lv; }
+  let bestScore = Infinity;
+  for (const lv of ALL_CLUB_MATCH_LEVELS) {
+    const relBb = Math.abs(lv.bb - bbChips) / lv.bb;
+    if (relBb > gate) continue;
+    // BB 距離が主。ante は「同じ BB の別スピード」を分ける決め手なので従（重み 0.5）。
+    const score = relBb + (useAnte ? 0.5 * (Math.abs(lv.ante - anteChips) / lv.ante) : 0);
+    if (score < bestScore) { bestScore = score; best = lv; }
   }
-  return best && bestRel <= gate ? best : null;
+  return best;
 }
 
 /**
  * ヘッダの SB/BB/アンティ（チップ）からブラインドを解決する（保存則ベースの主入口）。
  *  - BB が読めない場合は SB×2 で代用（SB=BB/2 の不変を使う）。両方読めなければ null（＝チェック無効）。
- *  - 公式「通常」表に**タイト一致**すればその厳密値（小誤読を補正）。
- *  - 一致しなければ**読み値をそのまま採用**（別スピード）: bb=読み値, sb=bb/2（不変を強制）,
+ *  - 公式表（通常／ゆっくり／もっとゆっくり）に**タイト一致**すればその厳密値（小誤読を補正）。
+ *    同じ BB が複数スピードにあるときは読み取った ante で決める。
+ *  - 一致しなければ**読み値をそのまま採用**（表に無い構造）: bb=読み値, sb=bb/2（不変を強制）,
  *    ante=読み値が妥当（0.15〜0.35×bb）ならそれ、外れれば 0.25×bb で近似。level=0。
  * いずれの場合も総 BB は `totalBbFromBbChips(bb)`（=90,000÷bb）で求まり、全スピードを自動対応する。
  */
@@ -92,8 +149,10 @@ export function resolveBlindChips(sbChips: number, bbChips: number, anteChips: n
       : NaN;
   if (!Number.isFinite(bbGuess) || bbGuess <= 0) return null;
 
-  const matched = snapByBb(bbGuess, tightGate);
-  if (matched) return { sb: matched.sb, bb: matched.bb, ante: matched.ante, level: matched.level };
+  const matched = snapByBb(bbGuess, tightGate, anteChips);
+  if (matched) {
+    return { sb: matched.sb, bb: matched.bb, ante: matched.ante, level: matched.level, speed: matched.speed };
+  }
 
   // 別スピード: 読み値採用。SB=BB/2 を強制、アンティは妥当域なら読み値・外れれば 0.25×BB。
   const bb = Math.round(bbGuess);

@@ -66,6 +66,20 @@ export interface OcrPipelineOptions {
   readonly checksumTol?: number;
 }
 
+/**
+ * 「クラブマッチとして整合しない」棄却メッセージ。数値を入れて理由が追えるようにする
+ * （利用者は「別モードのスクショを入れた」のか「読み取りが崩れた」のかを画像と見比べて判断できる）。
+ */
+function notClubIssue(check: ChipConsistencyResult): string {
+  const read = check.totalBbRead;
+  const theory = check.totalBbTheory;
+  const nums =
+    read !== undefined && theory !== undefined
+      ? `（場のチップ合計 ${read.toFixed(1)}bb / クラブマッチなら ${theory.toFixed(1)}bb）`
+      : '';
+  return `クラブマッチの局面として整合しません${nums}。クラブマッチ以外のモードのスクショか、スタックが大きく誤読されています。`;
+}
+
 export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): OcrValidation {
   const threshold = opts.confidenceThreshold;
   const gate = streetGate(reads.street);
@@ -103,6 +117,27 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     };
   }
   const posById = posByIdFromFacts(recon.facts);
+
+  // 場のチップ総量がクラブマッチ（6人×15,000＝90,000）と大きく食い違うフレームは棄却する。
+  // ソルバーはクラブマッチの実払い（+5/+3/+2/+1/0/-1・SPEC §2.1）を固定で使うため、別モードの
+  // スクショをそのまま解くと**間違った EV を警告なしに返す**（さつき決定 2026-09-10・SPEC §5.2.1）。
+  // 判定自体は applyChipConsistency 内で済んでいるが、棄却するのは**ポジション導出後**にする:
+  // 照合モーダルに席 ID ではなくポジション付きで読み取り結果を出せるので、利用者が
+  // 「別モードのスクショを入れた」のか「読み取りが崩れた」のかを画像と見比べて判断できる。
+  if (chipCheck.mode === 'not-club-skip') {
+    const issues = [notClubIssue(chipCheck)];
+    return {
+      ok: false,
+      issues,
+      lowConfidenceFields: [],
+      readout: buildReadout(reads, {
+        issues,
+        posById,
+        chipCheck: chipCheckReadout,
+        ...(threshold !== undefined ? { threshold } : {}),
+      }),
+    };
+  }
 
   // core の構造・意味論検証（保険）。
   const parsed = parseBoardState(recon.state);

@@ -20,7 +20,20 @@ const templates: AnchorTemplates = {
 };
 const DIR = 'packages/ocr/local-fixtures';
 
-interface Expect { pl: number; heroPos: string; pot: number; hand: string; stacks?: Record<string, number>; }
+interface Expect {
+  pl: number;
+  heroPos: string;
+  pot: number;
+  hand: string;
+  stacks?: Record<string, number>;
+  /**
+   * クラブマッチ以外のモードのフレーム（場のチップ総量が 6人×15,000 と桁違い）。
+   * パイプラインは棄却するのが正しいので、res.ok は false を期待し、スタックの一致は
+   * readout（ポジション付き）で確認する。この2枚は「同一ハンドの iOS/Android 対」で
+   * スタック復元フォールバックの回帰検知に使っているため、棄却されても採点は続ける。
+   */
+  notClub?: true;
+}
 // AI 目視 GT（accuracy.groundtruth.json / iphone GT）からの抜粋。stacks は本番 extractRawReadsAuto と
 // 一致する root stack（ポジション別, ±0.05）。§B9 bar #1 の stack parity 回帰検知。
 const CASES: Record<string, Expect> = {
@@ -34,9 +47,9 @@ const CASES: Record<string, Expect> = {
   'Screenshot_20260902-115309.png': { pl: 3, heroPos: 'SB', pot: 11.8, hand: '99', stacks: { BU: 9.6, SB: 21.1, BB: 22 } },
   // iOS 6-max: hero BC（BU）＋ 折れコーナー BR（CO）の stack を固定フラクショナル y フォールバックで
   // 復元（fix 3, 従来は NaN→0）。
-  'E4073E5F-9454-480E-AC61-C15E6728DCBD.png': { pl: 6, heroPos: 'BU', pot: 3.0, hand: 'KJo', stacks: { BU: 9.4, CO: 16.4, HJ: 27.7, UTG: 13.2, SB: 10.9, BB: 19.2 } },
+  'E4073E5F-9454-480E-AC61-C15E6728DCBD.png': { pl: 6, heroPos: 'BU', pot: 3.0, hand: 'KJo', stacks: { BU: 9.4, CO: 16.4, HJ: 27.7, UTG: 13.2, SB: 10.9, BB: 19.2 }, notClub: true },
   // Android 6-max: hero BC 手番グロー席（BU）＋ 折れ BR（CO）の stack をフォールバックで復元（fix 3）。
-  'Screenshot_20260902-203304.png': { pl: 6, heroPos: 'BU', pot: 3.0, hand: 'KJo', stacks: { BU: 9.4, CO: 16.4, HJ: 27.7, UTG: 13.2, SB: 10.9, BB: 19.2 } },
+  'Screenshot_20260902-203304.png': { pl: 6, heroPos: 'BU', pot: 3.0, hand: 'KJo', stacks: { BU: 9.4, CO: 16.4, HJ: 27.7, UTG: 13.2, SB: 10.9, BB: 19.2 }, notClub: true },
 };
 
 function read(name: string) {
@@ -51,6 +64,19 @@ describe('extractAnchored end-to-end (fixture-gated)', () => {
     const present = existsSync(`${DIR}/${name}`);
     it.runIf(present)(`${name}: playersLeft/heroPos/pot/heroHand/stacks`, () => {
       const { reads, res } = read(name);
+      if (ex.notClub) {
+        // クラブマッチ以外のモード＝パイプラインは棄却するのが正しい。スタック復元の回帰検知は
+        // readout（ポジション付きの生読み値）側で続ける。
+        expect(res.ok).toBe(false);
+        expect(res.issues.some((m) => /クラブマッチの局面として整合しません/.test(m))).toBe(true);
+        expect(reads.pot.value).toBeCloseTo(ex.pot, 1);
+        expect(reads.heroHand.value).toBe(ex.hand);
+        const byPosRo = new Map(res.readout.seats.map((s) => [s.pos, s.stack.value]));
+        for (const [pos, v] of Object.entries(ex.stacks ?? {})) {
+          expect(byPosRo.get(pos), `${pos} displayed stack`).toBeCloseTo(v, 1);
+        }
+        return;
+      }
       expect(res.ok).toBe(true);
       expect(res.state?.playersLeft).toBe(ex.pl);
       expect(res.state?.heroPos).toBe(ex.heroPos);

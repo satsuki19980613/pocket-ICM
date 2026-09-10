@@ -10,7 +10,7 @@
  * 対応コード一覧（SPEC §12.2）:
  *   street_not_preflop / street_unknown / display_mode_chips / out_of_scope_raise /
  *   out_of_scope_limp / out_of_scope_unclassified_bet / walk / seat_read_failed /
- *   checksum_mismatch / too_many_players / unknown
+ *   checksum_mismatch / too_many_players / not_club_match / unknown
  */
 
 export type IssueCode =
@@ -24,6 +24,7 @@ export type IssueCode =
   | 'seat_read_failed'
   | 'checksum_mismatch'
   | 'too_many_players'
+  | 'not_club_match'
   | 'unknown';
 
 interface Rule {
@@ -51,6 +52,8 @@ const RULES: readonly Rule[] = [
   { code: 'out_of_scope_unclassified_bet', test: (m) => /未分類のベット/.test(m) },
   // spotReconstruction.ts detectOutOfScope: 'hero が BB で pot が未レイズです（ウォーク＝...）'
   { code: 'walk', test: (m) => /ウォーク/.test(m) },
+  // pipeline.ts notClubIssue: 'クラブマッチの局面として整合しません（場のチップ合計 ...）。...'
+  { code: 'not_club_match', test: (m) => /クラブマッチの局面として整合しません/.test(m) },
   // App.tsx OVER_SCOPE_MSG: '現在は${MAX_PLAYERS}人までの局面に対応しています。'
   { code: 'too_many_players', test: (m) => /人までの局面に対応/.test(m) },
   // confidence.ts のポット・チェックサム不一致（画面表示は Confirm.tsx が動的に組む数値付き文言のため、

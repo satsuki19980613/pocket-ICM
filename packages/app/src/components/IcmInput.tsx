@@ -10,6 +10,8 @@ import { useRef } from 'react';
  *        hero=BB かつ未レイズ（ウォーク）を棄却
  *   5. `MAX_PLAYERS = 6`（App.tsx）
  *   6. `extractAnchored`（packages/ocr/src/extractAnchored.ts）… 画面全体のランドマーク前提
+ *   7. `chipConsistency`（packages/ocr/src/chipConsistency.ts）… 場のチップ総量が
+ *      6人×15,000=90,000 と 15% 以上食い違えば `not-club-skip` → pipeline が棄却
  */
 export const READ_CONDITIONS: { title: string; hint: string }[] = [
   { title: 'プリフロップの画面', hint: 'フロップ以降・ストリート表示が読めないものは対象外です' },
@@ -21,6 +23,10 @@ export const READ_CONDITIONS: { title: string; hint: string }[] = [
   { title: '自分の判断がある場面', hint: '全員フォールドで BB に手番が回ったウォークは対象外です' },
   { title: '2〜6人の局面', hint: '7人以上には対応していません' },
   { title: '切り抜いていない全画面のスクショ', hint: '一部を切り抜くとスタックやポジションが読み取れません' },
+  {
+    title: 'クラブマッチの局面',
+    hint: 'ランクマッチなど他モードは対象外です（賞金の配分が違うため計算が合いません）',
+  },
 ];
 
 /** チェックリスト下の小さな補足（対応形式・解析場所）。icm とエラー画面で共有（SPEC §5.2.1）。 */

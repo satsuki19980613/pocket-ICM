@@ -43,6 +43,21 @@ const CONSISTENT_TOL = 0.05;
 const DISPLAY_STEP = 0.1;
 /** 差がこの割合（総BB比）を超えたら誤補正回避のため触らない（モード不一致等）。 */
 const LARGE_DELTA_FRAC = 0.06;
+/**
+ * 差がこの割合（総BB比）以上なら「クラブマッチの局面として整合しない」と判定して**棄却**する
+ * （さつき決定 2026-09-10）。
+ *
+ * クラブマッチは常に 6 人 × 15,000＝90,000 チップなので、場のチップ総量がそれと大きく食い違う
+ * フレームはクラブマッチではない（別モードのスクショ）か、スタックが大きく誤読されている。
+ * どちらにせよソルバーはクラブマッチの実払い（+5/+3/+2/+1/0/-1・SPEC §2.1）を固定で使うため、
+ * そのまま解くと**間違った EV を警告なしに返す**。黙って通すより弾く方が安全。
+ *
+ * しきい値の根拠（実測・GT 全 BB 表示フレーム）: 正しく保存しているフレームの乖離は 0.1% 未満、
+ * 対象外（レイズ/リンプで場に追加ベットがある）フレームでも最大 2.5% に収まる。一方、別モードの
+ * 実機フレームは 33%（6-max・開始 20,000）・56%（HU・開始 20,000）と桁違いに離れる。15% は
+ * この間隙に十分な余裕をもって入る。
+ */
+const NOT_CLUB_FRAC = 0.15;
 /** スタック≈0（オールイン）とみなす閾値。 */
 const ALLIN_STACK = 0.5;
 /** オールイン時のポット照合許容差（BB）。計算ポット vs OCR ポット。 */
@@ -58,6 +73,7 @@ export type ChipCheckMode =
   | 'allin-bet-underread' // オールイン: 計算ポット<OCR（ベット読み落とし疑い）→ OCR 保持
   | 'allin-unread-skip' // オールイン: 当該席のベット未読でポット計算不可（保留）
   | 'multi-unreadable-skip' // 未読 2 席以上で一意に解けず
+  | 'not-club-skip' // クラブマッチの総チップと大きく食い違う＝棄却（別モード or 重大誤読）
   | 'large-delta-skip'; // 差が大きすぎて未補正
 
 export interface ChipConsistencyResult {
@@ -222,6 +238,16 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
       result: {
         applied: true, mode: 'consistent', totalBbTheory, totalBbRead, deltaBb: delta,
         notes: [`|delta|=${Math.abs(delta)} <= tol=${round2(tol)} (display rounding of ${readable.length} stacks)`],
+      },
+    };
+  }
+  // クラブマッチとして整合しない（別モードのスクショ or 重大誤読）→ 棄却させる。
+  if (Math.abs(delta) >= NOT_CLUB_FRAC * totalBbTheory) {
+    return {
+      reads,
+      result: {
+        applied: false, mode: 'not-club-skip', totalBbTheory, totalBbRead, deltaBb: delta,
+        notes: [`chip total ${totalBbRead}bb vs club-match theory ${round2(totalBbTheory)}bb (${Math.round((100 * Math.abs(delta)) / totalBbTheory)}% off)`],
       },
     };
   }

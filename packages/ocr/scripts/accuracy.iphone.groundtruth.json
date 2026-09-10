@@ -2,7 +2,7 @@
   "_README": "実iPhoneスクショの正解ラベル（AI目視, [[ocr-accuracy-verification]]）。スマホ21:9・BB表示。accuracy.ts --auto --gt で採点。画像は local-fixtures(gitignore)。これがスマホOCRの reality check（Android縮小=合成21:9代理と併用）。heroPos は Dボタンからの導出ラベル(BU/SB/BB/UTG/HJ/CO)。",
   "frames": {
     "E4073E5F-9454-480E-AC61-C15E6728DCBD.png": {
-      "note": "6-max bb, hero=BC=BU(ボタン), TC/TR/BR fold, hero KJo に回った未レイズ",
+      "note": "6-max bb, hero=BC=BU(ボタン), TC/TR/BR fold, hero KJo に回った未レイズ。**クラブマッチではない**（SB/BB 600/1200・アンティ300、スタック合計96.8BB+ポット3BB=99.8BB×1200 ≒ 120,000 = 6人×20,000）。ポットはアンティ300×6+600+1200 と 6 人ぶんで一致。棄却が正（not_club_match）。iOS のスタック復元フォールバック回帰検知には引き続き使う",
       "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 3.0, "heroHand": "KJo",
       "seats": {
         "TL": { "occ": "occupied", "action": "none", "stack": 19.2, "bet": 1 },
@@ -12,7 +12,7 @@
         "BC": { "occ": "occupied", "action": "none", "stack": 9.4, "bet": 0, "hero": true, "button": true },
         "BL": { "occ": "occupied", "action": "none", "stack": 10.9, "bet": 0.5 }
       },
-      "expect": { "ok": true, "heroPos": "BU", "playersLeft": 6 }
+      "expect": { "ok": false, "reasonHint": "not_club_match" }
     },
     "EC7CD106-18EC-4D16-8DDB-7FD454071DB5.png": {
       "note": "6-max bb, D=TL, hero=BC=HJ, BR のみ fold, hero AQo で手番（first-in）",
@@ -25,7 +25,7 @@
         "BC": { "occ": "occupied", "action": "none", "stack": 11.9, "bet": 0, "hero": true },
         "BL": { "occ": "occupied", "action": "none", "stack": 10.4, "bet": 0 }
       },
-      "expect": { "ok": true, "heroPos": "HJ", "playersLeft": 6 }
+      "expect": { "ok": false, "reasonHint": "not_club_match" }
     }
   }
 }

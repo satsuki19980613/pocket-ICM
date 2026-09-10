@@ -135,14 +135,27 @@ describe('chipConsistency', () => {
     expect(out).toBe(r);
   });
 
-  it('差が大きすぎる（モード不一致疑い）は触らない', () => {
-    // 合計を大きくずらす → large-delta-skip。
+  it('差が大きすぎる（6〜15%・モード不一致疑い）は触らない', () => {
+    // 合計 81.6 + deadPot 2.75 = 84.35 / 理論 93.75 → 差 9.4（10.0%）。
+    // 補正はしないが、棄却するほどではない帯（large-delta-skip）。
+    const r = reads([
+      { id: 'UTG', v: 11.5 }, { id: 'CO', v: 31.9 }, { id: 'BU', v: 22.3 },
+      { id: 'SB', v: 14.4, c: 0.3 }, { id: 'BB', v: 1.5 },
+    ]);
+    const { reads: out, result } = applyChipConsistency(r);
+    expect(result.mode).toBe('large-delta-skip');
+    expect(out.seats.map((s) => s.stack.value)).toEqual([11.5, 31.9, 22.3, 14.4, 1.5]);
+  });
+
+  it('クラブマッチの総チップと 15% 以上食い違えば not-club-skip（棄却させる）', () => {
+    // 合計 25 + 2.75 = 27.75 / 理論 93.75 → 70% 乖離。別モードのスクショか重大誤読。
     const r = reads([
       { id: 'UTG', v: 5 }, { id: 'CO', v: 5 }, { id: 'BU', v: 5 },
       { id: 'SB', v: 5, c: 0.3 }, { id: 'BB', v: 5 },
     ]);
     const { reads: out, result } = applyChipConsistency(r);
-    expect(result.mode).toBe('large-delta-skip');
+    expect(result.mode).toBe('not-club-skip');
+    expect(result.applied).toBe(false);
     expect(out.seats.map((s) => s.stack.value)).toEqual([5, 5, 5, 5, 5]);
   });
 

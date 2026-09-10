@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AVATAR_EDGE, avatarFileName, avatarOutputEdge, squareCropRect, withCacheBuster } from './avatar';
+import { AVATAR_EDGE, avatarOutputEdge, avatarPathFromUrl, squareCropRect } from './avatar';
 
 describe('squareCropRect', () => {
   it('正方形はそのまま（切り出し無し）', () => {
@@ -37,21 +37,24 @@ describe('avatarOutputEdge', () => {
   });
 });
 
-describe('avatarFileName', () => {
-  it('WebP と JPEG でパスを分ける（どちらか一方だけを残す）', () => {
-    expect(avatarFileName('image/webp')).toBe('avatar.webp');
-    expect(avatarFileName('image/jpeg')).toBe('avatar.jpg');
-  });
-});
+describe('avatarPathFromUrl', () => {
+  const base = 'https://x.supabase.co/storage/v1/object/public/avatars/';
 
-describe('withCacheBuster', () => {
-  it('パス固定で上書きするので ?v= で古い画像を掴ませない', () => {
-    expect(withCacheBuster('https://x/storage/avatars/u/avatar.webp', 123)).toBe(
-      'https://x/storage/avatars/u/avatar.webp?v=123',
-    );
+  it('公開 URL から <uid>/<file> を取り出す（差し替え時に前のファイルを消すため）', () => {
+    expect(avatarPathFromUrl(base + 'u1/abc.webp')).toBe('u1/abc.webp');
   });
 
-  it('既にクエリがあれば & でつなぐ', () => {
-    expect(withCacheBuster('https://x/a.webp?token=1', 9)).toBe('https://x/a.webp?token=1&v=9');
+  it('クエリが付いていても落とす', () => {
+    expect(avatarPathFromUrl(base + 'u1/abc.webp?v=1')).toBe('u1/abc.webp');
+  });
+
+  it('URL エンコードは戻す', () => {
+    expect(avatarPathFromUrl(base + 'u1/a%20b.webp')).toBe('u1/a b.webp');
+  });
+
+  it('別バケット・null・空は null（削除をあきらめる＝孤児が1個残るだけ）', () => {
+    expect(avatarPathFromUrl(null)).toBeNull();
+    expect(avatarPathFromUrl('https://x/storage/v1/object/public/thread-images/u1/a.webp')).toBeNull();
+    expect(avatarPathFromUrl(base)).toBeNull();
   });
 });

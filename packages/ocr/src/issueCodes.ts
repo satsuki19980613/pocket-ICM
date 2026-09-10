@@ -10,7 +10,8 @@
  * 対応コード一覧（SPEC §12.2）:
  *   street_not_preflop / street_unknown / display_mode_chips / out_of_scope_raise /
  *   out_of_scope_limp / out_of_scope_unclassified_bet / walk / seat_read_failed /
- *   checksum_mismatch / too_many_players / not_club_match / unknown
+ *   checksum_mismatch / too_many_players / not_club_match /
+ *   hero_hand_unreadable / pot_unreadable / unknown
  */
 
 export type IssueCode =
@@ -25,6 +26,10 @@ export type IssueCode =
   | 'checksum_mismatch'
   | 'too_many_players'
   | 'not_club_match'
+  // 「読めなかった」系。zod のスキーマ検証が英語で落とすので、従来は全部 unknown に
+  // 落ちてサーバー側で集計できなかった（実測: 装飾テーマ卓の実機フレーム）。
+  | 'hero_hand_unreadable'
+  | 'pot_unreadable'
   | 'unknown';
 
 interface Rule {
@@ -65,6 +70,11 @@ const RULES: readonly Rule[] = [
     test: (m) =>
       /D ?ボタン/.test(m) || /hero 席は/.test(m) || /hero が生存席/.test(m) || /席数は\s*2\.\.6/.test(m),
   },
+  // pipeline.ts の zod 検証が返す英語メッセージ（BoardState スキーマ）。
+  // 例: 'heroHand: invalid hand-class notation'（カード検出が 2 枚揃わず空文字）。
+  { code: 'hero_hand_unreadable', test: (m) => /^heroHand:/.test(m) || /手札が読めません/.test(m) },
+  // 例: 'pot: Expected number, received nan'（中央ピルの数字が読めず NaN）。
+  { code: 'pot_unreadable', test: (m) => /^pot:/.test(m) || /ポットが読めません/.test(m) },
 ];
 
 /** 1 件のメッセージを理由コードへ分類する。どれにも一致しなければ 'unknown'。 */

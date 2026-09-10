@@ -27,6 +27,8 @@ export * from './seatEnum.js';
 export * from './upscaleNormalize.js';
 export * from './potAnchor.js';
 export * from './anchorAction.js';
+export * from './actionMark.js';
+export * from './actionMarkZone.js';
 export * from './extractAnchored.js';
 export * from './seatAnchorGrids.js';
 export * from './blindLevels.js';

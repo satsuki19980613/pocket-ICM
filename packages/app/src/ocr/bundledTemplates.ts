@@ -11,6 +11,7 @@ import digitsJson from '@oshihiki/ocr/assets/digits.json';
 import ranksJson from '@oshihiki/ocr/assets/ranks_hero.json';
 import actionsJson from '@oshihiki/ocr/assets/actions.json';
 import lettersJson from '@oshihiki/ocr/assets/letters_bb.json';
+import actionMarksJson from '@oshihiki/ocr/assets/action_marks.json';
 
 let cache: ExtractTemplates | undefined;
 
@@ -22,6 +23,7 @@ export function getBundledTemplates(): ExtractTemplates {
       ranks: templatesFromJson(ranksJson),
       actions: templatesFromJson(actionsJson),
       letters: templatesFromJson(lettersJson),
+      marks: templatesFromJson(actionMarksJson),
     };
   }
   return cache;

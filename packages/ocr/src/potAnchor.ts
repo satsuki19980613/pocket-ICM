@@ -30,6 +30,20 @@ export interface PotAnchorRegion {
 /** CHIPS_6MAX の pot 領域（frameProfile）に合わせた中央ピル数字帯（少し左・広めに取る）。 */
 export const DEFAULT_POT_REGION: PotAnchorRegion = { x: 0.46, y: 0.305, w: 0.09, h: 0.05 };
 
+/**
+ * pot 専用の白マスクしきい値（min(R,G,B) の下限）。
+ *
+ * 共通の既定 120（bbAmount）は席スタック向けに緩めてあり、pot ピルには緩すぎる。
+ * 装飾テーマの卓（ステンドグラス・金の唐草）では中間輝度の背景まで「白」に混ざり、
+ * 数字成分の切り出しが壊れて NaN になる（実測: Pixel 実機フレーム 2424×1080）。
+ *
+ * BB 表示の全 17 枚（既存較正 16＋装飾卓 1）で振った実測:
+ *   minCh=120 → 15/17（装飾卓と 143002 が失敗） / 150 → 16/17 / **180 → 17/17** / 200 → 17/17
+ * 180 は既存フレームを 1 枚改善しつつ装飾卓も拾えるので、ここを pot の既定にする。
+ * 呼び出し側が opts.minCh を明示した場合はそちらを優先する（較正ツールの上書き用）。
+ */
+export const POT_MIN_CH = 180;
+
 export interface PotAnchorResult extends Read<number> {
   /** 探索に使った pot 数字帯（px, 正規化画像座標）。デバッグ／クロップ用。 */
   readonly box: Rect;
@@ -55,6 +69,6 @@ export function readPotAnchored(
   // ピル中央を名前アンカーに見立てる（中央帯に BB 候補は pot のみのはずだが、
   // 万一 side pot 等が入っても中央に最も近いものを選ぶ）。
   const nameCx = rect.x + rect.w / 2;
-  const r = readAmountBbAnchored(img, rect, digits, opts, letters, nameCx);
+  const r = readAmountBbAnchored(img, rect, digits, { minCh: POT_MIN_CH, ...opts }, letters, nameCx);
   return { value: r.value, conf: r.conf, box: rect };
 }

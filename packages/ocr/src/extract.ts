@@ -44,6 +44,11 @@ export interface ExtractTemplates {
   readonly actions: readonly Template[];
   /** BB 表示判定用の "B" 文字（label 'B'）。省略時はモード自動判定せず chips 既定。 */
   readonly letters?: readonly Template[];
+  /**
+   * アクションマークの語（フォールドを含む 5 語, `assets/action_marks.json`）。
+   * アンカー抽出（`extractAnchored`）の action 主信号。固定座標経路（本ファイル）では使わない。
+   */
+  readonly marks?: readonly Template[];
 }
 
 export interface ExtractOptions {

@@ -101,6 +101,27 @@ describe('classifyIssueCodes — 複数メッセージ・重複除去・checksum
     expect(classifyIssueCodes([])).toEqual([]);
   });
 
+  // 「読めなかった」系（zod のスキーマ検証が英語で落とす）。従来は全部 unknown に落ちて
+  // サーバー側で集計できなかった。実測: 装飾テーマ卓の Pixel フレーム 20260910-192316。
+  it('手札が読めなかった失敗を hero_hand_unreadable に分類する', () => {
+    expect(classifyIssueCodes(['heroHand: invalid hand-class notation'])).toEqual([
+      'hero_hand_unreadable',
+    ]);
+  });
+
+  it('ポットが読めなかった失敗を pot_unreadable に分類する', () => {
+    expect(classifyIssueCodes(['pot: Expected number, received nan'])).toEqual(['pot_unreadable']);
+  });
+
+  it('手札とポットが同時に読めない場合は両方のコードが出る', () => {
+    expect(
+      classifyIssueCodes([
+        'heroHand: invalid hand-class notation',
+        'pot: Expected number, received nan',
+      ]),
+    ).toEqual(['hero_hand_unreadable', 'pot_unreadable']);
+  });
+
   it('checksumOk=false のとき checksum_mismatch を末尾に追加する', () => {
     const codes = classifyIssueCodes([], { checksumOk: false });
     expect(codes).toEqual(['checksum_mismatch']);

@@ -28,10 +28,17 @@
  * stack 読み（fix 3）: 名前直上 BB アンカーを主とし、名前ボックス検出が破綻した席（手番グロー枠 hero /
  * 折れ暗コーナー / iOS 小名）は固定フラクショナル y の数字ライン（STACK_Y_FRAC）で読み直す。
  *
- * action（本番 extract.ts と同等）: 非 hero は fold（isActiveHand）→ active なら能動タグ NCC
- * （recognizeAction; raise/call/allin/check）。hero も能動タグを読む。タグが none の非 hero で
- * stack≈0 なら allin ヒューリスティックで補完。能動タグは AnchorTemplates.actions を渡した場合のみ
- * 読み、raise/limp/walk の対象外局面を下流 spotReconstruction が棄却できる（§6.5・過受理の是正）。
+ * action: **`AnchorTemplates.marks` を渡すのが本番経路**（アプリは常に渡す。2026-09-10 以降）。
+ * 行動した席には必ず吹き出しプレート（フォールド/コール/レイズ/オールイン/チェック）が出るので、
+ * `actionMark.recognizeMark` でそれを読んで action を確定し、**マークが無ければ未行動 = none** と
+ * 言い切る。カード裏の色（cardState）は使わない —— カード裏はユーザーが着せ替えられ、淡色スキンの
+ * 実機フレームで全席が fold と誤判定された（docs/OCR_PHASE2.md §C5）。hero も同じ経路で読む。
+ * これは固定座標経路（extract.ts）とは**異なる**（あちらは従来どおり cardState ＋ 能動タグ）。
+ *
+ * `marks` 未指定時は従来経路を温存する（回帰ゼロのため）: 非 hero は fold（isActiveHand）→ active なら
+ * 能動タグ NCC（recognizeAction; raise/call/allin/check）、hero も能動タグ、タグが none の非 hero で
+ * stack≈0 なら allin ヒューリスティックで補完。どちらの経路でも raise/limp/walk の対象外局面は
+ * 下流 spotReconstruction が棄却する（§6.5）。
  */
 
 import type { AnteScheme, DisplayMode, Occupancy, RawReads, RawSeatRead, Read, Rect, SeatAction } from './types.js';
@@ -41,6 +48,8 @@ import { normalizeForAnchors } from './upscaleNormalize.js';
 import { enumerateSeats, SLOTS, type SeatSlot, type Slot } from './seatEnum.js';
 import { readAmountBbAnchored } from './bbAmount.js';
 import { recognizeAction } from './actionTag.js';
+import { recognizeMark } from './actionMark.js';
+import { markZoneRect, pickMarkGrid } from './actionMarkZone.js';
 import { actionZoneRect } from './anchorAction.js';
 import { readBlinds } from './blinds.js';
 import { readPotAnchored, type PotAnchorRegion } from './potAnchor.js';
@@ -63,6 +72,14 @@ export interface AnchorTemplates {
    * 席のタグを読み、raise/limp/walk を下流 spotReconstruction が対象外棄却できる（§B/§6.5）。
    */
   readonly actions?: readonly Template[];
+  /**
+   * アクションマークの語（フォールド/レイズ/コール/オールイン/チェック, `assets/action_marks.json`）。
+   *
+   * **渡すとこれが action の主信号になる**（`actionMark.recognizeMark`）。行動した席には必ず
+   * 吹き出しプレートが出るので、マークが無い席は「まだ行動していない」＝ none と確定できる。
+   * 省略時は従来経路（カード裏の色で fold 判定 ＋ 能動タグ ＋ allin ヒューリスティック）。
+   */
+  readonly marks?: readonly Template[];
 }
 
 export interface AnchorOptions {
@@ -272,32 +289,51 @@ function cardRectFromName(nb: { cx: number; top: number; h: number }): Rect {
   };
 }
 
+/**
+ * hero カード検出の明度しきい値。厳しい順に試し、2 枚揃った最初の値を採る。
+ *
+ * 190 は無地の緑フェルト（較正機）向け。装飾テーマの卓では hero カードの隣に淡色の
+ * キャラ絵が載り、カードの白塊とキャラ絵が 1 つに繋がって横長になり、縦横比フィルタ
+ * [0.45,0.95] で「カードではない」と捨てられる（実測: Pixel 実機フレームで
+ * 249×194・比 1.284 の塊になり J♣ が消え、10♣ の 1 枚だけになって手札が空）。
+ * カード面はほぼ純白・キャラ絵は少し暗いので、しきい値を上げれば分離できる
+ * （225 で JTs を正しく復元・較正機 J4o/QJs/AQs は 190 と同一）。
+ *
+ * 厳しい方を先に試し、2 枚揃わなければ従来の 190 へ落とす。これにより
+ * 「225 では暗くて消えるフレーム」でも現行挙動が保たれる（回帰ゼロを構造で担保）。
+ */
+const HERO_CARD_THRESHOLDS = [225, 190] as const;
+
 /** hero(BC) の 2 枚を検出して heroHand を読む。 */
 function readHeroHand(img: Rgba, ranks: readonly Template[]): Read<string> {
   const hrect = fracRect(img, HERO_CARD_BAND);
   const g = grayFromRgba(img, hrect);
-  const found = findCardRects(g, { threshold: 190, minAreaFrac: 0.02, closeRadius: 1 }).map((r) => ({
-    x: hrect.x + r.x,
-    y: hrect.y + r.y,
-    w: r.w,
-    h: r.h,
-  }));
-  const rects = largestCardRects(found, 2);
-  if (rects.length < 2) return { value: '', conf: 0 };
-  return recognizeHeroHandColor(img, rects[0]!, rects[1]!, ranks);
+  for (const threshold of HERO_CARD_THRESHOLDS) {
+    const found = findCardRects(g, { threshold, minAreaFrac: 0.02, closeRadius: 1 }).map((r) => ({
+      x: hrect.x + r.x,
+      y: hrect.y + r.y,
+      w: r.w,
+      h: r.h,
+    }));
+    const rects = largestCardRects(found, 2);
+    if (rects.length >= 2) return recognizeHeroHandColor(img, rects[0]!, rects[1]!, ranks);
+  }
+  return { value: '', conf: 0 };
 }
 
 /**
  * アンカー抽出のメイン。img は任意解像度／アスペクト。RawReads（extractRawReads と同形）を返す。
  */
 export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: AnchorOptions = {}): RawReads {
-  const { digits, ranks, letters, actions } = templates;
+  const { digits, ranks, letters, actions, marks } = templates;
   const scoreFloor = opts.scoreFloor ?? BB_SCORE_FLOOR;
 
   // §B2/§B3: 正規化してから席列挙。normalizeForAnchors は決定的なので enumerateSeats が内部で
   // 使う正規化画像と同一（nameBox はこの正規化画像座標）。
   const { img: nimg } = normalizeForAnchors(img);
   const enr = enumerateSeats(img);
+  // マーク帯の静的グリッド（アスペクト帯ごとの実測値。未測定帯は undefined で席名アンカーに落ちる）。
+  const markGrid = pickMarkGrid(img.w / img.h);
 
   // ロバストな名前高（占有席 nameBox 高の中央値）。手番グロー席・iOS 小名で個々の nb.h が過小に
   // 出るため、フォールバック stack 帯の尺度に使う（個々の壊れた nb.h に依存させない）。
@@ -411,11 +447,15 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   // 先に集めて** pickHandActiveRule で自動判別する（cardState.ts 参照。Android は bright でしか
   // 切れず、iOS は bright が常に 0 で strong でしか切れないという実測に基づく）。
   // opts.handActive が明示されたら（extract.ts のプロファイル経路に対応）そちらを優先。
+  // marks 経路ではカード裏を一切見ないので、全席の blueFractions を集めるプリパスも走らせない
+  // （純粋に無駄な計算。ルール自体も使われないので既定値を置くだけ）。
   const handActiveRule: HandActiveRule =
     opts.handActive ??
-    pickHandActiveRule(
-      occ.filter((s) => !s.isHero && s.nameBox).map((s) => blueFractions(nimg, cardRectFromName(s.nameBox!))),
-    );
+    (marks
+      ? { metric: 'bright', threshold: 0.06 }
+      : pickHandActiveRule(
+          occ.filter((s) => !s.isHero && s.nameBox).map((s) => blueFractions(nimg, cardRectFromName(s.nameBox!))),
+        ));
   const handActiveOpts: CardStateOptions = { metric: handActiveRule.metric, activeFrac: handActiveRule.threshold };
 
   // 席（SLOTS 順）。
@@ -468,19 +508,33 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
     // タグ帯は名前アンカーから actionZoneRect（本番 actionZone と同相対位置）。カード領域は
     // 名前直上のスタックの更に上（アバター帯）。
     let action: Read<SeatAction> = { value: 'none', conf: 0.6 };
-    const az = actionZoneRect(nimg, s.slot, s.nameBox);
-    if (isHero) {
-      if (actions) action = recognizeAction(nimg, az, actions);
-    } else if (s.nameBox) {
-      const active = isActiveHand(nimg, cardRectFromName(s.nameBox), handActiveOpts);
-      if (!active.value) action = { value: 'fold', conf: active.conf };
-      else if (actions) action = recognizeAction(nimg, az, actions);
-    }
-    // allin: 能動タグが読めなかった（none）非 hero で stack がほぼ 0（シューブ済み）なら構造から
-    // allin を確定（§B5 の精神・従来の allin 復旧を温存）。タグが raise/call/check を返した席は
-    // 上書きしない（下流の対象外判定を尊重）。
-    if (!isHero && action.value === 'none' && stackParsed && stack.value < 0.5) {
-      action = { value: 'allin', conf: 0.6 };
+    if (marks) {
+      // マーク経路（既定・2026-09-10 以降）: 行動した席には必ず吹き出しプレートが出るので、
+      // マークを読めば fold/call/raise/allin が確定し、**マークが無ければ未行動 = none** と
+      // 言い切れる。カード裏の色（cardState）は使わない —— カード裏はユーザーが着せ替えられ、
+      // 淡色スキンのフレームでは全席が「降りた」と誤判定された（実測 Screenshot_20260910-192316）。
+      // hero も同じ経路で読む（対応スポットでは hero は手番＝マーク無し）。
+      action = recognizeMark(nimg, markZoneRect(nimg, s.slot, s.nameBox, markGrid), marks);
+    } else {
+      // 従来経路（marks 未指定）: 回帰ゼロのため温存する。
+      const az = actionZoneRect(nimg, s.slot, s.nameBox);
+      if (isHero) {
+        if (actions) action = recognizeAction(nimg, az, actions);
+      } else if (s.nameBox) {
+        const active = isActiveHand(nimg, cardRectFromName(s.nameBox), handActiveOpts);
+        if (!active.value) action = { value: 'fold', conf: active.conf };
+        else if (actions) action = recognizeAction(nimg, az, actions);
+      }
+      // allin: 能動タグが読めなかった（none）非 hero で stack がほぼ 0（シューブ済み）なら構造から
+      // allin を確定（§B5 の精神・従来の allin 復旧を温存）。タグが raise/call/check を返した席は
+      // 上書きしない（下流の対象外判定を尊重）。
+      //
+      // マーク経路ではこの推測を使わない: stack の誤読で偽の allin が出る（実測 142903/142909 の
+      // TC）。マークが無ければ未行動と確定できるので、推測で埋める必要がそもそも無い。読み落と
+      // した本物の allin は bet が全額で残るため、下流が「未分類のベット」として利用者に出す。
+      if (!isHero && action.value === 'none' && stackParsed && stack.value < 0.5) {
+        action = { value: 'allin', conf: 0.6 };
+      }
     }
 
     // ベット読み（fix 1/2）: 席前チップ "N BB" を BB アンカーで読む。ブラインド投函（SB=0.5/BB=1）や

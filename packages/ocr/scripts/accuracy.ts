@@ -33,6 +33,7 @@ const templates: ExtractTemplates = {
   ranks: load(`${A}/ranks_hero.json`),
   actions: load(`${A}/actions.json`),
   letters: load(`${A}/letters_bb.json`),
+  marks: load(`${A}/action_marks.json`),
 };
 
 // ---- 正解ラベル ----

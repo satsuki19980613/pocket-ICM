@@ -260,6 +260,32 @@
         "BL": { "occ": "empty" }
       },
       "expect": { "ok": false, "reasonHint": "limp" }
+    },
+    "Screenshot_20260910-192316.png": {
+      "note": "装飾テーマ卓（ステンドグラス＋キャラ絵）の Pixel 実機 2424×1080・ハンドリプレイ画面。1枚目の非無地テーマ。5p BB表示 280/560・アンティ 140。D=BL(Alfie)、手番は BR(manat)=UTG でまだ誰もアクションしていない（pot 2.8 = 0.5+1+0.25×5）。よって hero の手番ではなく対象外。既知の未修正: アンティ計測失敗・BL stack 29.8→29.3 誤読・TC を occupied と誤判定（本来 5 人だが 6 人と読む）。カード裏が淡色キャラ絵スキンで、cardState 方式では全席 fold と誤判定していた（アクションマーク読みで解消）。",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 2.8, "heroHand": "JTs",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 44.3, "bet": 0.5 },
+        "TC": { "occ": "empty" },
+        "TR": { "occ": "occupied", "action": "none", "stack": 6.9, "bet": 1 },
+        "BR": { "occ": "occupied", "action": "none", "stack": 66.6, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 10.4, "bet": 0, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 29.8, "bet": 0, "button": true }
+      },
+      "expect": { "ok": false, "reasonHint": "hero の手番前（UTG 未アクション）" }
+    },
+    "Screenshot_20260902-203304.png": {
+      "note": "ローズ/R.I.P. 装飾テーマ卓（Android 2730）。bb 表示、6-max、hero=BC(ri)=BU で手番。UTG(TC)/HJ(TR)/CO(BR) がフォールドし、フォールドマークが 3 席同時に見える。カード裏は紫系スキン（青ではない）で cardState の前提が成立しない。",
+      "displayMode": "bb", "blinds": { "sb": 0.5, "bb": 1 }, "ante": 0.25, "pot": 3, "heroHand": "KJo",
+      "seats": {
+        "TL": { "occ": "occupied", "action": "none", "stack": 19.2, "bet": 1 },
+        "TC": { "occ": "occupied", "action": "fold", "stack": 13.2, "bet": 0 },
+        "TR": { "occ": "occupied", "action": "fold", "stack": 27.7, "bet": 0 },
+        "BR": { "occ": "occupied", "action": "fold", "stack": 16.4, "bet": 0 },
+        "BC": { "occ": "occupied", "action": "none", "stack": 9.4, "bet": 0, "button": true, "hero": true },
+        "BL": { "occ": "occupied", "action": "none", "stack": 10.9, "bet": 0.5 }
+      },
+      "expect": { "ok": true, "heroPos": "BU", "playersLeft": 6 }
     }
   }
 }

@@ -119,13 +119,13 @@ describe('mapFeedRow', () => {
   const author = { id: 'u1', handle: 'satsuki', display_name: 'Satsuki', avatar_url: null };
   const result = makeResult('A8o', 'SB', 11, 1, 0.122, 78.9);
 
-  it('著者・結果・件数・♡・先頭コメントを束ねる（結果投稿）', () => {
+  it('著者・結果・件数・♡・本文（公開時の一言）を束ねる（結果投稿）', () => {
     const post = mapFeedRow(
       {
         id: 't1',
         created_at: 'x',
         kind: 'result',
-        body: null,
+        body: 'SBのA8o、押し得らしい',
         image_url: null,
         updated_at: null,
         author,
@@ -133,18 +133,16 @@ describe('mapFeedRow', () => {
         comments: [{ count: 5 }],
         likes: [{ count: 2 }],
       },
-      new Map([['t1', 'SBのA8o、押し得らしい']]),
       new Set(['t1']),
     );
     expect(post).not.toBeNull();
     expect(post!.thread_id).toBe('t1');
     expect(post!.kind).toBe('result');
     expect(post!.result).toBe(result);
-    expect(post!.body).toBeNull();
+    expect(post!.body).toBe('SBのA8o、押し得らしい');
     expect(post!.comment_count).toBe(5);
     expect(post!.like_count).toBe(2);
     expect(post!.liked_by_me).toBe(true);
-    expect(post!.lead_comment).toBe('SBのA8o、押し得らしい');
   });
 
   it('通常投稿（本文のみ）は result が無くても正当な行として通す', () => {
@@ -161,7 +159,6 @@ describe('mapFeedRow', () => {
         comments: [{ count: 1 }],
         likes: [{ count: 0 }],
       },
-      new Map(),
       new Set(),
     );
     expect(post).not.toBeNull();
@@ -185,7 +182,6 @@ describe('mapFeedRow', () => {
         comments: [{ count: 0 }],
         likes: [{ count: 0 }],
       },
-      new Map(),
       new Set(),
     );
     expect(post).not.toBeNull();
@@ -198,14 +194,12 @@ describe('mapFeedRow', () => {
     expect(
       mapFeedRow(
         { id: 't2', created_at: 'x', kind: 'result', body: null, image_url: null, updated_at: null, author: null, result },
-        new Map(),
         new Set(),
       ),
     ).toBeNull();
     expect(
       mapFeedRow(
         { id: 't7', created_at: 'x', kind: 'post', body: 'x', image_url: null, updated_at: null, author: null, result: null },
-        new Map(),
         new Set(),
       ),
     ).toBeNull();
@@ -215,13 +209,12 @@ describe('mapFeedRow', () => {
     expect(
       mapFeedRow(
         { id: 't3', created_at: 'x', kind: 'result', body: null, image_url: null, updated_at: null, author, result: null },
-        new Map(),
         new Set(),
       ),
     ).toBeNull();
   });
 
-  it('先頭コメント無し/未♡は null/false', () => {
+  it('公開時の一言が無し/未♡は null/false', () => {
     const post = mapFeedRow(
       {
         id: 't4',
@@ -235,11 +228,38 @@ describe('mapFeedRow', () => {
         comments: [{ count: 0 }],
         likes: [{ count: 0 }],
       },
-      new Map(),
       new Set(),
     );
-    expect(post!.lead_comment).toBeNull();
+    expect(post!.body).toBeNull();
     expect(post!.liked_by_me).toBe(false);
     expect(post!.comment_count).toBe(0);
+  });
+
+  it('回帰: 一言無しで公開した投稿に他人の返信が付いても本文欄には出ない', () => {
+    // 実際に起きたバグの再現条件: @rin が一言無しで公開（threads.body は null）→
+    // @satsuki がスレッドに返信（comments 行が増える。ここでは count にのみ反映）。
+    // 旧実装は「スレッドの投稿者を問わず comments の先頭行」を lead_comment として拾っていたため
+    // @satsuki の返信が @rin の投稿本文として表示されてしまっていた。
+    // 新実装は body を threads 行から素通しするだけで comments には一切触れないため、
+    // RawThreadRow の型上も comments は count 集計（`{count}[]`）しか持てず、
+    // 他人の返信本文がここに紛れ込む経路が存在しない。
+    const post = mapFeedRow(
+      {
+        id: 't8',
+        created_at: 'x',
+        kind: 'result',
+        body: null, // rin は一言無しで公開
+        image_url: null,
+        updated_at: null,
+        author: { id: 'u-rin', handle: 'rin', display_name: 'Rin', avatar_url: null },
+        result,
+        comments: [{ count: 1 }], // satsuki の返信で +1（本文の中身はここには来ない）
+        likes: [{ count: 0 }],
+      },
+      new Set(),
+    );
+    expect(post).not.toBeNull();
+    expect(post!.body).toBeNull();
+    expect(post!.comment_count).toBe(1);
   });
 });

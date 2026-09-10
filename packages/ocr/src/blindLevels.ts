@@ -54,12 +54,18 @@ export const CLUB_MATCH_LEVELS: readonly BlindLevel[] = BB_ANTE.map(([bb, ante],
 }));
 
 /**
- * 読み取り BB（チップ）を公式「通常」表へ**タイトに**スナップする。相対距離が gate（既定 6%）以内の
+ * 読み取り BB（チップ）を公式「通常」表へ**タイトに**スナップする。相対距離が gate（既定 2%）以内の
  * レベルがあればそれを返す。無ければ null（＝別スピード扱い＝読み値採用）。gate をタイトにするのは、
  * 別スピードの正しい読み（例 960）を近いレベル（1100・12.7%）へ誤スナップして保存を壊さないため。
- * 「通常」表はレベル間隔が広い（~40%）ので、6% は小さな誤読だけを補正し別スピードは弾く。
+ *
+ * gate は当初 6% だったが、実測で**別スピード 400/800 を表の 780（相対 2.6%）へ誤スナップ**しており
+ * （GT: Screenshot_20260901-142955 / -143002）、総チップ保存の理論値が 112.5 → 115.4 とずれて
+ * 「2.9bb 不足」に見え、スタックを 2.9bb も書き換えかねない状態だった。2% へ絞ると同フレームは
+ * 800 のまま解決され、実チップが保存している GT 8 枚すべてで残差が ±0.10bb 以内に収まる
+ * （Android/iPhone とも精度の回帰はゼロ）。表のレベル間隔は ~40% あるので、2% でも
+ * 「小さな誤読の補正」という本来の役割は果たせる。
  */
-export function snapByBb(bbChips: number, gate = 0.06): BlindLevel | null {
+export function snapByBb(bbChips: number, gate = 0.02): BlindLevel | null {
   if (!Number.isFinite(bbChips) || bbChips <= 0) return null;
   let best: BlindLevel | null = null;
   let bestRel = Infinity;
@@ -78,7 +84,7 @@ export function snapByBb(bbChips: number, gate = 0.06): BlindLevel | null {
  *    ante=読み値が妥当（0.15〜0.35×bb）ならそれ、外れれば 0.25×bb で近似。level=0。
  * いずれの場合も総 BB は `totalBbFromBbChips(bb)`（=90,000÷bb）で求まり、全スピードを自動対応する。
  */
-export function resolveBlindChips(sbChips: number, bbChips: number, anteChips: number, tightGate = 0.06): ResolvedBlinds | null {
+export function resolveBlindChips(sbChips: number, bbChips: number, anteChips: number, tightGate = 0.02): ResolvedBlinds | null {
   const bbGuess = Number.isFinite(bbChips) && bbChips > 0
     ? bbChips
     : Number.isFinite(sbChips) && sbChips > 0

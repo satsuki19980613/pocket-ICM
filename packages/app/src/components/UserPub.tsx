@@ -51,7 +51,10 @@ export function UserPub(props: {
         props.posts.map((p) => (
           <div className="userpub-item" key={p.thread_id}>
             {p.kind === 'result' && p.result ? (
-              <ResultCard result={p.result} onOpen={() => props.onOpenThread(p.thread_id)} />
+              <>
+                {p.body && <p className="post-body-text">{p.body}</p>}
+                <ResultCard result={p.result} onOpen={() => props.onOpenThread(p.thread_id)} />
+              </>
             ) : (
               <PostBody body={p.body} imageUrl={p.image_url} onOpen={() => props.onOpenThread(p.thread_id)} />
             )}

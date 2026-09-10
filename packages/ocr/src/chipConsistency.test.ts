@@ -32,6 +32,20 @@ function reads(stacks: StackSpec[], withLevel = true, pot = 2.75): RawReads {
 
 const FIVE = ['UTG', 'CO', 'BU', 'SB', 'BB'];
 
+/** bb780/ante200・3席（βテストで誤補正が出た実フレームの再現用）。deadPot=2.269, totalTheory=115.385。 */
+function reads780(stacks: StackSpec[]): RawReads {
+  return {
+    street: { value: 'preflop', conf: 0.9 },
+    blinds: { sb: { value: 0.5, conf: 0.9 }, bb: { value: 1, conf: 0.9 } },
+    ante: { scheme: 'all', amount: { value: 200 / 780, conf: 0.9 } },
+    pot: { value: 2.3, conf: 0.9 },
+    heroHand: { value: '72o', conf: 0.9 },
+    seats: stacks.map((s) => seat(s.id, s.v, s.c, 'occupied', s.bet ?? 0, s.act ?? 'none')),
+    displayMode: 'bb',
+    blindChips: { sb: 390, bb: 780, ante: 200, level: 0 },
+  };
+}
+
 describe('chipConsistency', () => {
   it('一致（合計=91.0）はそのまま consistent', () => {
     const r = reads([
@@ -42,6 +56,47 @@ describe('chipConsistency', () => {
     expect(result.mode).toBe('consistent');
     expect(result.totalBbTheory).toBeCloseTo(93.75, 2);
     expect(out.seats.map((s) => s.stack.value)).toEqual([11.5, 31.9, 22.3, 14.4, 10.9]);
+  });
+
+  it('回帰(β報告): 表示丸めぶんの差では補正しない（bb780・3席・73.5bb が 73.6bb に化けた件）', () => {
+    // 実フレーム: SB 73.5 / BB 23.6 / BU(hero) 15.9、ante 200・BB 780。OCR は 3 席とも正しい。
+    // 理論 115.385 に対し読み合計は 115.269（差 0.116）だが、これは各席の BB 表示が
+    // 0.1 刻みへ丸められている残差（3 席で最大 ±0.15）で説明できる。誤読ではないので
+    // 触ってはいけない。旧実装は固定しきい値 0.05 で「不一致」と判定し、最低信頼席
+    // （SB）に +0.12 を足して 73.6bb にしていた。
+    const r = reads780([
+      { id: 'SB', v: 73.5, c: 0.7, bet: 0.5 },
+      { id: 'BB', v: 23.6, c: 0.9, bet: 1 },
+      { id: 'BC', v: 15.9, c: 0.9 },
+    ]);
+    const { reads: out, result } = applyChipConsistency(r);
+    expect(result.mode).toBe('consistent');
+    expect(result.correctedSeatId).toBeUndefined();
+    expect(out.seats.map((s) => s.stack.value)).toEqual([73.5, 23.6, 15.9]);
+  });
+
+  it('許容幅は席数に比例する（3席=±0.20 / 5席=±0.30）', () => {
+    // 3 席で差 0.25（帯 0.20 の外）なら従来どおり補正される＝緩めすぎていないことの確認。
+    const r = reads780([
+      { id: 'SB', v: 73.5 - 0.25, c: 0.3, bet: 0.5 },
+      { id: 'BB', v: 23.6, c: 0.9, bet: 1 },
+      { id: 'BC', v: 15.9, c: 0.9 },
+    ]);
+    const { result } = applyChipConsistency(r);
+    expect(result.mode).toBe('adjust');
+    expect(result.correctedSeatId).toBe('SB');
+  });
+
+  it('補正値は画面と同じ 0.1 刻みに載る', () => {
+    const r = reads780([
+      { id: 'SB', v: 73.5 - 0.44, c: 0.3, bet: 0.5 },
+      { id: 'BB', v: 23.6, c: 0.9, bet: 1 },
+      { id: 'BC', v: 15.9, c: 0.9 },
+    ]);
+    const { reads: out, result } = applyChipConsistency(r);
+    expect(result.mode).toBe('adjust');
+    const sb = out.seats.find((s) => s.id === 'SB')!;
+    expect(Math.round(sb.stack.value * 10) / 10).toBe(sb.stack.value); // 0.1 の倍数
   });
 
   it('0.5低い誤読を最低信頼席で+0.5調整', () => {

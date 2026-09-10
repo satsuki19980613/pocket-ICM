@@ -81,8 +81,13 @@ export function ImageModal(props: {
                 {view.seats.map((s) => (
                   <div key={s.id} className={`seatrow-ro${s.isHero ? ' hero' : ''}`}>
                     <span className={`posbadge sm pos-${s.posLabel}`}>{s.posLabel}</span>
-                    {s.isHero && <span className="imgmodal-tag hero">hero</span>}
-                    {s.isButton && <span className="imgmodal-tag dbtn">D</span>}
+                    {/* タグ枠は hero/D の有無に関わらず常に描画する（CSS Grid の列を必ず1つ
+                        消費させ、後続の stk の開始位置を全行で揃えるため。中身が無くても
+                        空のまま置いておく）。 */}
+                    <span className="imgmodal-tagbox">
+                      {s.isHero && <span className="imgmodal-tag hero">hero</span>}
+                      {s.isButton && <span className="imgmodal-tag dbtn">D</span>}
+                    </span>
                     <span className={`stk${s.stackLow ? ' lowconf' : ''}`}>{s.stackText}</span>
                     {s.betText && (
                       <span className={`betchip${s.betLow ? ' lowconf' : ''}`}>bet {s.betText}</span>

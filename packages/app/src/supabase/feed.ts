@@ -44,14 +44,16 @@ export interface FeedPost {
   kind: ThreadKind;
   /** 結果投稿のみ値を持つ（通常投稿は null）。 */
   result: FeedResult | null;
-  /** 通常投稿の本文（結果投稿は null）。 */
+  /**
+   * スレッド本文。通常投稿は本文そのもの。結果投稿は「公開時の一言」（無ければ null）。
+   * 投稿者本人しか書けない列（`threads_update` RLS で著者以外は更新不可）なので、
+   * スレッド内の他人の返信（`comments`）が紛れ込むことはない。
+   */
   body: string | null;
   /** 通常投稿の画像1枚（結果投稿は null）。 */
   image_url: string | null;
   /** 通常投稿の本文編集時刻（未編集/結果投稿は null）。 */
   updated_at: string | null;
-  /** 投稿者の先頭コメント（公開時の一言。結果投稿のみ意味を持つ）。無ければ null。 */
-  lead_comment: string | null;
   comment_count: number;
   like_count: number;
   liked_by_me: boolean;
@@ -75,7 +77,11 @@ export interface ThreadDetail {
   kind: ThreadKind;
   /** 結果投稿のみ値を持つ（通常投稿は null）。 */
   result: FeedResult | null;
-  /** 通常投稿の本文（結果投稿は null）。 */
+  /**
+   * スレッド本文。通常投稿は本文そのもの。結果投稿は「公開時の一言」（無ければ null）。
+   * 投稿者本人しか書けない列（`threads_update` RLS で著者以外は更新不可）なので、
+   * スレッド内の他人の返信（`comments`）が紛れ込むことはない。
+   */
   body: string | null;
   /** 通常投稿の画像1枚（結果投稿は null）。 */
   image_url: string | null;
@@ -188,16 +194,15 @@ interface RawThreadRow {
 
 /**
  * threads 行＋補助データ → FeedPost（純）。
- * leadByThread: thread_id → 先頭コメント本文。likedThreads: 自分が♡したスレッド id 集合。
+ * likedThreads: 自分が♡したスレッド id 集合。
  * 結果投稿（`kind==='result'`）で result が欠けた行は不可視データとして落とす
  * （旧 `results!inner` が担っていたガードを引き続き純関数側でも担保する）。
  * 通常投稿（`kind==='post'`）は result が無くても正当な行として通す。
+ * `body` は `threads` 行そのもの（投稿者本人しか書けない）を素通しする。以前はここに
+ * `comments` テーブルから拾った「先頭コメント」を充てていたが、投稿者以外の返信が
+ * 最初に付くと本文欄に他人の発言が表示される不具合があった（`threads.body` に一本化して解消）。
  */
-export function mapFeedRow(
-  row: RawThreadRow,
-  leadByThread: Map<string, string | null>,
-  likedThreads: Set<string>,
-): FeedPost | null {
+export function mapFeedRow(row: RawThreadRow, likedThreads: Set<string>): FeedPost | null {
   if (!row.author) return null;
   if (row.kind === 'result' && !row.result) return null;
   return {
@@ -209,7 +214,6 @@ export function mapFeedRow(
     body: row.body,
     image_url: row.image_url,
     updated_at: row.updated_at,
-    lead_comment: leadByThread.get(row.id) ?? null,
     comment_count: countOf(row.comments),
     like_count: countOf(row.likes),
     liked_by_me: likedThreads.has(row.id),
@@ -258,32 +262,15 @@ export async function listFeed(opts?: {
   const ids = rows.map((r) => r.id);
   if (ids.length === 0) return { ok: true, data: [] };
 
-  // 先頭コメント（投稿者の一言）と自分の♡を別クエリで補う。
-  const [leadByThread, likedThreads] = await Promise.all([
-    fetchLeadComments(ids),
-    fetchMyLikes(uid, ids),
-  ]);
+  // 自分の♡を別クエリで補う（本文は threads 行に既に載っているので追加取得不要）。
+  const likedThreads = await fetchMyLikes(uid, ids);
 
   const posts: FeedPost[] = [];
   for (const row of rows) {
-    const p = mapFeedRow(row, leadByThread, likedThreads);
+    const p = mapFeedRow(row, likedThreads);
     if (p) posts.push(p);
   }
   return { ok: true, data: posts };
-}
-
-/** 各スレッドの先頭コメント本文（created_at 昇順の最初＝公開時の一言）。 */
-async function fetchLeadComments(threadIds: string[]): Promise<Map<string, string | null>> {
-  const map = new Map<string, string | null>();
-  const { data } = await supabase
-    .from('comments')
-    .select('thread_id, body, created_at')
-    .in('thread_id', threadIds)
-    .order('created_at', { ascending: true });
-  for (const c of (data ?? []) as { thread_id: string; body: string | null }[]) {
-    if (!map.has(c.thread_id)) map.set(c.thread_id, c.body);
-  }
-  return map;
 }
 
 /** 自分が♡したスレッド id 集合。 */

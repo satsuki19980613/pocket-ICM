@@ -1334,9 +1334,39 @@ button.cell { cursor: pointer; }
 
 /* ---- 元画像 × OCR 出力の照合表（SPEC §5.2.3・WP-B1。SEATS のみに絞り情報量を削減済み） ---- */
 .imgmodal-readout { padding: var(--s4); border-top: 1px solid var(--line); }
-/* 席テーブルは 375px 幅でも横スクロールしないよう折り返す（既存 .seatrow-ro は1行前提のため
-   このモーダル内だけ挙動を変える）。 */
-.imgmodal-seats-ro .seatrow-ro { flex-wrap: wrap; row-gap: 6px; }
+/* 席一覧はバッジ（hero/D）の有無で stk（スタック）の開始位置がズレていた（Director 指摘）ため、
+   .seatrow-ro（display:flex）をこのモーダル内だけ CSS Grid の固定列に上書きする：
+   [ポジションバッジ][タグ枠][スタック][betチップ]。行（.seatrow-ro）は1行ずつ独立した
+   grid コンテナ（Confirm.tsx と共有する背景/box-shadow を保つため subgrid にはしない）
+   なので、列幅を "auto" のまま content-fit にすると行ごとに実測幅が変わってしまい
+   揃わない（hero+D 両方付く行だけタグ枠が広がり、以降の列が右にズレる＝今回の不具合の
+   原因そのもの）。そのため列2「タグ枠」・列3「スタック」は px 固定にして、内容の有無に
+   関わらずどの行でも同じ列幅＝同じ開始 x になるようにする。
+   固定幅の根拠（実測, .stk/.imgmodal-tag と同じフォント指定で計測）:
+     - 列2 タグ枠: hero(4文字)+D(1文字)を並べても 63.5px（hero 単体 39px + gap 4px + D 20px）
+       → 66px（安全マージン込み）。
+     - 列3 スタック: "123.4bb"(7文字) で 61.6px、極端な "9999.9bb"(8文字) でも 70.4px
+       → 68px を基準にし、万一それを超える値が来ても崩れないよう nowrap+ellipsis で
+       ソフトに丸める（通常の 2〜3 桁 bb 表記では発動しない）。
+   列1（ポジションバッジ）は .posbadge.sm の min-width（42px）で全ポジション共通のため
+   auto のままで揃う。列4（bet チップ）は最後列なので auto のままで問題ない（列1〜3が
+   固定である以上、bet チップの開始 x も行によらず一定になる）。
+   .seats-ro / .seatrow-ro 自体は Confirm.tsx の Stacks 一覧と共有しているため、
+   影響は必ず .imgmodal-seats-ro 配下だけに限定する。 */
+.imgmodal-seats-ro .seatrow-ro {
+  display: grid;
+  grid-template-columns: auto 66px 68px auto;
+  /* justify-content の既定 'normal' は auto トラックへ余白を均等配分して伸ばしてしまう
+     （bet チップの無い行だけ列1・列4が伸びて逆にズレる）。'start' で無効化し、
+     使われない余白は行の右側にだけ残す。 */
+  justify-content: start;
+  align-items: center;
+}
+/* 列3 スタックが想定を超える極端な長さの値でもグリッド列や行を突き破らないようにする
+   安全策（通常の 2〜3 桁 bb 表記では発動しない）。 */
+.imgmodal-seats-ro .stk { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* タグ枠（列2）。hero/D が両方付く行でも横並びにして固定幅の中に収める。 */
+.imgmodal-tagbox { display: flex; align-items: center; gap: 4px; overflow: hidden; }
 /* hero/D バッジ（.herotag は margin-left:auto で右寄せ仕様のため、後続のセルが並ぶこの表では
    使わず専用クラスを用意する）。 */
 .imgmodal-tag {
@@ -1347,6 +1377,7 @@ button.cell { cursor: pointer; }
   padding: 1px 6px;
   border: 1px solid var(--line-2);
   color: var(--dim);
+  white-space: nowrap;
 }
 .imgmodal-tag.hero { color: var(--yellow); border-color: rgba(252, 238, 10, 0.5); }
 /* 注意: モディファイアは .btn ではなく .dbtn にする（グローバルな .btn ボタン

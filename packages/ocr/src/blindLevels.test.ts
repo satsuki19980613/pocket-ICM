@@ -25,15 +25,19 @@ describe('blindLevels', () => {
     expect(lv!.level).toBe(1);
   });
 
-  it('snapByBb: タイト（6%）一致で公式レベルへ・小誤読を補正', () => {
+  it('snapByBb: タイト（2%）一致で公式レベルへ・小誤読を補正', () => {
     expect(snapByBb(200)!.level).toBe(1);
-    expect(snapByBb(205)!.level).toBe(1); // 2.5% 内
+    expect(snapByBb(203)!.level).toBe(1); // 1.5% 内
     expect(snapByBb(3800)!.level).toBe(9);
   });
 
   it('snapByBb: 別スピードの BB（表に無い）はスナップしない', () => {
     // 960 は 780(lv5)/1100(lv6) から 12〜19% 離れる → null（誤スナップしない）。
     expect(snapByBb(960)).toBeNull();
+    // 回帰: 別スピード 400/800 は表の 780 から 2.6% しか離れておらず、旧 gate(6%) では
+    // 780 へ誤スナップしていた。総チップ保存の理論値が 112.5→115.4 とずれ、スタックを
+    // 2.9bb も書き換えかねなかった（GT: Screenshot_20260901-142955 / -143002）。
+    expect(snapByBb(800)).toBeNull();
     expect(snapByBb(NaN)).toBeNull();
     expect(snapByBb(0)).toBeNull();
     expect(snapByBb(123456789)).toBeNull();

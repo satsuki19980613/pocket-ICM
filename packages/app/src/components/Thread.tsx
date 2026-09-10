@@ -38,7 +38,10 @@ export function Thread(props: {
             {d.kind === 'post' && d.updated_at && <i>（編集済み）</i>}
           </div>
           {d.kind === 'result' && d.result ? (
-            <ResultCard result={d.result} onOpen={props.onOpenResult} />
+            <>
+              {d.body && <p className="post-body-text">{d.body}</p>}
+              <ResultCard result={d.result} onOpen={props.onOpenResult} />
+            </>
           ) : (
             <PostHead
               body={d.body}

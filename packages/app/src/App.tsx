@@ -609,8 +609,9 @@ export function App(): JSX.Element {
   }
 
   /**
-   * 公開レバー（SPEC §5.3）。on=true で `publishRecord`（is_public 更新＋スレッド作成＋
-   * 先頭コメント）、on=false で `unpublishRecord`（スレッド削除＋is_public を戻す）。
+   * 公開レバー（SPEC §5.3）。on=true で `publishRecord`（is_public 更新＋スレッド作成、
+   * 公開時の一言は `threads.body` に保存）、on=false で `unpublishRecord`（スレッド削除＋
+   * is_public を戻す）。
    * v2 にあった `supabase/feed.ts` の `publishResult`（計算結果を新規 results 行として
    * 公開する経路）は WP-D で削除済み（既に呼び出し元が無いことを確認して削除）。
    */

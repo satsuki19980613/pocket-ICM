@@ -24,8 +24,23 @@ import { totalBbFromBbChips } from './blindLevels.js';
 
 const SB_BB = 0.5;
 const BB_BB = 1;
-/** これ未満の差は「一致」とみなし調整しない。 */
+/** これ未満の差は「一致」とみなし調整しない（表示丸め分は displayTolerance で別途上乗せ）。 */
 const CONSISTENT_TOL = 0.05;
+/**
+ * BB 表示の刻み（画面は小数第1位まで＝ 73.5bb のように出る）。
+ *
+ * 実チップ → BB 換算は割り切れないので、画面の値は必ずこの刻みへ丸められている。
+ * その丸め残差は 1 席あたり最大 ±DISPLAY_STEP/2 で、**席数に比例して合計に積み上がる**。
+ * 総チップ保存の理論値（90,000÷BB）は丸める前の値なので、両者の差は誤読でなくても
+ * 席数ぶんだけ開く。ここを見落として「差＝誤読」と決めつけると、正しく読めている
+ * スタックを勝手に書き換えてしまう（β報告: 3人・BB=780 で 73.5bb が 73.6bb に化けた）。
+ *
+ * 丸めが切り捨てか四捨五入かは実測で確かめた（[[ocr-accuracy-verification]] の規律）。
+ * 総チップが保存している GT フレーム 6 枚（n=2..6）の delta は **-0.086 〜 +0.050** に収まり、
+ * 席数に比例して**両側**へ散った。切り捨てなら +0.05n 側へ偏るはずなので、実装は
+ * **四捨五入**と判断し、許容幅も両側 ±0.05n とする。
+ */
+const DISPLAY_STEP = 0.1;
 /** 差がこの割合（総BB比）を超えたら誤補正回避のため触らない（モード不一致等）。 */
 const LARGE_DELTA_FRAC = 0.06;
 /** スタック≈0（オールイン）とみなす閾値。 */
@@ -64,6 +79,19 @@ export interface ChipConsistencyResult {
 
 function round2(x: number): number {
   return Math.round(x * 100) / 100;
+}
+
+/** 表示スタックは必ず 0.1 刻み。復元・補正した値もその格子に載せる（画面と同じ形にする）。 */
+function snapDisplay(x: number): number {
+  return Math.round(x * 10) / 10;
+}
+
+/**
+ * 「読み合計 vs 理論値」の許容差。表示丸めの残差が席数に比例して積み上がる分を上乗せする。
+ * displayedCount は**画面から読んだスタックの個数**（丸め残差の発生源の数）。
+ */
+function displayTolerance(displayedCount: number): number {
+  return CONSISTENT_TOL + (DISPLAY_STEP / 2) * displayedCount;
 }
 
 /** アンティ拠出（BB 換算）。scheme に応じて all=人数分 / bb=1 席分 / none=0。 */
@@ -162,7 +190,8 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
 
   // 1 席だけ未読 → 保存則から復元。
   if (unreadable.length === 1) {
-    const recovered = round2(totalBbTheory - (readableSum + deadPot));
+    // 復元値も画面と同じ 0.1 刻みに載せる（他席の丸め残差ぶん端数が乗るため）。
+    const recovered = snapDisplay(totalBbTheory - (readableSum + deadPot));
     if (recovered > CONSISTENT_TOL && recovered < totalBbTheory) {
       const target = unreadable[0]!;
       const seats = reads.seats.map((s): RawSeatRead =>
@@ -185,8 +214,16 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
   // 全席読めた → 差分を最低信頼席で調整。
   const totalBbRead = round2(readableSum + deadPot);
   const delta = round2(totalBbTheory - totalBbRead);
-  if (Math.abs(delta) < CONSISTENT_TOL) {
-    return { reads: { ...reads, pot: potFixed }, result: { applied: true, mode: 'consistent', totalBbTheory, totalBbRead, deltaBb: delta, notes: [] } };
+  // 表示丸めで説明できる範囲は「一致」。ここを席数に比例させないと、正しい読みを補正してしまう。
+  const tol = displayTolerance(readable.length);
+  if (Math.abs(delta) <= tol) {
+    return {
+      reads: { ...reads, pot: potFixed },
+      result: {
+        applied: true, mode: 'consistent', totalBbTheory, totalBbRead, deltaBb: delta,
+        notes: [`|delta|=${Math.abs(delta)} <= tol=${round2(tol)} (display rounding of ${readable.length} stacks)`],
+      },
+    };
   }
   if (Math.abs(delta) > LARGE_DELTA_FRAC * totalBbTheory) {
     return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, notes: [`delta ${delta} too large; not adjusting`] } };
@@ -194,7 +231,8 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
   let target: RawSeatRead | undefined;
   for (const s of readable) if (!target || s.stack.conf < target.stack.conf) target = s;
   if (!target) return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, notes: [] } };
-  const newVal = round2(target.stack.value + delta);
+  // 補正後の値も画面と同じ 0.1 刻みに載せる（表示され得ない端数を作らない）。
+  const newVal = snapDisplay(target.stack.value + delta);
   if (newVal <= 0) {
     return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, notes: ['adjustment would make stack<=0'] } };
   }

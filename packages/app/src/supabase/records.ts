@@ -244,8 +244,11 @@ export async function listMyRecords(limit = 100): Promise<FnResult<SpotRecord[]>
  *
  * v2 は「結果画面で記録と公開を同時に行う」経路で公開のたびに新しい `results` 行を作っていたが
  * （旧 `feed.ts` の `publishResult`・v3 で削除）、v3 は計算開始時点で `results` 行が既に存在するため
- * それでは二重登録になる。ここでは既存の result 行を `is_public=true` に更新し、
- * `threads` に1行挿入、コメントがあれば先頭コメントとして挿入する。スレッド作成に失敗したら
+ * それでは二重登録になる。ここでは既存の result 行を `is_public=true` に更新し、`threads` に1行
+ * 挿入する（公開時の一言は `threads.body` に持たせる。§5.7 バグ修正の後日追記: 以前はこの一言を
+ * `comments` 行として挿入していたため、フィードの `lead_comment`（スレッドの投稿者を問わず最初の
+ * コメント）がスレッド内の**他人の返信**を拾ってしまうバグがあった。`threads.body` は投稿者本人
+ * にしか書けない列なので、この経路のバグは構造的に起きない）。スレッド作成に失敗したら
  * `is_public` を戻し、公開されていないのに「公開中」に見える孤児状態を残さない。
  */
 export async function publishRecord(
@@ -260,7 +263,7 @@ export async function publishRecord(
 
   const { data: th, error: terr } = await supabase
     .from('threads')
-    .insert({ kind: 'result', result_id: resultId, author: uid })
+    .insert({ kind: 'result', result_id: resultId, author: uid, body: comment.trim() || null })
     .select('id')
     .single();
   if (terr || !th) {
@@ -269,12 +272,6 @@ export async function publishRecord(
     return fail('公開に失敗しました（スレッドの作成）');
   }
   const threadId = (th as { id: string }).id;
-
-  const body = comment.trim();
-  if (body) {
-    await supabase.from('comments').insert({ thread_id: threadId, author: uid, body });
-    // コメント失敗は致命でない（スレッド自体は成立しており、後から追記できる）。
-  }
 
   return { ok: true, data: { thread_id: threadId } };
 }

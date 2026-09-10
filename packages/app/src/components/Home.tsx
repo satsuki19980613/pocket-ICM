@@ -82,7 +82,7 @@ function PostCard(props: {
         </div>
         {p.kind === 'result' && p.result ? (
           <>
-            {p.lead_comment && <p>{p.lead_comment}</p>}
+            {p.body && <p className="post-body-text">{p.body}</p>}
             <ResultCard result={p.result} onOpen={props.onOpenThread} />
           </>
         ) : (

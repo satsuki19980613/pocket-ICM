@@ -103,10 +103,11 @@ body::before {
 }
 
 /* =========================================================================
-   流動マーブル背景 — ブランド＆ポジション色が混ざり、ゆっくり大きく流れる下地。
-   2 レイヤー（::before/::after）を別周期・逆方向にドリフトさせ screen 合成で混色。
-   「ゆっくり・大きく」を狙い、周期は長め（27〜34s）のまま振れ幅（平行移動/回転/拡大）を
-   大きく取る。速度を上げると酔うので上げない。reduced-motion で静止（上部一括）。
+   流動マーブル背景（煙） — Marble.tsx が .marble > .mb×6 を描く。
+   ブロブ1個につき translate / scale / rotate を**別プロパティ・別周期**で回す。
+   周期は互いに素に近い値をばらして選んであるので、合成された動きはほぼ繰り返さない。
+   輪郭は radial-gradient の長い減衰だけで消す（全画面 filter: blur は毎フレーム再計算に
+   なり低スペック端末で重いので使わない）。reduced-motion では上部の一括ルールで静止。
    ========================================================================= */
 .marble {
   position: fixed;
@@ -116,47 +117,129 @@ body::before {
   pointer-events: none;
   background: var(--bg2);
 }
-.marble::before,
-.marble::after {
-  content: '';
+.mb {
   position: absolute;
-  /* 回転・拡大で端が見えないよう画面より大きく取る。ただし広げすぎると radial-gradient
-     の中心（18%〜84%）が画面外へ逃げて“ほぼ無地”になるため、回転20deg・拡大1.32 が
-     端を出さない下限として -30% に留める。 */
-  inset: -30%;
+  display: block;
+  border-radius: 50%;
   will-change: transform;
-  transform-origin: 50% 50%;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-fill-mode: both;
 }
-.marble::before {
-  background:
-    radial-gradient(34% 38% at 18% 18%, rgba(252, 238, 10, 0.52), transparent 62%),
-    radial-gradient(36% 38% at 84% 14%, rgba(58, 230, 255, 0.54), transparent 62%),
-    radial-gradient(38% 42% at 72% 60%, rgba(255, 154, 213, 0.50), transparent 64%),
-    radial-gradient(40% 42% at 22% 74%, rgba(201, 168, 255, 0.50), transparent 64%),
-    radial-gradient(32% 36% at 52% 96%, rgba(252, 238, 10, 0.34), transparent 64%);
-  animation: marbleA 34s ease-in-out infinite alternate;
+
+/* ---- 個々のブロブ（色・大きさ・置き場所・周期）----
+   置き場所は「画面の何%にコアを置くか」で決める（left は calc(X% - 半径) ）。
+   vmax 基準の固定 left だと縦長画面でコアが画面外へ逃げ、薄い裾しか見えなくなる。 */
+.mb1 {
+  width: 78vmax; height: 78vmax; left: calc(15% - 39vmax); top: calc(10% - 39vmax);
+  background: radial-gradient(circle, rgba(252, 238, 10, 0.56) 0%, rgba(252, 238, 10, 0.20) 40%, transparent 75%);
+  animation-name: roamA, breatheA, spinA;
+  animation-duration: 53s, 37s, 89s;
+  animation-delay: -7s, -13s, -31s;
 }
-.marble::after {
-  background:
-    radial-gradient(36% 40% at 76% 34%, rgba(255, 59, 59, 0.38), transparent 62%),
-    radial-gradient(40% 44% at 18% 44%, rgba(143, 180, 255, 0.48), transparent 64%),
-    radial-gradient(34% 38% at 58% 8%, rgba(121, 235, 199, 0.44), transparent 62%),
-    radial-gradient(42% 44% at 90% 80%, rgba(255, 159, 107, 0.44), transparent 64%),
-    radial-gradient(36% 40% at 36% 66%, rgba(58, 230, 255, 0.34), transparent 64%);
-  mix-blend-mode: screen;
-  animation: marbleB 27s ease-in-out infinite alternate;
+.mb2 {
+  width: 70vmax; height: 70vmax; left: calc(85% - 35vmax); top: calc(18% - 35vmax);
+  background: radial-gradient(circle, rgba(58, 230, 255, 0.56) 0%, rgba(58, 230, 255, 0.20) 40%, transparent 75%);
+  animation-name: roamB, breatheB, spinB;
+  animation-duration: 61s, 43s, 79s;
+  animation-delay: -23s, -5s, -11s;
 }
-@keyframes marbleA {
-  0%   { transform: translate(-9%, -7%) rotate(-6deg) scale(1.05); }
-  35%  { transform: translate(6%, -4%) rotate(9deg) scale(1.28); }
-  70%  { transform: translate(8%, 9%) rotate(20deg) scale(1.12); }
-  100% { transform: translate(-6%, 6%) rotate(-11deg) scale(1.32); }
+.mb3 {
+  width: 84vmax; height: 84vmax; left: calc(70% - 42vmax); top: calc(55% - 42vmax);
+  background: radial-gradient(circle, rgba(255, 154, 213, 0.50) 0%, rgba(255, 154, 213, 0.18) 40%, transparent 75%);
+  animation-name: roamC, breatheA, spinB;
+  animation-duration: 47s, 59s, 97s;
+  animation-delay: -17s, -29s, -3s;
 }
-@keyframes marbleB {
-  0%   { transform: translate(8%, 5%) rotate(4deg) scale(1.30); }
-  40%  { transform: translate(-9%, -8%) rotate(-16deg) scale(1.05); }
-  75%  { transform: translate(-3%, 8%) rotate(12deg) scale(1.24); }
-  100% { transform: translate(7%, -6%) rotate(-5deg) scale(1.10); }
+.mb4 {
+  width: 72vmax; height: 72vmax; left: calc(20% - 36vmax); top: calc(72% - 36vmax);
+  background: radial-gradient(circle, rgba(201, 168, 255, 0.52) 0%, rgba(201, 168, 255, 0.19) 40%, transparent 75%);
+  animation-name: roamD, breatheB, spinA;
+  animation-duration: 67s, 41s, 83s;
+  animation-delay: -37s, -19s, -47s;
+}
+.mb5 {
+  width: 64vmax; height: 64vmax; left: calc(50% - 32vmax); top: calc(35% - 32vmax);
+  background: radial-gradient(circle, rgba(255, 159, 107, 0.44) 0%, rgba(255, 159, 107, 0.16) 40%, transparent 75%);
+  animation-name: roamE, breatheA, spinB;
+  animation-duration: 43s, 71s, 101s;
+  animation-delay: -11s, -41s, -23s;
+}
+.mb6 {
+  width: 68vmax; height: 68vmax; left: calc(90% - 34vmax); top: calc(90% - 34vmax);
+  background: radial-gradient(circle, rgba(121, 235, 199, 0.44) 0%, rgba(121, 235, 199, 0.16) 40%, transparent 75%);
+  animation-name: roamB, breatheB, spinA;
+  animation-duration: 59s, 47s, 73s;
+  animation-delay: -31s, -7s, -53s;
+}
+
+/* ---- 漂う経路（ウェイポイントを不揃いに置いて直線的に見せない）---- */
+@keyframes roamA {
+  0%   { translate: -6vmax  4vmax; }
+  18%  { translate:  9vmax -7vmax; }
+  37%  { translate: 14vmax  6vmax; }
+  55%  { translate:  2vmax 13vmax; }
+  71%  { translate: -11vmax 9vmax; }
+  88%  { translate: -8vmax -6vmax; }
+  100% { translate:  5vmax -12vmax; }
+}
+@keyframes roamB {
+  0%   { translate:  8vmax -5vmax; }
+  22%  { translate: -7vmax -11vmax; }
+  41%  { translate: -13vmax 3vmax; }
+  63%  { translate: -2vmax 12vmax; }
+  79%  { translate: 10vmax  8vmax; }
+  100% { translate: 15vmax -3vmax; }
+}
+@keyframes roamC {
+  0%   { translate:  3vmax 10vmax; }
+  16%  { translate: -9vmax  5vmax; }
+  33%  { translate: -12vmax -8vmax; }
+  52%  { translate:  4vmax -13vmax; }
+  68%  { translate: 13vmax -4vmax; }
+  84%  { translate:  7vmax  9vmax; }
+  100% { translate: -5vmax 14vmax; }
+}
+@keyframes roamD {
+  0%   { translate: -10vmax -8vmax; }
+  25%  { translate:  6vmax -12vmax; }
+  44%  { translate: 12vmax  2vmax; }
+  61%  { translate:  1vmax 11vmax; }
+  83%  { translate: -13vmax 6vmax; }
+  100% { translate: -4vmax -10vmax; }
+}
+@keyframes roamE {
+  0%   { translate: 11vmax  7vmax; }
+  19%  { translate:  0vmax 14vmax; }
+  38%  { translate: -12vmax 4vmax; }
+  57%  { translate: -6vmax -10vmax; }
+  74%  { translate:  8vmax -13vmax; }
+  100% { translate: 14vmax -1vmax; }
+}
+
+/* ---- 膨らみ縮み（煙が湧いて散る感じ）---- */
+@keyframes breatheA {
+  0%   { scale: 0.82; }
+  34%  { scale: 1.14; }
+  67%  { scale: 0.94; }
+  100% { scale: 1.22; }
+}
+@keyframes breatheB {
+  0%   { scale: 1.18; }
+  29%  { scale: 0.88; }
+  62%  { scale: 1.26; }
+  100% { scale: 0.96; }
+}
+
+/* ---- ゆっくり回す（勾配の非対称を回して “ねじれ” を出す）---- */
+@keyframes spinA {
+  from { rotate: -24deg; }
+  to   { rotate: 31deg; }
+}
+@keyframes spinB {
+  from { rotate: 27deg; }
+  to   { rotate: -19deg; }
 }
 
 /* ---- HUD ヘッダー ---- */

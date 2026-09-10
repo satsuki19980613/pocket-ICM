@@ -84,12 +84,6 @@ export function Auth(props: {
     <div className="auth">
       <div className="logo">◢◤</div>
       <h2>Black Ops ICM</h2>
-      <p className="lead">
-        クラブマッチのオールイン、
-        <br />
-        あとから答え合わせする場所。
-      </p>
-
       <div className="seg2">
         <button type="button" aria-pressed={mode === 'login'} onClick={() => switchMode('login')}>
           ログイン

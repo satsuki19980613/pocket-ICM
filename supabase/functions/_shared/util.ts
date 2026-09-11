@@ -1,5 +1,7 @@
 // Edge Function 共通ユーティリティ（Deno ランタイム）。
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// 版は固定する（`@2` のままだとデプロイのたびに最新の 2.x を取りに行き、中身が勝手に変わる）。
+// アプリ（packages/app）と同じ版に揃える。
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.115.0';
 
 // synthetic email のドメイン。メール送信はしない（email_confirm=true で確定）。
 // handle をローカル部にして「handle@…」を Supabase Auth の識別子にする。

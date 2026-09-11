@@ -9,6 +9,7 @@ import { signOut, deleteAccount } from '../supabase/api';
 import { uploadAvatar, removeAvatar } from '../supabase/avatar';
 import { validatePassword } from '../auth/validate';
 import { checkForUpdate, useAppUpdate, type UpdatePhase } from '../pwa/appUpdate';
+import { useStorageImage } from '../supabase/storageUrls';
 import { InfoMark, InfoModal } from './InfoModal';
 import { useBackLayer } from './BackLayer';
 
@@ -51,6 +52,7 @@ export function Settings(props: {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const upd = useAppUpdate();
+  const avatarSrc = useStorageImage(profile?.avatar_url ?? null, 'avatars');
 
   useEffect(() => {
     let active = true;
@@ -201,7 +203,7 @@ export function Settings(props: {
     <div className="settings">
       <div className="avpick">
         <div className="avbig">
-          {profile?.avatar_url ? <img src={profile.avatar_url} alt="" /> : initial}
+          {avatarSrc ? <img src={avatarSrc} alt="" /> : initial}
         </div>
         <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => void onPickAvatar(e)} />
         <div className="avpick-actions">

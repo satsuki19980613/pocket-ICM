@@ -12,6 +12,7 @@ import { headlineNode, verdictOf, type HeroAction } from '../records/model';
 import type { SampleCard, Suit } from '../data/cardTypes';
 import { supabase } from './client';
 import type { FnResult } from './api';
+import { storagePathFromRef } from './storageUrls';
 
 // ---------------------------------------------------------------------------
 // 型
@@ -177,6 +178,23 @@ export function heroActionToDb(a: HeroAction | null | undefined): 'ALL_IN' | 'FO
   return null;
 }
 
+/**
+ * 結果投稿の解（solution）がカード・結果画面で描ける形か。他のメンバーが投稿した行の形が
+ * 壊れていても（悪意の有無を問わず）、フィード全体を落とさずにその行だけを落とすため。
+ */
+export function isRenderableResult(result: unknown): result is FeedResult {
+  if (!result || typeof result !== 'object') return false;
+  const sol = (result as { solution?: unknown }).solution;
+  if (!sol || typeof sol !== 'object') return false;
+  const s = sol as Record<string, unknown>;
+  return (
+    Array.isArray(s.nodes) &&
+    typeof s.heroHand === 'string' &&
+    typeof s.heroPos === 'string' &&
+    typeof s.playersLeft === 'number'
+  );
+}
+
 // 生の埋め込み行（PostgREST）。to-one は object, to-many は array。
 // v3: result は左結合（`results!inner` を外した）なので通常投稿では null で返る。
 interface RawThreadRow {
@@ -204,7 +222,7 @@ interface RawThreadRow {
  */
 export function mapFeedRow(row: RawThreadRow, likedThreads: Set<string>): FeedPost | null {
   if (!row.author) return null;
-  if (row.kind === 'result' && !row.result) return null;
+  if (row.kind === 'result' && !isRenderableResult(row.result)) return null;
   return {
     thread_id: row.id,
     created_at: row.created_at,
@@ -301,7 +319,7 @@ export async function getThread(threadId: string): Promise<FnResult<ThreadDetail
   if (error || !t) return fail('スレッドを取得できませんでした');
   const row = t as unknown as RawThreadRow;
   if (!row.author) return fail('スレッドの内容を取得できませんでした');
-  if (row.kind === 'result' && !row.result) return fail('スレッドの内容を取得できませんでした');
+  if (row.kind === 'result' && !isRenderableResult(row.result)) return fail('スレッドの内容を取得できませんでした');
 
   const { data: cdata, error: cerr } = await supabase
     .from('comments')
@@ -408,9 +426,24 @@ export async function editPost(threadId: string, body: string): Promise<FnResult
  * 返信（comments）・♡（likes）は FK cascade で連動して消える（既存の結果投稿削除と同じ挙動）。
  */
 export async function deletePost(threadId: string): Promise<FnResult<Record<string, never>>> {
+  // 画像ファイル本体は DB の削除では消えないので、先に参照を控えて消した後に Storage からも消す。
+  // （他の人の返信画像は本人以外消せない＝週1の purge-images が孤児として回収する）
+  const before = await supabase.from('threads').select('image_url').eq('id', threadId).eq('kind', 'post').maybeSingle();
   const { error } = await supabase.from('threads').delete().eq('id', threadId).eq('kind', 'post');
   if (error) return fail('投稿を削除できませんでした');
+  await removeThreadImage((before.data as { image_url: string | null } | null)?.image_url ?? null);
   return { ok: true, data: {} };
+}
+
+/** 自分が上げたスレッド画像を Storage から消す（失敗は無視＝孤児は週1の purge-images が回収）。 */
+async function removeThreadImage(ref: string | null): Promise<void> {
+  const path = storagePathFromRef(ref, 'thread-images');
+  if (!path) return;
+  try {
+    await supabase.storage.from('thread-images').remove([path]);
+  } catch {
+    /* noop */
+  }
 }
 
 /** コメント（返信）を追加。本文・画像 URL の少なくとも一方が要る（DB constraint）。 */
@@ -463,8 +496,10 @@ export async function editComment(commentId: string, body: string): Promise<FnRe
 
 /** 自分のコメントを削除。 */
 export async function deleteComment(commentId: string): Promise<FnResult<Record<string, never>>> {
+  const before = await supabase.from('comments').select('image_url').eq('id', commentId).maybeSingle();
   const { error } = await supabase.from('comments').delete().eq('id', commentId);
   if (error) return fail('コメントを削除できませんでした');
+  await removeThreadImage((before.data as { image_url: string | null } | null)?.image_url ?? null);
   return { ok: true, data: {} };
 }
 

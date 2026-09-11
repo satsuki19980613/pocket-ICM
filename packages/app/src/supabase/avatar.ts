@@ -5,9 +5,10 @@
  * 無料枠（Storage 1GB・§7）にも表示速度にも効いてくる。ここで**正方形に切り出して 256px へ縮小**し、
  * WebP へ再圧縮してから送る。元画像は端末外へ出さない（`images.ts` の圧縮方針と同じ）。
  *
- * 保存先は既存の `avatars` バケット（0004_storage.sql・public・2MB 上限・画像 MIME のみ）。
+ * 保存先は `avatars` バケット（2MB 上限・画像 MIME のみ。0008_security.sql で非公開化）。
  * パス規約は `<uid>/<filename>` で、RLS が先頭フォルダ＝本人 uid のみ書き込み可にしている。
- * 追加の SQL は不要。表示は公開 URL（フィードで他のメンバーにも見えるため署名 URL は使わない）。
+ * `profiles.avatar_url` には公開 URL 形式の文字列を「どのファイルか」の参照として保存し、
+ * 表示はメンバーだけが署名 URL で見る（storageUrls.ts の useStorageImage）。
  *
  * パスは**毎回ユニーク**（`<uid>/<uuid>.<ext>`）にし、`upsert: false` で入れる。
  * 固定パス＋`upsert: true` は使わない: `avatars` バケットには select ポリシーが無く

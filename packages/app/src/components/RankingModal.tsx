@@ -12,12 +12,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackLayer } from './BackLayer';
 import { signedBbLabel } from '../slumbot/rules';
 import { fetchRanking, flushPending, type RankRow } from '../supabase/huStats';
+import { useStorageImage } from '../supabase/storageUrls';
 
 type State = 'loading' | 'ready' | 'error';
 
 function Avatar(props: { row: RankRow }): JSX.Element {
   const initial = props.row.handle.trim().charAt(0).toUpperCase() || '?';
-  return <div className="av">{props.row.avatarUrl ? <img src={props.row.avatarUrl} alt="" /> : initial}</div>;
+  // アイコンはこのアプリの Storage の参照だけを署名 URL にして出す（storageUrls.ts）。
+  const src = useStorageImage(props.row.avatarUrl, 'avatars');
+  return <div className="av">{src ? <img src={src} alt="" /> : initial}</div>;
 }
 
 function Body(props: { state: State; rows: RankRow[]; onReload: () => void }): JSX.Element {

@@ -3,8 +3,23 @@ import type { FeedAuthor, ThreadComment, ThreadDetail } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
 import { Avatar, relTime } from './feedShared';
 import { useBackLayer } from './BackLayer';
+import { useStorageImage } from '../supabase/storageUrls';
 
 type Ack = { ok: boolean; message?: string };
+
+/**
+ * 添付画像（タップで別タブに原寸表示）。このアプリの Storage の参照だけを署名 URL にして出す。
+ * 形の不正な参照（javascript: や外部 URL）はリンクにも画像にもしない（storageUrls.ts）。
+ */
+function AttachedImage(props: { refUrl: string | null }): JSX.Element | null {
+  const src = useStorageImage(props.refUrl, 'thread-images');
+  if (!src) return null;
+  return (
+    <a href={src} target="_blank" rel="noreferrer noopener" className="cmt-img">
+      <img src={src} alt="添付画像" />
+    </a>
+  );
+}
 
 /**
  * スレッド詳細（M6・v3 で通常投稿にも対応）。見出しは種別で切り替える
@@ -151,11 +166,7 @@ function PostHead(props: {
   return (
     <>
       {props.body && <p className="post-body-text">{props.body}</p>}
-      {props.imageUrl && (
-        <a href={props.imageUrl} target="_blank" rel="noreferrer" className="cmt-img">
-          <img src={props.imageUrl} alt="添付画像" />
-        </a>
-      )}
+      <AttachedImage refUrl={props.imageUrl} />
       {err && <p className="auth-err">{err}</p>}
       {props.mine && (
         <div className="cmt-own-acts">
@@ -246,11 +257,7 @@ function CommentRow(props: {
         ) : (
           <>
             {c.body && <p>{c.body}</p>}
-            {c.image_url && (
-              <a href={c.image_url} target="_blank" rel="noreferrer" className="cmt-img">
-                <img src={c.image_url} alt="添付画像" />
-              </a>
-            )}
+            <AttachedImage refUrl={c.image_url} />
             {err && <p className="auth-err">{err}</p>}
             {c.mine && (
               <div className="cmt-own-acts">

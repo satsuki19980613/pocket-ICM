@@ -28,14 +28,16 @@ const MAX_BODY = 4096;
 /** 上流が詰まったときに待ち続けない。 */
 const TIMEOUT_MS = 20_000;
 
+/** 中継の応答に付ける共通ヘッダー（静的ファイル側の _headers はこの Worker の応答には効かない）。 */
+const API_HEADERS = {
+  'content-type': 'application/json; charset=utf-8',
+  'cache-control': 'no-store',
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+};
+
 function json(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  });
+  return new Response(JSON.stringify(body), { status, headers: API_HEADERS });
 }
 
 async function proxy(request: Request, name: string): Promise<Response> {
@@ -64,13 +66,7 @@ async function proxy(request: Request, name: string): Promise<Response> {
       signal: ctl.signal,
     });
     const text = await upstream.text();
-    return new Response(text, {
-      status: upstream.status,
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    });
+    return new Response(text, { status: upstream.status, headers: API_HEADERS });
   } catch {
     return json({ error_msg: 'upstream unavailable' }, 502);
   } finally {

@@ -1,7 +1,8 @@
 import type { FeedAuthor, FeedPost } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
 import { Avatar, PostBody, relTime } from './feedShared';
-import type { FeedState } from './Home';
+import { BrokenPost, type FeedState } from './Home';
+import { ErrorBoundary } from './ErrorBoundary';
 
 /**
  * 他人の公開一覧（M6 userpub・v3 で通常投稿も混在）。
@@ -49,7 +50,9 @@ export function UserPub(props: {
 
       {props.state === 'ready' &&
         props.posts.map((p) => (
-          <div className="userpub-item" key={p.thread_id}>
+          // 1件の形が壊れていても、一覧全体は表示し続ける。
+          <ErrorBoundary key={p.thread_id} renderFallback={() => <BrokenPost />}>
+          <div className="userpub-item">
             {p.kind === 'result' && p.result ? (
               <>
                 {p.body && <p className="post-body-text">{p.body}</p>}
@@ -64,6 +67,7 @@ export function UserPub(props: {
               <i>{relTime(p.created_at)}</i>
             </div>
           </div>
+          </ErrorBoundary>
         ))}
     </div>
   );

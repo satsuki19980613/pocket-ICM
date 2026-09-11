@@ -1,4 +1,5 @@
 import type { FeedAuthor } from '../supabase/feed';
+import { useStorageImage } from '../supabase/storageUrls';
 
 /** ISO 時刻 → 相対表記（たった今 / N分 / N時間 / N日 / 月日）。純関数。 */
 export function relTime(iso: string, now: number = Date.now()): string {
@@ -21,14 +22,16 @@ export function relTime(iso: string, now: number = Date.now()): string {
  * （タップでスレッドを開く。ResultCard と同じ「カード自体がボタン」の作法）。
  * スレッド詳細の見出し（自分の投稿の編集・削除つき）は Thread.tsx が別途組む
  * （既存コメントの編集 UI と同じ作法に合わせるため、こちらでは持たない）。
+ * 画像はこのアプリの Storage の参照だけを、署名 URL にして出す（storageUrls.ts）。
  */
 export function PostBody(props: { body: string | null; imageUrl: string | null; onOpen?: () => void }): JSX.Element {
+  const src = useStorageImage(props.imageUrl, 'thread-images');
   const inner = (
     <>
       {props.body && <p className="post-body-text">{props.body}</p>}
-      {props.imageUrl && (
+      {src && (
         <span className="post-img">
-          <img src={props.imageUrl} alt="投稿画像" />
+          <img src={src} alt="投稿画像" />
         </span>
       )}
     </>
@@ -43,14 +46,11 @@ export function PostBody(props: { body: string | null; imageUrl: string | null; 
   return <div className="post-body">{inner}</div>;
 }
 
-/** アバター（画像 URL があれば画像、無ければ handle の頭文字）。 */
+/** アバター（画像があれば画像、無ければ handle の頭文字）。画像は署名 URL で出す。 */
 export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX.Element {
   const initial = props.author.handle.trim().charAt(0).toUpperCase() || '?';
-  const inner = props.author.avatar_url ? (
-    <img src={props.author.avatar_url} alt="" />
-  ) : (
-    initial
-  );
+  const src = useStorageImage(props.author.avatar_url, 'avatars');
+  const inner = src ? <img src={src} alt="" /> : initial;
   if (props.onClick) {
     return (
       <button type="button" className="av av-btn" onClick={props.onClick} aria-label={`@${props.author.handle} の公開結果`}>

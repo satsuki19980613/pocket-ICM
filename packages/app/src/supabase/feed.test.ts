@@ -205,6 +205,26 @@ describe('mapFeedRow', () => {
     ).toBeNull();
   });
 
+  it('結果投稿で解の形が壊れた行は null（他のメンバーの行でフィード全体を落とさない）', () => {
+    for (const solution of [{}, { nodes: 'x', heroHand: 'AA', heroPos: 'BU', playersLeft: 3 }, null]) {
+      expect(
+        mapFeedRow(
+          {
+            id: 't9',
+            created_at: 'x',
+            kind: 'result',
+            body: null,
+            image_url: null,
+            updated_at: null,
+            author,
+            result: { ...result, solution: solution as never },
+          },
+          new Set(),
+        ),
+      ).toBeNull();
+    }
+  });
+
   it('結果投稿で result が欠けた行は null（不可視 result の左結合抜け等）', () => {
     expect(
       mapFeedRow(

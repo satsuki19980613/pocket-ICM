@@ -9,6 +9,9 @@ Black Ops ICM のサーバ基盤（Auth / DB / RLS / 招待キー / 上限 / 管
 - `migrations/0007_hu_stats.sql` … Training ▸ Slumbot HU の通算成績とランキング（SPEC §7.4.3）。
   0001〜0006 適用済みの既存プロジェクトに追加で流す。`hu_stats` テーブル（owner / hands / net_chips）と
   加算用 RPC `hu_add_result(int, bigint)` ができる。テーブルへの直接書き込みは RLS で拒否される。
+- `migrations/0008_security.sql` … セキュリティ強化（2026-09-11）。読み書きをメンバー限定・画像参照の形の制約・
+  スレッド画像/アイコンの非公開化・サーバ専用関数の権限整理。**アプリをデプロイしてから** SQL Editor で流す。
+  背景と反映手順は `docs/SECURITY.md`。
 - `functions/*` … Edge Function（signup / issue-invite / revoke-invite / set-max-accounts / delete-account / purge-images）
 - `scripts/gen-invite.mjs` … 初回アカウント用ブートストラップ招待キー生成
 - `scripts/m1-verify.mjs` / `scripts/m8-verify.mjs` … サーバ側の拒否・スキーマ存在の検証スクリプト
@@ -176,3 +179,11 @@ node supabase/scripts/m8-verify.mjs
   is_admin 変更を無効化（service_role / SQL Editor からの初期付与は素通し）。
 - **synthetic email**: Auth の識別子は `handle@users.pocket-icm.app`（メール送信なし）。
   パスワード忘れの復旧は将来 管理者リセット関数で対応（v2 スコープ外）。
+- **メンバー限定（0008）**: 全ポリシーに `is_member()`（profiles 行を持つ＝招待で入った人）を付けた。
+  Supabase Auth に直接アカウントを作られても、メンバーでなければ何も読めず書けない。
+  あわせてダッシュボードの「Allow new users to sign up」はオフにする（招待登録は Edge Function が作るので影響なし）。
+- **画像（0008）**: スレッド画像・アイコンのバケットは非公開。メンバーだけが署名 URL で見る。DB の画像参照は
+  「このアプリの Storage の本人フォルダの画像」の形しか入らない（javascript: 等を防ぐ CHECK 制約）。
+- **アカウント削除**: `delete-account` が Storage のファイル本体も消す（DB の連鎖削除では消えないため）。
+  参照されなくなったファイルは `purge-images` が週1で回収する。
+- 全体像・反映手順・確かめ方は `docs/SECURITY.md`。

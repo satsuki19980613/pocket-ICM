@@ -10,6 +10,25 @@ import {
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
+/** check_invite / claim_invite / register_member の結果 → 利用者向けのエラー応答。 */
+function inviteError(status: unknown): Response {
+  switch (status) {
+    case 'invalid':
+      return json({ error: 'invalid_invite', message: '招待キーが無効です' }, 400);
+    case 'expired':
+      return json({ error: 'expired_invite', message: '招待キーの期限が切れています' }, 400);
+    case 'used':
+      return json({ error: 'used_invite', message: 'この招待キーは既に使用されています' }, 400);
+    case 'full':
+      return json({ error: 'account_full', message: '定員に達しています' }, 403);
+    default:
+      return json({ error: 'invite_failed', message: '招待キーの処理に失敗しました' }, 400);
+  }
+}
+
+const HANDLE_TAKEN = (): Response =>
+  json({ error: 'handle_taken', message: 'このユーザー名は既に使われています' }, 409);
+
 Deno.serve(async (req) => {
   const pf = preflight(req);
   if (pf) return pf;
@@ -53,7 +72,22 @@ Deno.serve(async (req) => {
   const codeHash = await sha256Hex(normalizeCode(inviteCode));
   const email = `${handle}@${EMAIL_DOMAIN}`;
 
-  // 1) Auth ユーザー作成（メール送信なし = email_confirm）。
+  // 1) 招待キーを先に確かめる（消費はしない）。キーが無効ならアカウントを作らずにここで止める。
+  //    以前はアカウントを先に作っていたため、招待キーを持たない人でも「このユーザー名は既に
+  //    使われています」の応答から、実在するユーザー名を調べられた。
+  //    check_invite が「存在しない」（0008 未適用）ときだけ、下見を飛ばして旧経路で判定する。
+  //    一時的なエラーで旧経路へ落ちると、旧経路の弱さ（後始末の失敗・ユーザー名の露出）が戻るので、
+  //    それ以外のエラーはここで止める。
+  const pre = await svc.rpc('check_invite', { p_code_hash: codeHash });
+  const hardened = !pre.error;
+  if (pre.error) {
+    const missing =
+      pre.error.code === 'PGRST202' || /could not find the function|does not exist/i.test(pre.error.message ?? '');
+    if (!missing) return json({ error: 'signup_failed', message: 'アカウント作成に失敗しました（時間をおいてお試しください）' }, 503);
+  }
+  if (hardened && pre.data !== 'ok') return inviteError(pre.data);
+
+  // 2) Auth ユーザー作成（メール送信なし = email_confirm）。
   const created = await svc.auth.admin.createUser({
     email,
     password,
@@ -61,49 +95,52 @@ Deno.serve(async (req) => {
   });
   if (created.error || !created.data.user) {
     const msg = created.error?.message ?? '';
-    if (/already|registered|exist/i.test(msg)) {
-      return json({ error: 'handle_taken', message: 'このユーザー名は既に使われています' }, 409);
-    }
+    if (/already|registered|exist/i.test(msg)) return HANDLE_TAKEN();
     return json({ error: 'signup_failed', message: 'アカウント作成に失敗しました' }, 400);
   }
   const uid = created.data.user.id;
 
-  // 失敗時に作成済みユーザーを片付けるヘルパ（cascade で profile も消える）。
-  const rollback = async () => {
-    await svc.auth.admin.deleteUser(uid);
+  // 失敗時に作成済みの Auth ユーザーを片付ける。消せなかった場合もプロフィールは無い
+  // （＝メンバーではないので何も読めない・書けない）。
+  const rollback = async (): Promise<void> => {
+    const { error } = await svc.auth.admin.deleteUser(uid);
+    if (error) console.error('signup rollback: auth user を削除できませんでした', uid, error.message);
   };
 
-  // 2) プロフィール挿入。
+  if (hardened) {
+    // 3) プロフィール作成と招待キーの消費を1つのトランザクションで（0008 の register_member）。
+    //    'ok' 以外ならプロフィールも作られていない。
+    const reg = await svc.rpc('register_member', {
+      p_user: uid,
+      p_handle: handle,
+      p_display_name: displayName,
+      p_code_hash: codeHash,
+    });
+    if (reg.error || reg.data !== 'ok') {
+      await rollback();
+      if (reg.data === 'handle_taken') return HANDLE_TAKEN();
+      if (reg.error) return json({ error: 'signup_failed', message: 'アカウント作成に失敗しました' }, 500);
+      return inviteError(reg.data);
+    }
+    return json({ ok: true, user_id: uid, handle });
+  }
+
+  // --- 旧経路（0008 未適用のときだけ通る） ---
   const prof = await svc
     .from('profiles')
     .insert({ id: uid, handle, display_name: displayName });
   if (prof.error) {
     await rollback();
-    if (prof.error.code === '23505') {
-      return json({ error: 'handle_taken', message: 'このユーザー名は既に使われています' }, 409);
-    }
+    if (prof.error.code === '23505') return HANDLE_TAKEN();
     return json({ error: 'profile_failed', message: 'プロフィール作成に失敗しました' }, 400);
   }
-
-  // 3) 招待キーを原子的に検証＋消費（上限も同時強制）。
   const claim = await svc.rpc('claim_invite', {
     p_code_hash: codeHash,
     p_user: uid,
   });
   if (claim.error || claim.data !== 'ok') {
     await rollback();
-    switch (claim.data) {
-      case 'invalid':
-        return json({ error: 'invalid_invite', message: '招待キーが無効です' }, 400);
-      case 'expired':
-        return json({ error: 'expired_invite', message: '招待キーの期限が切れています' }, 400);
-      case 'used':
-        return json({ error: 'used_invite', message: 'この招待キーは既に使用されています' }, 400);
-      case 'full':
-        return json({ error: 'account_full', message: '定員に達しています' }, 403);
-      default:
-        return json({ error: 'invite_failed', message: '招待キーの処理に失敗しました' }, 400);
-    }
+    return inviteError(claim.data);
   }
 
   return json({ ok: true, user_id: uid, handle });

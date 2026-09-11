@@ -25,6 +25,7 @@ import { PostComposer } from './components/PostComposer';
 import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
 import { UpdateBanner } from './components/UpdateBanner';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { reportAppIdle } from './pwa/appUpdate';
 import { Admin } from './components/Admin';
 import { backLayers } from './backLayers';
@@ -1078,6 +1079,22 @@ export function App(): JSX.Element {
 
       <UpdateBanner blocked={jobRunning} />
 
+      {/* 画面単位の受け止め役。どこかの描画が壊れても、アプリ全体が真っ白にならない。
+          画面を切り替えると（key）受け止めた状態はリセットされる。 */}
+      <ErrorBoundary
+        key={`${screen}:${thread?.thread_id ?? ''}`}
+        renderFallback={() => (
+          <div className="panel err-view">
+            <ul className="issues">
+              <li>この画面を表示できませんでした。</li>
+            </ul>
+            <button type="button" className="btn ghost" onClick={() => setScreen(screen === 'home' ? 'history' : 'home')}>
+              {screen === 'home' ? '記録を開く' : 'ホームに戻る'}
+            </button>
+          </div>
+        )}
+      >
+
       {screen === 'home' && (
         <Home
           state={feedState}
@@ -1227,6 +1244,8 @@ export function App(): JSX.Element {
           imageSize={imageSize}
         />
       )}
+
+      </ErrorBoundary>
 
       {manualOpen && (
         <InputForm

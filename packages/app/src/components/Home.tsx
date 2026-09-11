@@ -1,6 +1,7 @@
 import type { FeedAuthor, FeedPost } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
 import { Avatar, PostBody, relTime } from './feedShared';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export type FeedState = 'loading' | 'error' | 'ready';
 
@@ -51,15 +52,28 @@ export function Home(props: {
   return (
     <div className="feed">
       {props.posts.map((p) => (
-        <PostCard
-          key={p.thread_id}
-          post={p}
-          onOpenThread={() => props.onOpenThread(p.thread_id)}
-          onOpenAuthor={() => props.onOpenAuthor(p.author)}
-          onToggleLike={() => props.onToggleLike(p.thread_id, !p.liked_by_me)}
-        />
+        // 1件の形が壊れていても、フィード全体は表示し続ける。
+        <ErrorBoundary key={p.thread_id} renderFallback={() => <BrokenPost />}>
+          <PostCard
+            post={p}
+            onOpenThread={() => props.onOpenThread(p.thread_id)}
+            onOpenAuthor={() => props.onOpenAuthor(p.author)}
+            onToggleLike={() => props.onToggleLike(p.thread_id, !p.liked_by_me)}
+          />
+        </ErrorBoundary>
       ))}
     </div>
+  );
+}
+
+/** 表示できなかった投稿の代わり（ErrorBoundary の受け皿）。 */
+export function BrokenPost(): JSX.Element {
+  return (
+    <article className="post">
+      <div className="col">
+        <p className="feed-note">この投稿は表示できませんでした。</p>
+      </div>
+    </article>
   );
 }
 

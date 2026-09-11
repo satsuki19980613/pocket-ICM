@@ -68,7 +68,11 @@ export function DigitalRain(): JSX.Element {
     let dpr = 1;
 
     const resize = (): void => {
-      dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+      const nextDpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+      // 高さが縮むだけ（スレッド画面でキーボードが出てレイアウトが縮んだとき）は描き直さない。
+      // 作り直すと雨が上から降り直して一瞬消える。はみ出た分はキーボードの裏に隠れるだけ。
+      if (h > 0 && w === window.innerWidth && nextDpr === dpr && window.innerHeight <= h) return;
+      dpr = nextDpr;
       w = window.innerWidth;
       h = window.innerHeight;
       canvas.width = Math.floor(w * dpr);

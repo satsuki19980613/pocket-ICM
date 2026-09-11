@@ -22,20 +22,43 @@ function AttachedImage(props: { refUrl: string | null }): JSX.Element | null {
 }
 
 /**
- * ソフトキーボードに隠れている画面下端の高さを、el の CSS 変数 --kb（px）に書き続ける。
- * Android Chrome（既定の resizes-visual）も iOS Safari も、キーボードが出ても見えている範囲
- * （visualViewport）が縮むだけでレイアウトの高さは変わらない。そのため bottom:0 の fixed 要素は
- * キーボードの裏に回るか、ブラウザが画面ごと持ち上げて上側（スレッド本文）が見えなくなる。
- * 見えている範囲の下端からレイアウト下端までの差を bottom に足して、入力欄をキーボードの真上に置く。
- * 再描画を挟むとその間にブラウザが入力欄を見せようと画面をずらすので、React の state は使わず直接書く。
+ * スレッド画面を開いている間だけ、ソフトキーボードが出たらレイアウトごと縮めるようブラウザに頼む
+ * （viewport の interactive-widget=resizes-content）。こうするとキーボードの上端がレイアウトの下端になり、
+ * bottom:0 の返信欄は CSS だけでキーボードの真上に固定される（スクロールで JS が追いかけないのでがたつかない）。
+ * 既定（resizes-visual）のままだと、見えている範囲が縮むだけで返信欄はキーボードの裏に回る。
+ * Chrome/Samsung Internet（Android）と Firefox Android が対応。iOS Safari は未対応で、下の
+ * useKeyboardInset が代わりに持ち上げる。アプリ全体に掛けると他画面の下段タブまでキーボードの上に
+ * 乗ってしまうので、この画面の間だけにして、離れたら元に戻す（Chromium は meta の書き換えを即反映する）。
+ */
+function useResizesContentKeyboard(): void {
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!meta) return;
+    const original = meta.content;
+    if (/interactive-widget/.test(original)) return;
+    meta.content = `${original}, interactive-widget=resizes-content`;
+    return () => {
+      meta.content = original;
+    };
+  }, []);
+}
+
+/**
+ * useResizesContentKeyboard が効かない端末（iOS Safari）向けの代替。キーボードに隠れている画面下端の
+ * 高さを el の CSS 変数 --kb（px）に書き、返信欄の bottom に足す。
+ * 対応端末ではレイアウトごと縮むので、この差（innerHeight − 見えている範囲の下端）は常に 0 になり何もしない。
+ * iOS ではスクロールのたびに見えている範囲がずれるので scroll も聞く（その分 1 フレーム遅れて追従する）。
  */
 function useKeyboardInset(ref: RefObject<HTMLElement>): void {
   useEffect(() => {
     const vv = window.visualViewport;
     const el = ref.current;
     if (!vv || !el) return;
+    let current = -1;
     const update = (): void => {
       const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (inset === current) return;
+      current = inset;
       el.style.setProperty('--kb', `${inset}px`);
     };
     update();
@@ -69,6 +92,7 @@ export function Thread(props: {
 }): JSX.Element {
   const d = props.detail;
   const rootRef = useRef<HTMLDivElement>(null);
+  useResizesContentKeyboard();
   useKeyboardInset(rootRef);
   return (
     <div className="thread" ref={rootRef}>

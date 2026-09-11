@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
@@ -27,7 +27,7 @@ import { Settings } from './components/Settings';
 import { UpdateBanner } from './components/UpdateBanner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { reportAppIdle } from './pwa/appUpdate';
-import { Admin } from './components/Admin';
+import { reportClientError, setReportScreen } from './supabase/clientErrors';
 import { backLayers } from './backLayers';
 import { createBackController } from './navHistory';
 import { screenDepth, type Screen } from './navModel';
@@ -118,7 +118,25 @@ const TITLES: Record<Screen, string> = {
   slumbot: 'Slumbot HU',
   settings: '設定',
   admin: 'クラブ管理',
+  diag: '診断ログ',
 };
+
+/**
+ * 管理者だけの画面（クラブ管理・診断ログ）は別チャンク（adminScreens.ts）。サーバの判定で管理者と
+ * 分かったときだけ描く＝読み込む（PWA の precache からも外している）。データの守りはサーバ側が本体。
+ */
+const Admin = lazy(() => import('./adminScreens').then((m) => ({ default: m.Admin })));
+const Diagnostics = lazy(() => import('./adminScreens').then((m) => ({ default: m.Diagnostics })));
+
+/** 管理系の画面を出すまで（管理者の確認・チャンクの取得）の表示。 */
+function AdminLoading(): JSX.Element {
+  return (
+    <div className="panel solving">
+      <div className="spinner" />
+      <p>読み込み中…</p>
+    </div>
+  );
+}
 
 /** 下段タブを出す画面（トップレベル）。フロー中は隠す。 */
 const TAB_SCREENS: Screen[] = ['home', 'icm', 'training', 'history', 'settings'];
@@ -198,8 +216,11 @@ async function runOcrAndLog(
     const { blob, width, height } = await compressForUpload(file);
     const up = await uploadSpotImage(blob, { width, height });
     if (up.ok) imageId = up.data.imageId;
-  } catch {
-    /* 圧縮/アップロード失敗はアプリを止めない（§7.2）。imageId は未設定のまま進む。 */
+    else reportClientError('sync', `スクショの保存に失敗: ${up.message}`);
+  } catch (e) {
+    /* 圧縮/アップロード失敗はアプリを止めない（§7.2）。imageId は未設定のまま進む。
+       利用者には見えないので、管理者の診断ログにだけ残す。 */
+    reportClientError('sync', e, 'スクショの圧縮・アップロード中');
   }
 
   const res = await prefillFromScreenshot(file);
@@ -228,13 +249,16 @@ async function runOcrAndLog(
       },
     });
     if (log.ok) ocrReadId = log.data.id;
-  } catch {
+    else reportClientError('sync', `OCR 読み取りログの保存に失敗: ${log.message}`);
+  } catch (e) {
     /* OCR ログの失敗もアプリを止めない（成功・失敗を問わず記録したいが、書けなければ諦める）。 */
+    reportClientError('sync', e, 'OCR 読み取りログの保存中');
   }
 
   // OCR が読めなかった画像は無期限保持へ（精度改善の資産, §7.2/§12）。
   if (!res.ok && imageId) {
-    await markImageProtected(imageId).catch(() => undefined);
+    const prot = await markImageProtected(imageId).catch(() => null);
+    if (!prot?.ok) reportClientError('sync', 'OCR が読めなかったスクショの保護設定に失敗');
   }
 
   return { res, imageId, ocrReadId };
@@ -288,6 +312,9 @@ export function App(): JSX.Element {
   // 設定「計算したら最初から公開する」（profiles.default_public）。結果画面の公開レバーの
   // 初期状態に使う（SPEC §5.3。オンでも「この内容で公開する」を押すまで公開はされない）。
   const [defaultPublish, setDefaultPublish] = useState(false);
+  // 管理者か（サーバの profiles.is_admin・本人は書き換えられない）。null=まだ分からない。
+  // 管理系の画面はこれが true のときだけ描く（データはサーバが管理者以外に渡さないので、これは二重の守り）。
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   // --- M6 フィード/スレッド/他人公開 ---
   const [feedState, setFeedState] = useState<FeedState>('loading');
@@ -411,6 +438,7 @@ export function App(): JSX.Element {
       // ログアウト/削除でセッションが切れたら画面状態を初期化。
       if (!s) {
         setScreen('home');
+        setIsAdmin(null);
         setResultOrigin(null);
         setThread(null);
         setSolveJob(IDLE_JOB);
@@ -440,10 +468,21 @@ export function App(): JSX.Element {
       await refreshRecords();
       const prof = await getMyProfile();
       if (prof.ok) setDefaultPublish(prof.data.default_public);
+      setIsAdmin(prof.ok && prof.data.is_admin);
     })();
     void loadFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  // 管理者でないと分かったら管理系の画面から外す（入口のボタンは管理者にしか出ないが、念のため）。
+  useEffect(() => {
+    if (isAdmin === false && (screen === 'admin' || screen === 'diag')) setScreen('settings');
+  }, [isAdmin, screen]);
+
+  // エラーがどの画面で起きたかを診断ログに添えるため、いまの画面名を渡しておく。
+  useEffect(() => {
+    setReportScreen(screen);
+  }, [screen]);
 
   /** 公開フィードを読み込む。 */
   async function loadFeed(): Promise<void> {
@@ -753,6 +792,7 @@ export function App(): JSX.Element {
       setState(built.state);
       setScreen('confirm');
     } catch (e) {
+      reportClientError('ocr', e);
       setIssues(['スクリーンショットの読み込みに失敗しました。', e instanceof Error ? e.message : String(e)]);
       setScreen('error');
     } finally {
@@ -785,6 +825,7 @@ export function App(): JSX.Element {
         const heroEv = head?.heroEv ?? 0;
         const comp = await completeRecord(serverId, { solution: dto, ms: elapsed, verdict, heroEv });
         if (!comp.ok) {
+          reportClientError('sync', `計算結果の保存に失敗: ${comp.message}`);
           // サーバ反映に失敗しても計算結果はローカルに残す（pendingSync を立てて次回に委ねる）。
           const pending: SpotRecord = { ...finished, pendingSync: true };
           try {
@@ -807,7 +848,11 @@ export function App(): JSX.Element {
       setSolveJob((j) => (j.recordId === rec.id ? failJob(j) : j));
       showToast('計算に失敗しました', 'err', () => setScreen('history'));
       if (serverId) {
-        await failRecord(serverId, message).catch(() => undefined);
+        const fr = await failRecord(serverId, message).catch(() => null);
+        if (!fr?.ok) reportClientError('sync', e, '計算の失敗をサーバに記録できなかった');
+      } else {
+        // サーバに記録の無い計算（作成に失敗していた）の失敗は、診断ログにしか残らない。
+        reportClientError('error', e, 'サーバに記録の無い計算が失敗した');
       }
     }
   }
@@ -863,6 +908,7 @@ export function App(): JSX.Element {
         playersLeft: finalState.playersLeft,
       });
       const serverId = created.ok ? created.data.id : undefined;
+      if (!created.ok) reportClientError('sync', `計算記録の作成に失敗: ${created.message}`);
       const rec: SpotRecord = { ...localRec, serverId, pendingSync: !created.ok };
 
       try {
@@ -906,6 +952,15 @@ export function App(): JSX.Element {
     }
   }
 
+  /** クラブ管理を開く。管理者の判定がまだ・取れていなければ、その場でサーバに確かめ直す。 */
+  function openAdmin(): void {
+    if (isAdmin !== true) {
+      setIsAdmin(null);
+      void getMyProfile().then((p) => setIsAdmin(p.ok && p.data.is_admin));
+    }
+    setScreen('admin');
+  }
+
   /** 下段タブの遷移。 */
   function navTab(key: TabKey): void {
     switch (key) {
@@ -937,6 +992,8 @@ export function App(): JSX.Element {
         return () => setScreen('icm');
       case 'admin':
         return () => setScreen('settings');
+      case 'diag':
+        return () => setScreen('admin');
       case 'slumbot':
         return () => setScreen('training');
       case 'thread':
@@ -1227,12 +1284,22 @@ export function App(): JSX.Element {
       {screen === 'settings' && (
         <Settings
           onBack={() => setScreen('icm')}
-          onOpenAdmin={() => setScreen('admin')}
+          onOpenAdmin={openAdmin}
           updateBlocked={jobRunning}
         />
       )}
 
-      {screen === 'admin' && <Admin onBack={() => setScreen('settings')} />}
+      {(screen === 'admin' || screen === 'diag') && isAdmin === null && <AdminLoading />}
+      {screen === 'admin' && isAdmin === true && (
+        <Suspense fallback={<AdminLoading />}>
+          <Admin onBack={() => setScreen('settings')} onOpenDiagnostics={() => setScreen('diag')} />
+        </Suspense>
+      )}
+      {screen === 'diag' && isAdmin === true && (
+        <Suspense fallback={<AdminLoading />}>
+          <Diagnostics onBack={() => setScreen('admin')} />
+        </Suspense>
+      )}
 
       {screen === 'error' && (
         <ErrorView

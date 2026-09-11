@@ -16,6 +16,7 @@ const PARENT: Record<Exclude<Screen, 'home'>, Screen> = {
   confirm: 'icm',
   error: 'icm',
   admin: 'settings',
+  diag: 'admin',
   slumbot: 'training',
   result: 'history', // スレッド経由でも戻り先は深さ1の thread なので同じ
 };

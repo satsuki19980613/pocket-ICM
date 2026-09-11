@@ -3,7 +3,6 @@ import {
   getAdminOverview,
   listInvites,
   listImageStats,
-  listOcrFailures,
   type AdminOverview,
   type InviteRow,
 } from '../supabase/admin';
@@ -15,29 +14,22 @@ import {
   statusLabelJa,
   summarizeStorage,
   formatBytes,
-  summarizeOcrFailures,
-  displayModeLabelJa,
   type StorageSummary,
-  type OcrFailureSummary,
 } from '../admin/format';
-
-/** OCR 失敗の集計対象期間（日数）。SPEC §4.2「直近」の既定値。 */
-const OCR_FAILURE_WINDOW_DAYS = 30;
 
 /**
  * 管理画面（M7・さつき専用, is_admin のみ）。登録状況／上限編集／招待キーの
  * 発行・一覧・取消。すべてサーバ側（Edge Function・RLS）で管理者を二重強制。
  * 発行された生キーは一度だけ表示（DB はハッシュのみ）。
+ * 計算の記録・OCR の失敗とスクショ・アプリのエラーは「診断ログ」（Diagnostics.tsx）で見る。
  */
-export function Admin(props: { onBack: () => void }): JSX.Element {
+export function Admin(props: { onBack: () => void; onOpenDiagnostics: () => void }): JSX.Element {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const [storage, setStorage] = useState<StorageSummary | null>(null);
   const [storageErr, setStorageErr] = useState<string | null>(null);
-  const [ocrFail, setOcrFail] = useState<OcrFailureSummary | null>(null);
-  const [ocrErr, setOcrErr] = useState<string | null>(null);
 
   const [maxVal, setMaxVal] = useState('');
   const [maxBusy, setMaxBusy] = useState(false);
@@ -49,12 +41,7 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
   async function refresh(): Promise<void> {
-    const [ov, inv, imgs, ocr] = await Promise.all([
-      getAdminOverview(),
-      listInvites(),
-      listImageStats(),
-      listOcrFailures(OCR_FAILURE_WINDOW_DAYS),
-    ]);
+    const [ov, inv, imgs] = await Promise.all([getAdminOverview(), listInvites(), listImageStats()]);
     if (ov.ok) {
       setOverview(ov.data);
       setMaxVal(String(ov.data.max_accounts));
@@ -64,8 +51,6 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
 
     if (imgs.ok) setStorage(summarizeStorage(imgs.data));
     else setStorageErr(imgs.message);
-    if (ocr.ok) setOcrFail(summarizeOcrFailures(ocr.data));
-    else setOcrErr(ocr.message);
   }
 
   useEffect(() => {
@@ -153,6 +138,14 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="pad pt0">
+        <h2 className="scr-h sm">診断ログ</h2>
+        <button type="button" className="btn cyan" onClick={props.onOpenDiagnostics}>
+          診断ログを開く
+        </button>
+        <p className="note">全員の計算の記録（非公開を含む）・OCR の読み取りとスクショ・アプリのエラーをまとめて確認できます。</p>
       </div>
 
       <div className="pad pt0">
@@ -247,41 +240,6 @@ export function Admin(props: { onBack: () => void }): JSX.Element {
                 （`pullFailures.ts`）してから手動で整理してください。
               </p>
             )}
-          </>
-        )}
-      </div>
-
-      <div className="pad pt0">
-        <h2 className="scr-h sm">OCR 失敗（直近{OCR_FAILURE_WINDOW_DAYS}日）</h2>
-        {ocrErr && <p className="auth-err">{ocrErr}</p>}
-        {ocrFail && (
-          <>
-            <div className="statrow">
-              <div className="stat">
-                <span className="statlbl">失敗・低信頼の件数</span>
-                <b className="statval loss">{ocrFail.total}</b>
-              </div>
-              <div className="stat">
-                <span className="statlbl">表示モード別</span>
-                <b className="statval">
-                  {ocrFail.byDisplayMode.map((m) => `${displayModeLabelJa(m.mode)} ${m.count}`).join(' / ') || '—'}
-                </b>
-              </div>
-            </div>
-            {ocrFail.byIssueCode.length > 0 && (
-              <div className="readout">
-                {ocrFail.byIssueCode.map((c) => (
-                  <div key={c.code} className="row">
-                    <span>{c.code}</span>
-                    <b>{c.count}件</b>
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="note">
-              画像そのものはここには出しません。詳細解析はローカルで `pullFailures.ts`
-              を実行して行います（docs/OCR_ANALYSIS.md）。
-            </p>
           </>
         )}
       </div>

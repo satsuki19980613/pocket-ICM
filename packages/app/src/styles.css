@@ -524,6 +524,54 @@ select.inp { appearance: none; cursor: pointer; }
 .invrow .badge.st-revoked { color: var(--red); border-color: rgba(255, 59, 59, 0.45); }
 .invrow .badge.st-expired { color: var(--dim2); }
 
+/* ---- 診断ログ（管理者専用, Diagnostics.tsx） ---- */
+.diag-tabs { display: flex; gap: var(--s1); margin-bottom: var(--s3); }
+.diag-tabs .seg { flex: 1; }
+.diag-counts { margin-bottom: var(--s3); }
+.diag-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.diag-row { border-bottom: 1px solid var(--line); }
+.diag-head {
+  display: flex; flex-direction: column; gap: 4px; width: 100%;
+  padding: 10px 2px; background: none; border: 0; color: var(--fg);
+  text-align: left; cursor: pointer; font: inherit;
+}
+.diag-head:hover { background: rgba(255, 255, 255, 0.02); }
+.diag-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.diag-when { font-family: var(--mono); font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.diag-who { font-weight: 600; }
+.diag-sub { font-size: 12px; color: var(--dim); line-height: 1.5; }
+.diag-msg {
+  color: var(--fg); overflow: hidden; word-break: break-word;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.diag-row .badge {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+  padding: 2px 7px; border: 1px solid var(--line-2); color: var(--dim);
+}
+.diag-row .badge.st-done { color: var(--fg); }
+/* 件数タイルの一部だけ赤くする（「OCR 失敗 / 修正あり」の失敗側）。 */
+.statval .neg { color: var(--red); }
+/* 理由コードは見出し用の大文字化を受けない（一覧の表記 no_hero と揃える）。 */
+.diag-counts .readout .row .diag-code { text-transform: none; font-family: var(--mono); letter-spacing: 0; }
+.diag-row .badge.st-solving { color: var(--cyan); border-color: rgba(58, 230, 255, 0.5); }
+.diag-row .badge.st-failed,
+.diag-row .badge.st-stuck { color: var(--red); border-color: rgba(255, 59, 59, 0.45); }
+.diag-row .badge.st-aborted,
+.diag-row .badge.st-fix { color: var(--yellow); border-color: rgba(252, 238, 10, 0.45); background: rgba(252, 238, 10, 0.06); }
+.diag-detail { padding: 2px 2px 14px; display: flex; flex-direction: column; gap: 12px; }
+.diag-block .lbl { margin-bottom: 6px; }
+.diag-lines { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; color: var(--fg); }
+.diag-pre {
+  margin: 0; padding: 8px 10px; max-height: 240px; overflow: auto;
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--fg);
+  white-space: pre-wrap; word-break: break-word;
+}
+.diag-kv { margin: 0; font-size: 12.5px; color: var(--fg); }
+.diag-shot { display: block; max-width: 260px; }
+.diag-shot img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); }
+.diag-more { margin-top: var(--s3); }
+
 /* ---- Coming Soon（Drill 等） ---- */
 .soon { padding: 64px 30px; text-align: center; }
 .soon .glyph {

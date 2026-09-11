@@ -18,7 +18,8 @@ export type Screen =
   | 'training'
   | 'slumbot'
   | 'settings'
-  | 'admin';
+  | 'admin'
+  | 'diag';
 
 /** 深さの判定に効く「どこから開いたか」。 */
 export interface NavContext {
@@ -51,5 +52,8 @@ export function screenDepth(screen: Screen, ctx: NavContext = NAV_CONTEXT_ROOT):
     case 'result':
       // 記録タブ（深さ1）からもスレッド（深さ1）からも、その1つ下。
       return 2;
+    case 'diag':
+      // 診断ログはクラブ管理（深さ2）から開く。
+      return 3;
   }
 }

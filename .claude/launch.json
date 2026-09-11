@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "@oshihiki/app"],
       "port": 5173
+    },
+    {
+      "name": "app-dist",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["exec", "--workspace", "@oshihiki/app", "--", "vite", "preview", "--port", "4173", "--strictPort"],
+      "port": 4173
     }
   ]
 }

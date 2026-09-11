@@ -50,7 +50,9 @@ export default defineConfig({
         // （インストールを重くしない）。初回の4人求解／5〜6人求解で fetch →
         // runtimeCaching(CacheFirst)でキャッシュ＝以後オフライン可。
         // 3人(1.33MB)/HU は従来どおり precache（インストール時からオフライン）。
-        globIgnores: ['**/pf4way.f16-*.bin', '**/wintie3-169.u16-*.bin'],
+        // 管理者だけの画面（adminScreens-*.js・App が lazy で読む）も precache しない＝管理者以外の端末には
+        // ダウンロードされない（管理者が開いたときだけネットから読む）。
+        globIgnores: ['**/pf4way.f16-*.bin', '**/wintie3-169.u16-*.bin', '**/adminScreens-*.js'],
         runtimeCaching: [
           {
             urlPattern: /pf4way\.f16-.*\.bin$/,

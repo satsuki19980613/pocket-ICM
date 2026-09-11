@@ -285,7 +285,9 @@ describe('pipeline — 信頼度・チェックサム（§6.3 / Plan 2-8）', ()
     );
     expect(r.ok).toBe(true);
     expect(r.lowConfidenceFields).toContain('UTG.stack');
-    expect(r.lowConfidenceFields).toContain('UTG.bet');
+    // UTG は行動マークが無い（未行動）ので、ベットは席順から決まるブラインド額（0）で確定して
+    // いる。チップの読みが怪しくても要確認にはしない（さつき指摘 2026-09-11・confidence.ts）。
+    expect(r.lowConfidenceFields).not.toContain('UTG.bet');
   });
 
   it('ポット・チェックサム不一致で pot と各 bet が強調される', () => {

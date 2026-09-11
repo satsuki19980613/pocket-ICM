@@ -32,10 +32,15 @@ export function potChecksum(
   facts: readonly SeatFacts[],
   tol = 0.5,
 ): ChecksumResult {
-  const contributions = facts.reduce(
-    (acc, f) => acc + (f.folded ? f.blindOb : f.screenBet),
-    0,
-  );
+  // 行動マーク（レイズ/コール/オールイン）の無い席が場に置けるのはブラインドだけなので、
+  // その席はブラインド額で数える（spotReconstruction の root 逆算と同じ扱い・さつき指摘
+  // 2026-09-11）。読んだチップ額を使うと、チップ 1 枚の読み漏らしで理論値がずれ、正しい
+  // ポットの読みを「不一致」と誤判定する（実測: Pixel 実機で BB の 1 BB を読み漏らし、
+  // 理論 1.75 vs 画面 2.8 で不一致と出て、全席のベットが要確認の強調になっていた）。
+  const contributions = facts.reduce((acc, f) => {
+    const voluntary = f.action === 'allin' || f.action === 'call' || f.action === 'raise';
+    return acc + (voluntary ? f.screenBet : f.blindOb);
+  }, 0);
   const anteAmount = reads.ante.scheme === 'none' ? 0 : reads.ante.amount.value;
   const anteContribution =
     reads.ante.scheme === 'all'
@@ -80,7 +85,12 @@ export function aggregateConfidence(
     const s = rawById.get(f.id);
     if (!s) continue;
     if (s.stack.conf < threshold) low.add(`${f.pos}.stack`);
-    if (s.bet.conf < threshold) low.add(`${f.pos}.bet`);
+    // ベットの読みが怪しくても、行動マークの無い席のベットは席順から決まるブラインド額で
+    // 確定している（spotReconstruction）ので要確認にしない。読んだ額を計算に使う
+    // レイズ/コール/オールインの席だけ、読みの信頼度で強調する（実測: Pixel 実機で BB の
+    // 1 BB チップを読み漏らし、正しく 1 で計算しているのに確認画面の「bet 1」が注意色になった）。
+    const voluntary = f.action === 'allin' || f.action === 'call' || f.action === 'raise';
+    if (voluntary && s.bet.conf < threshold) low.add(`${f.pos}.bet`);
     if (Math.min(s.occupancy.conf, s.action.conf) < threshold) low.add(`${f.pos}.state`);
   }
 

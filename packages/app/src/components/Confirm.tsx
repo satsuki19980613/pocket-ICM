@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
-import { potChecksumDelta } from '@oshihiki/core';
 import { ImageModal } from './ImageModal';
+import { potRowView } from './confirmPot';
 import { InfoMark, InfoModal } from './InfoModal';
 
 /**
@@ -36,8 +36,9 @@ export function Confirm(props: {
   const low = new Set(props.lowConfidenceFields ?? []);
   const hasLow = low.size > 0;
   const anteText = state.ante.scheme === 'none' ? 'なし' : `${state.ante.scheme} ${state.ante.amount}bb`;
-  const delta = potChecksumDelta(state);
-  const potOk = delta !== null && Math.abs(delta) < 1e-9;
+  // ポット欄: ゲームと同じ丸め（小数第 2 位を四捨五入）で出し、スクショから読んだポットが
+  // あればそれと照合する（オールイン等の上乗せ分も読み取り結果から足す・confirmPot.ts）。
+  const pot = potRowView(state, props.readout);
   // 席スタックのいずれかが低信頼なら Players 行を CHECK 強調（モックの low 行に対応）。
   const stacksLow = state.seats.some((s) => low.has(`${s.pos}.stack`));
   // 写真取り込みのときは「検出人数」を大きく確認させ、その場で人数を直せるようにする（安全網）。
@@ -109,9 +110,7 @@ export function Confirm(props: {
         )}
         <div className="row">
           <span className="lb">Pot</span>
-          <span className={`vl ${potOk ? 'ok' : 'warn'}`}>
-            {potOk ? `一致 (${state.pot}bb)` : `不一致 Δ=${delta?.toFixed(2)}`}
-          </span>
+          <span className={`vl ${pot.ok ? 'ok' : 'warn'}`}>{pot.text}</span>
           <Edit />
         </div>
       </div>

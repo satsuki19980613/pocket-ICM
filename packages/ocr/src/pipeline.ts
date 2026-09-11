@@ -95,6 +95,10 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
   // 総チップ保存チェック（クラブマッチ）: 未読 1 席の復元／最低信頼席での差分調整。
   // blindChips が無ければ no-op（reads 不変＝従来挙動・回帰ゼロ）。復元/調整した席は下流で
   // reconstruct され、低信頼フラグで確認画面に強調される。
+  // 保存チェックが整合するとポットを計算値に置き換えるので、画面から読んだ値を先に控えておき、
+  // 読み取り結果（readout）にはこちらを残す（確認画面のポット照合・照合ビュー・OCR ログ用）。
+  // 計算に使う state.pot は従来どおり置き換え後の計算値（さつき指摘: ポットは人数×アンティ+SB+BB で厳密）。
+  const potAsRead = reads.pot;
   const { reads: cReads, result: chipCheck } = applyChipConsistency(reads);
   reads = cReads;
   const chipCheckReadout = chipCheckForReadout(chipCheck);
@@ -111,6 +115,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
       readout: buildReadout(reads, {
         issues: recon.issues,
         chipCheck: chipCheckReadout,
+        potRead: potAsRead,
         ...(failPosById ? { posById: failPosById } : {}),
         ...(threshold !== undefined ? { threshold } : {}),
       }),
@@ -134,6 +139,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
         issues,
         posById,
         chipCheck: chipCheckReadout,
+        potRead: potAsRead,
         ...(threshold !== undefined ? { threshold } : {}),
       }),
     };
@@ -150,6 +156,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
         issues: parsed.issues,
         posById,
         chipCheck: chipCheckReadout,
+        potRead: potAsRead,
         ...(threshold !== undefined ? { threshold } : {}),
       }),
     };
@@ -164,6 +171,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
         issues: sem.issues,
         posById,
         chipCheck: chipCheckReadout,
+        potRead: potAsRead,
         ...(threshold !== undefined ? { threshold } : {}),
       }),
     };
@@ -195,6 +203,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
       posById,
       lowConfidenceFields: low,
       chipCheck: chipCheckReadout,
+      potRead: potAsRead,
       checksumOk: conf.checksum.ok,
       ...(threshold !== undefined ? { threshold } : {}),
     }),

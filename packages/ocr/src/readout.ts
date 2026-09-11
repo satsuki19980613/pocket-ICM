@@ -81,6 +81,13 @@ export interface BuildReadoutExtra {
   readonly chipCheck?: ReadoutChipCheck;
   /** ポット・チェックサムが不一致だったか（§6.3）。issueCodes に checksum_mismatch を足すためだけに使う。 */
   readonly checksumOk?: boolean;
+  /**
+   * 画面から読んだポット（総チップ保存チェックで置き換える**前**の値）。照合ビューと確認画面の
+   * ポット照合は「OCR が画面から読んだもの」を出す（SPEC §5.2.3）。保存チェックが整合すると
+   * reads.pot は人数×アンティ＋ブラインドの計算値に置き換わるため、渡さないと確認画面の照合が
+   * 「計算値と計算値」の比較になり常に一致してしまう（2026-09-11 に発覚）。省略時は reads.pot。
+   */
+  readonly potRead?: Read<number>;
 }
 
 function seatLow(s: RawSeatRead, threshold: number): SeatLowKey[] {
@@ -122,7 +129,7 @@ export function buildReadout(reads: RawReads, extra: BuildReadoutExtra = {}): Oc
     blinds: { sb: reads.blinds.sb, bb: reads.blinds.bb },
     ante: { scheme: reads.ante.scheme, amount: reads.ante.amount },
     ...(reads.blindChips !== undefined ? { blindChips: reads.blindChips } : {}),
-    pot: reads.pot,
+    pot: extra.potRead ?? reads.pot,
     heroHand: reads.heroHand,
     seats,
     threshold,

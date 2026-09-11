@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { MAX_POST_BODY } from '../supabase/feed';
 import { useBackLayer } from './BackLayer';
+import { CameraIcon } from './feedShared';
 
 type Ack = { ok: boolean; message?: string };
 
@@ -95,7 +96,7 @@ export function PostComposer(props: {
               aria-label="画像を添付"
               disabled={busy}
             >
-              📷
+              <CameraIcon />
             </button>
             <span className="post-compose-count">
               {body.length}/{MAX_POST_BODY}

@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { CameraIcon } from './feedShared';
 
 /**
  * 読み取れる条件のチェックリスト（撮り方ガイド）。icm とエラー画面で共有。
@@ -68,7 +69,9 @@ export function IcmInput(props: {
       )}
 
       <div className="shot">
-        <div className="ic">📷</div>
+        <div className="ic">
+          <CameraIcon />
+        </div>
         <b>スクリーンショットを選ぶ</b>
         <span className="sub">
           自分の手番が回ってきた場面を

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { FeedAuthor, ThreadComment, ThreadDetail } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
-import { Avatar, relTime } from './feedShared';
+import { Avatar, CameraIcon, relTime } from './feedShared';
 import { useBackLayer } from './BackLayer';
 import { useStorageImage } from '../supabase/storageUrls';
 
@@ -434,7 +434,7 @@ function Composer(props: {
           aria-label="画像を添付"
           disabled={busy}
         >
-          📷
+          <CameraIcon />
         </button>
         <button type="button" className="btn sm" onClick={() => void send()} disabled={busy || (!body.trim() && !file)}>
           {busy ? '送信中…' : '返信'}

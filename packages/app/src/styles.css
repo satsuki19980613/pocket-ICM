@@ -1254,7 +1254,7 @@ button.cell { cursor: pointer; }
   text-align: center;
   background: radial-gradient(120% 80% at 50% 0%, rgba(58, 230, 255, 0.05), transparent 60%), var(--surface);
 }
-.shot .ic { font-size: 30px; margin-bottom: 10px; filter: drop-shadow(0 0 10px rgba(58, 230, 255, 0.4)); }
+.shot .ic { font-size: 30px; line-height: 1; margin-bottom: 10px; color: var(--cyan); filter: drop-shadow(0 0 10px rgba(58, 230, 255, 0.4)); }
 .shot b { display: block; font-family: var(--disp); font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: 0.02em; }
 .shot .sub { font-size: 12.5px; color: var(--dim); line-height: 1.7; }
 .shot .btn { margin-top: 16px; }
@@ -1844,11 +1844,13 @@ button.cell { cursor: pointer; }
 /* 下余白は返信欄が一番伸びたとき（字数表示＋3 行）でも最後の返信が隠れない固定値。
    返信欄の高さを JS で測って追いかけると、変換中（IME）にページが組み直されて入力が止まる恐れがある。 */
 .thread { padding-bottom: calc(140px + env(safe-area-inset-bottom) + var(--kb, 0px)); }
-.thread-head { padding: 15px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
+/* スレッドもホーム（.post）と同じ配置: アイコン 48px の中心を画面左端と本文の書き出し（88px）の中間に。 */
+.thread-head { padding: 15px 14px 15px 7px; border-bottom: 1px solid var(--line); display: flex; gap: 20px; }
+.thread-head .av, .cmt .av { width: 48px; height: 48px; font-size: 21px; }
 .thread-head .col { flex: 1; min-width: 0; }
 
 .comments { display: flex; flex-direction: column; }
-.cmt { padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
+.cmt { padding: 13px 14px 13px 7px; border-bottom: 1px solid var(--line); display: flex; gap: 20px; }
 .cmt .col { flex: 1; min-width: 0; }
 .cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; font-weight: 700; }
 /* 投稿・返信の本文は太字に（ホームのフィード・スレッドとも。500 では実機で細くて読みにくかった）。 */
@@ -1891,11 +1893,13 @@ button.cell { cursor: pointer; }
   border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
 }
 .composer-row textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+/* 画像添付ボタン。中身はカメラの線画（feedShared の CameraIcon・大きさは font-size、色は color に従う）。 */
 .composer-img {
   flex: none; width: 40px; height: 40px; border: 1px solid var(--line);
-  background: var(--surface-2); color: var(--dim); font-size: 18px; cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+  background: var(--surface-2); color: var(--dim); font-size: 20px; cursor: pointer;
 }
-.composer-img:hover:not(:disabled) { border-color: var(--cyan); }
+.composer-img:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
 .composer-preview { position: relative; margin-bottom: 8px; width: fit-content; }
 .composer-preview img { max-height: 120px; max-width: 100%; border: 1px solid var(--line); display: block; }
 .composer-preview button {

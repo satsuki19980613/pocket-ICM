@@ -10,7 +10,8 @@ import { useEffect, useRef } from 'react';
  * - 30fps に落として描く（雨は 60fps である必要が無く、負荷が半分になる）。
  * - devicePixelRatio は 1.5 で頭打ち。全画面を毎フレーム触るので、3倍解像度は割に合わない。
  * - 非表示タブでは止める（電池）。`prefers-reduced-motion` では一切描かない。
- * - 文字色はブランドのシアンを主、たまに黄（配色比 §11 を崩さないため。緑は使わない）。
+ * - 文字色はマトリックスの緑（#00ff41）を主、たまに白っぽく光る明るい緑（2026-09-11 さつきの指定で
+ *   シアン＋黄から変更。背景だけの色なので、UI の配色比 §11 には数えない）。
  */
 
 /** 列の間隔・行の高さ（CSS px）。 */
@@ -27,7 +28,7 @@ export interface RainColumn {
   readonly y: number;
   /** 1 フレームあたりの行数。1 を超えると尾が飛び飛びになるので上限 1。 */
   readonly speed: number;
-  /** 0..1。高いほど「黄色く光る列」になる（たまに混ぜてブランド色を効かせる）。 */
+  /** 0..1。高いほど「白っぽく光る列」になる（たまに混ぜて雨に奥行きを出す）。 */
   readonly hot: number;
 }
 
@@ -108,7 +109,7 @@ export function DigitalRain(): JSX.Element {
         const row = Math.floor(col.y);
         const y = row * ROW_H;
         if (y >= -ROW_H && y <= h) {
-          ctx.fillStyle = col.hot > 0.92 ? 'rgba(252, 238, 10, 0.46)' : 'rgba(58, 230, 255, 0.30)';
+          ctx.fillStyle = col.hot > 0.92 ? 'rgba(190, 255, 200, 0.46)' : 'rgba(0, 255, 65, 0.30)';
           ctx.fillText(Math.random() < 0.5 ? '0' : '1', i * COL_W + 3, y);
         }
         cols[i] = stepColumn(col, rows, Math.random);

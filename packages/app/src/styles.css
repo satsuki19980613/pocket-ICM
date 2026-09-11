@@ -1851,9 +1851,9 @@ button.cell { cursor: pointer; }
 .comments { display: flex; flex-direction: column; }
 .cmt { padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
 .cmt .col { flex: 1; min-width: 0; }
-.cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; font-weight: 500; }
-/* スレッドは読み物なので本文を一段太く（フィードの要約表示は据え置き）。 */
-.thread .post-body-text { font-weight: 500; }
+.cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; font-weight: 700; }
+/* スレッドは読み物なので本文を太字に（500 では実機で細くて読みにくかった。フィードの要約表示は据え置き）。 */
+.thread .post-body-text { font-weight: 700; }
 .cmt-img { display: block; margin-top: 8px; max-width: 240px; }
 .cmt-img img { border: 1px solid var(--line); display: block; max-width: 100%; height: auto; }
 .cmt-own-acts { display: flex; gap: 16px; margin-top: 8px; }
@@ -1882,9 +1882,11 @@ button.cell { cursor: pointer; }
   background: var(--surface); border-top: 1px solid var(--line);
 }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
+.composer-count { text-align: right; margin-bottom: 4px; font-family: var(--mono); font-size: 11px; color: var(--dim2); }
+.composer-count.full { color: var(--yellow); }
 .composer-row textarea {
   flex: 1; min-width: 0; padding: 9px 11px; resize: none; font-family: inherit; font-size: 14px;
-  line-height: 1.5; max-height: calc(1.5em * 5 + 20px); overflow-y: auto; /* 5 行まで伸び、その先は中でスクロール */
+  line-height: 1.5; max-height: calc(1.5em * 3 + 20px); overflow-y: auto; /* 3 行まで伸び、その先は中でスクロール */
   border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
 }
 .composer-row textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }

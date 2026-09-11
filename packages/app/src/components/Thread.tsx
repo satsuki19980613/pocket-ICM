@@ -329,6 +329,9 @@ function CommentRow(props: {
   );
 }
 
+/** 返信の最大字数（DB は 2000 まで受けるが、返信はひとことに絞る）。 */
+const MAX_REPLY_BODY = 100;
+
 function Composer(props: {
   onReply: (input: { body: string; imageFile: File | null }) => Promise<Ack>;
 }): JSX.Element {
@@ -341,7 +344,7 @@ function Composer(props: {
   const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
-  // LINE のように行数に合わせて縦に伸ばす（CSS の max-height＝5 行で頭打ち、その先は中でスクロール）。
+  // LINE のように行数に合わせて縦に伸ばす（CSS の max-height＝3 行で頭打ち、その先は中でスクロール）。
   // 送信後に空へ戻したときも 1 行に縮むよう、本文が変わるたびに測り直す。
   useLayoutEffect(() => {
     const el = textRef.current;
@@ -397,13 +400,17 @@ function Composer(props: {
         </div>
       )}
       {err && <p className="auth-err">{err}</p>}
+      <div className={body.length >= MAX_REPLY_BODY ? 'composer-count full' : 'composer-count'}>
+        {body.length}/{MAX_REPLY_BODY}
+      </div>
       <div className="composer-row">
+        {/* 上限は maxLength だけで守る。onChange で切り詰めると、変換中（IME）の文字列を書き換えて入力が崩れる。 */}
         <textarea
           ref={textRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="返信する…"
-          maxLength={2000}
+          maxLength={MAX_REPLY_BODY}
           rows={1}
           disabled={busy}
         />

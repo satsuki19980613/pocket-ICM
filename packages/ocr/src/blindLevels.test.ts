@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  isTableConsistentBlinds,
   ALL_CLUB_MATCH_LEVELS,
   CLUB_MATCH_LEVELS,
   CLUB_MATCH_LEVELS_SLOW,
@@ -126,6 +127,19 @@ describe('blindLevels', () => {
   it('resolveBlindChips: BB も SB も読めなければ null（チェック無効）', () => {
     expect(resolveBlindChips(NaN, NaN, NaN)).toBeNull();
     expect(resolveBlindChips(0, 0, 0)).toBeNull();
+  });
+
+  it('isTableConsistentBlinds: 表のレベルに載り SB がちょうど半分の読みだけ通す', () => {
+    expect(isTableConsistentBlinds(280, 560)).toBe(true); // 通常 lv4（実機 Pixel の本当の値）
+    expect(isTableConsistentBlinds(330, 660)).toBe(true);
+    // 読み位置がずれた実測の誤読（Pixel の従来位置: "3/88280/54"）。
+    expect(isTableConsistentBlinds(3, 8828054)).toBe(false);
+    // 数字の頭が切れた／「BB」の文字を巻き込んだ読みは SB が半分にならない。
+    expect(isTableConsistentBlinds(80, 560)).toBe(false);
+    expect(isTableConsistentBlinds(8280, 560)).toBe(false);
+    // 両方の末尾が切れた読み（56 は表に無い）。
+    expect(isTableConsistentBlinds(28, 56)).toBe(false);
+    expect(isTableConsistentBlinds(NaN, 560)).toBe(false);
   });
 
   it('resolveBlindChips: 総チップ 90,000 を超える BB はヘッダ誤読として null（実機 Pixel フレーム）', () => {

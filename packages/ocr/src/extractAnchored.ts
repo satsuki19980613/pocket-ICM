@@ -52,7 +52,7 @@ import { recognizeMark } from './actionMark.js';
 import { markZoneRect, pickMarkGrid } from './actionMarkZone.js';
 import { ANTE_BB, resolveStacklessSeats } from './anteSeatCount.js';
 import { actionZoneRect } from './anchorAction.js';
-import { readBlinds } from './blinds.js';
+import { readBlinds, type Blinds } from './blinds.js';
 import { readPotAnchored, type PotAnchorRegion } from './potAnchor.js';
 import { goldDiscCandidates, type FracPoint } from './button.js';
 import { isActiveHand, blueFractions, pickHandActiveRule, type CardStateOptions } from './cardState.js';
@@ -60,7 +60,7 @@ import { recognizeAmount, grayFromRgba } from './numberField.js';
 import { findCardRects, largestCardRects } from './detect.js';
 import { recognizeHeroHandColor } from './cards.js';
 import type { HandActiveRule } from './frameProfile.js';
-import { resolveBlindChips } from './blindLevels.js';
+import { isTableConsistentBlinds, resolveBlindChips } from './blindLevels.js';
 
 export interface AnchorTemplates {
   readonly digits: readonly Template[];
@@ -107,6 +107,48 @@ const HEADER_BLINDS: Rect = { x: 0.172, y: 0.012, w: 0.084, h: 0.044 };
 const HEADER_ANTE: Rect = { x: 0.18, y: 0.058, w: 0.06, h: 0.04 };
 /** hero カード帯（フラクショナル）。2 枚の表向きカードを内包する高さを確保（_dbg2 で全機種一致）。 */
 const HERO_CARD_BAND = { x: 0.40, y: 0.62, w: 0.22, h: 0.20 };
+
+/**
+ * ヘッダ読みの横位置の探索量（画像幅比）。近い順に +0.002, −0.002, +0.004, … と試す。
+ * 右へ最大 0.08・左へ最大 0.02（実測: Pixel 2424×1080 は数値部が +0.030〜+0.036 にずれていた）。
+ */
+const HEADER_SCAN_DX: readonly number[] = (() => {
+  const out: number[] = [];
+  for (let i = 1; i <= 40; i++) {
+    out.push(i * 0.002);
+    if (i <= 10) out.push(-i * 0.002);
+  }
+  return out;
+})();
+
+/**
+ * ヘッダの SB/BB を読み、**ストラクチャー表と照合できる読み**を採る（さつき決定: 読んだ BB は
+ * 登録済みのストラクチャー表と照合し、表の値で計算する）。
+ *
+ * 読む位置（HEADER_BLINDS）は標準比率（2.167）で較正した固定座標なので、画面比率や左端の
+ * 余白が違う機種ではずれる。実測: Pixel 2424×1080 で「SB/BB 280/560」の末尾が切れ、「B/BB」
+ * まで入って "3/88280/54"（SB 3 / BB 8,828,054）と読めた。本当は通常 lv4（280/560/140）なのに
+ * 表と照合できず、総チップ保存チェック（1 席の読み違いを 90,000 との差で直す処理）まで止まり、
+ * BU の 29.8 が 29.3 のまま残った（さつき指摘 2026-09-11）。そこで:
+ *  1. まず従来の位置で読み、表と照合できればそれを使う（較正機は従来どおり＝回帰ゼロ）。
+ *  2. 照合できなければ横位置を少しずつずらして読み直し（近い順）、「BB が表に載っていて SB が
+ *     ちょうどその半分」になる最初の読みを採る。表との照合そのものを正しさの判定に使うので、
+ *     切れた数字や「BB」の文字を巻き込んだ読みは自然に落ちる。
+ *  3. どこでも照合できなければ従来の読みのまま（resolveBlindChips が誤読として扱う）。
+ * ずらした量（dx）はアンティの読み位置にも使う（アンティの枠はブラインドの枠の真下で左端が揃う）。
+ */
+function readHeaderBlinds(img: Rgba, digits: readonly Template[]): { blinds: Blinds; dx: number } {
+  const at = (dx: number): Blinds =>
+    readBlinds(img, fracRect(img, { ...HEADER_BLINDS, x: HEADER_BLINDS.x + dx }), digits);
+  const consistent = (b: Blinds): boolean => isTableConsistentBlinds(b.sb.value, b.bb.value);
+  const base = at(0);
+  if (consistent(base)) return { blinds: base, dx: 0 };
+  for (const dx of HEADER_SCAN_DX) {
+    const b = at(dx);
+    if (consistent(b)) return { blinds: b, dx };
+  }
+  return { blinds: base, dx: 0 };
+}
 
 /**
  * D ボタンディスクの席アンカー（フラクショナル）。ディスクは名前プレートより内側（テーブル中心寄り）に
@@ -383,10 +425,11 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   }
 
   // ヘッダ SB/BB・アンティ（常に chips 表記）→ bb で BB 正規化。
-  const blindsRaw = readBlinds(nimg, fracRect(nimg, HEADER_BLINDS), digits);
+  // 表と照合できる位置で読む（readHeaderBlinds）。アンティも同じだけずらした位置で読む。
+  const { blinds: blindsRaw, dx: headerDx } = readHeaderBlinds(nimg, digits);
   const bbChips = Number.isFinite(blindsRaw.bb.value) && blindsRaw.bb.value > 0 ? blindsRaw.bb.value : 1;
   const bbNorm = norm(blindsRaw.bb, bbChips).value; // BB 換算での BB（=1, allin bet の下駄に使う）。
-  const anteChips = recognizeAmount(nimg, fracRect(nimg, HEADER_ANTE), digits);
+  const anteChips = recognizeAmount(nimg, fracRect(nimg, { ...HEADER_ANTE, x: HEADER_ANTE.x + headerDx }), digits);
   // ブラインド解決（クラブマッチ・保存則ベース）。読んだ BB を基準に blindChips を露出し、下流の総チップ
   // 保存チェック（chipConsistency）の基準にする。公式「通常」表にタイト一致すれば厳密値で小誤読を補正、
   // 一致しない別スピード（例 480/960/240）は読み値をそのまま採用（960 を 1100 へ誤スナップしない）。

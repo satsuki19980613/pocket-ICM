@@ -169,6 +169,18 @@ export function resolveBlindChips(sbChips: number, bbChips: number, anteChips: n
   return { sb, bb, ante, level: 0 };
 }
 
+/**
+ * SB/BB の読み（チップ）がストラクチャー表と照合できるか: BB が表のいずれかのレベルに
+ * タイト一致し、かつ SB がちょうど BB の半分。ヘッダの読み位置合わせの判定に使う
+ * （extractAnchored.readHeaderBlinds）。読み位置がずれて数字が切れたり「BB」の文字を
+ * 巻き込んだりした読み（SB 80・SB 8280・BB 8,828,054 など）はここで落ちる。
+ */
+export function isTableConsistentBlinds(sbChips: number, bbChips: number, tightGate = 0.02): boolean {
+  if (!(Number.isFinite(sbChips) && Number.isFinite(bbChips) && sbChips > 0 && bbChips > 0)) return false;
+  if (Math.abs(sbChips * 2 - bbChips) > 0.01 * bbChips) return false;
+  return snapByBb(bbChips, tightGate) !== null;
+}
+
 /** レベルの BB 換算アンティ（= ante/bb）。クラブマッチは概ね 0.25 だがレベルで微変動。 */
 export function anteBbOf(level: BlindLevel): number {
   return level.ante / level.bb;

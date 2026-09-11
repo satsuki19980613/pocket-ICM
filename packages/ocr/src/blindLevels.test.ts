@@ -128,6 +128,18 @@ describe('blindLevels', () => {
     expect(resolveBlindChips(0, 0, 0)).toBeNull();
   });
 
+  it('resolveBlindChips: 総チップ 90,000 を超える BB はヘッダ誤読として null（実機 Pixel フレーム）', () => {
+    // 装飾テーマ卓でヘッダの 280/560 が SB 3 / BB 8,828,054 と読まれた実測値。BB を採用すると総 BB の
+    // 理論値が 0.01 BB、SB×2 で救済すると BB 6 → 15,000 BB になり、どちらも誤って棄却される。
+    expect(resolveBlindChips(3, 8828054, NaN)).toBeNull();
+    // BB が壊れているときは、SB がもっともらしく見えても救済しない（同じヘッダの誤読）。
+    expect(resolveBlindChips(280, 8828054, 140)).toBeNull();
+    // BB が**読めなかった**ときの SB×2 救済は従来どおり。
+    expect(resolveBlindChips(280, NaN, 140)!.bb).toBe(560);
+    // 公式表の最大 BB（60,000）は落とさない。
+    expect(resolveBlindChips(30000, 60000, 15000)).not.toBeNull();
+  });
+
   it('anteBbOf: 各レベルのアンティは概ね 0.25×BB', () => {
     for (const lv of CLUB_MATCH_LEVELS) {
       expect(anteBbOf(lv)).toBeGreaterThan(0.24);

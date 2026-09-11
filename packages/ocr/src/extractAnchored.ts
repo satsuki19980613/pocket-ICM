@@ -50,6 +50,7 @@ import { readAmountBbAnchored } from './bbAmount.js';
 import { recognizeAction } from './actionTag.js';
 import { recognizeMark } from './actionMark.js';
 import { markZoneRect, pickMarkGrid } from './actionMarkZone.js';
+import { ANTE_BB, resolveStacklessSeats } from './anteSeatCount.js';
 import { actionZoneRect } from './anchorAction.js';
 import { readBlinds } from './blinds.js';
 import { readPotAnchored, type PotAnchorRegion } from './potAnchor.js';
@@ -570,18 +571,36 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   // SB=BB/2 で確定・BB 換算では常に sb=0.5 / bb=1.0）に上書きし、ヘッダ数値の誤読（実測 2.44 で sb≒0.60）を
   // 根治する（さつき: SB/BB は決まっている）。rb.sb/rb.bb は常に 0.5。解決不可（BB 読めず）は従来の
   // sanitizeBlinds（回帰ゼロ）。conf 0.9 で確認画面の低信頼強調からも外す。
+  // BB 表示でヘッダが解決できなかった（誤読して総チップを超える BB 等で rb=null）ときも、BB 換算の
+  // ブラインドは SB=0.5 / BB=1 で確定している（読み値に依存しない不変）。ヘッダの生値で正規化すると、
+  // 実測 Pixel 装飾卓の SB「3」/ BB「8,828,054」から SB ≈ 0 が出てしまうので使わない。
   const blinds = rb
     ? { sb: { value: rb.sb / rb.bb, conf: 0.9 }, bb: { value: 1, conf: 0.9 } }
-    : sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips));
+    : mode === 'bb'
+      ? { sb: { value: 0.5, conf: 0.8 }, bb: { value: 1, conf: 0.8 } }
+      : sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips));
 
-  return {
+  // アンティ（BB 換算）。クラブマッチは全員 0.25 BB（さつき確定 2026-09-11）。ヘッダの読みが
+  // 妥当域（0.15〜0.35）なら読み値のまま（公式表に 170/660 = 0.2576 のような微変動があり、
+  // 既存フレームの計算結果を変えないため）、外れたら 0.25 に置き換える（実測: 装飾テーマ卓で
+  // ヘッダのアンティが 0.000008 と読めた）。chips 表示は取り込み対象外なので従来どおり。
+  const anteRead = norm(anteChips, bbChips);
+  const anteAmount: Read<number> =
+    mode === 'bb' && !(anteRead.value >= 0.15 && anteRead.value <= 0.35) ? { value: ANTE_BB, conf: 0.6 } : anteRead;
+
+  const out: RawReads = {
     street: { value: 'preflop', conf: 0.8 }, // アンカー抽出はプリフロップ終了フレーム前提（§A）。
     blinds,
-    ante: { scheme: opts.anteScheme ?? 'all', amount: norm(anteChips, bbChips) },
+    ante: { scheme: opts.anteScheme ?? 'all', amount: anteAmount },
     pot,
     heroHand,
     seats,
     displayMode: mode,
     ...(rb ? { blindChips: { sb: rb.sb, bb: rb.bb, ante: rb.ante, level: rb.level } } : {}),
   };
+  // スタックが読めない席が本物か、空席の見間違い（装飾を人と誤読した幽霊席）かを、アンティと
+  // ポットの整合で決める（anteSeatCount.ts）。場のベットを行動マークから決めるので、マークを
+  // 読んでいる経路（marks 指定時）だけで使う。下流の総チップ保存チェックがポットを人数から
+  // 計算し直して上書きするので、**読んだポットが残っているここ**で判定する必要がある。
+  return marks ? resolveStacklessSeats(out).reads : out;
 }

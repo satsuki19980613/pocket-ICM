@@ -127,8 +127,16 @@ export function reconstructSpot(reads: RawReads): ReconstructResult {
 
     facts.push({ id, pos, isHero: raw.isHero, action, folded, allin, screenStack, screenBet, blindOb });
 
-    // root への逆算: フォールド済みはブラインドのデッド分のみを putIn とみなす。
-    const putIn = folded ? blindOb : screenBet;
+    // root への逆算に使う「この席が場に出したチップ」。
+    //  - レイズ/コール/オールインの席: 読んだチップ額（オールイン額など）。
+    //  - それ以外（未行動・フォールド）: 席のブラインド義務そのもの（SB 0.5 / BB 1 / 他 0）。
+    //    行動マークが無い席が場に置けるのはブラインドだけなので、チップを読む必要がない
+    //    （さつき指摘 2026-09-11）。読んだ額を使うと、チップ 1 枚の読み漏らしがそのまま
+    //    スタックのずれになる（実測: Pixel 実機フレームで BB の 1 BB を読み漏らし、BB のスタックが
+    //    1 少なく復元された）。読んだ額は facts.screenBet に残し、ブラインドを超えるチップ
+    //    （＝マークの読み落とし）の検出（detectOutOfScope）にはそちらを使う。
+    const voluntary = action === 'allin' || action === 'call' || action === 'raise';
+    const putIn = voluntary ? screenBet : blindOb;
     // 占有は検出できたがスタック数字が読めない席（seatPresence のみで occupied）: root 復元に
     // 使える数値が無い。ここで席を落とすと 6-max が 5-max として黙って誤解される（本バグ）。
     // 代わりに 0 を仮置きして席を残し（人数は正しい）、raw.stack.conf(=0) 由来で

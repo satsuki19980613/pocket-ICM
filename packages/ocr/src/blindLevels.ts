@@ -140,14 +140,21 @@ export function snapByBb(bbChips: number, gate = 0.02, anteChips = NaN): BlindLe
  *  - 一致しなければ**読み値をそのまま採用**（表に無い構造）: bb=読み値, sb=bb/2（不変を強制）,
  *    ante=読み値が妥当（0.15〜0.35×bb）ならそれ、外れれば 0.25×bb で近似。level=0。
  * いずれの場合も総 BB は `totalBbFromBbChips(bb)`（=90,000÷bb）で求まり、全スピードを自動対応する。
+ *
+ * **総チップを超える BB はヘッダの誤読とみなし、SB でも救済しない**（null ＝ チェック無効＝従来の
+ * 安全側）。BB が場の総チップ（クラブマッチ 90,000）を上回ることはあり得ず、公式表の最大 BB も
+ * 60,000 なので正しい読みは落ちない。実測: 装飾テーマ卓（Screenshot_20260910-192316.png）で
+ * ヘッダの「280/560」が SB 3 / BB 8,828,054 と読まれた。BB をそのまま使うと総 BB の理論値が
+ * 0.01 BB、SB×2 で救済すると BB 6 → 15,000 BB になり、どちらも「クラブマッチではない」と誤って
+ * 棄却する。同じヘッダが壊れている以上 SB も信用できないので、SB×2 の救済は BB が**読めなかった**
+ * とき（欠測）に限る。
  */
 export function resolveBlindChips(sbChips: number, bbChips: number, anteChips: number, tightGate = 0.02): ResolvedBlinds | null {
-  const bbGuess = Number.isFinite(bbChips) && bbChips > 0
-    ? bbChips
-    : Number.isFinite(sbChips) && sbChips > 0
-      ? sbChips * 2
-      : NaN;
-  if (!Number.isFinite(bbGuess) || bbGuess <= 0) return null;
+  const bbRead = Number.isFinite(bbChips) && bbChips > 0;
+  if (bbRead && bbChips > CLUB_MATCH_TOTAL_CHIPS) return null; // ヘッダ誤読
+  const sbRescue = Number.isFinite(sbChips) && sbChips > 0 && sbChips * 2 <= CLUB_MATCH_TOTAL_CHIPS;
+  const bbGuess = bbRead ? bbChips : sbRescue ? sbChips * 2 : NaN;
+  if (!Number.isFinite(bbGuess)) return null;
 
   const matched = snapByBb(bbGuess, tightGate, anteChips);
   if (matched) {

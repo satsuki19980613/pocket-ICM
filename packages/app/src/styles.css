@@ -1843,8 +1843,9 @@ button.cell { cursor: pointer; }
 
 /* ---- スレッド詳細 ---- */
 /* --kb＝画面下端のうちソフトキーボードに隠れている高さ（Thread.tsx の useKeyboardInset が書く）。 */
-/* --composer-h は返信欄の実際の高さ（行数に応じて伸びる, Thread.tsx の Composer が書く）。 */
-.thread { padding-bottom: calc(max(96px, var(--composer-h, 0px) + 16px) + var(--kb, 0px)); }
+/* 下余白は返信欄が一番伸びたとき（字数表示＋3 行）でも最後の返信が隠れない固定値。
+   返信欄の高さを JS で測って追いかけると、変換中（IME）にページが組み直されて入力が止まる恐れがある。 */
+.thread { padding-bottom: calc(140px + env(safe-area-inset-bottom) + var(--kb, 0px)); }
 .thread-head { padding: 15px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
 .thread-head .col { flex: 1; min-width: 0; }
 
@@ -1852,8 +1853,8 @@ button.cell { cursor: pointer; }
 .cmt { padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
 .cmt .col { flex: 1; min-width: 0; }
 .cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; font-weight: 700; }
-/* スレッドは読み物なので本文を太字に（500 では実機で細くて読みにくかった。フィードの要約表示は据え置き）。 */
-.thread .post-body-text { font-weight: 700; }
+/* 投稿・返信の本文は太字に（ホームのフィード・スレッドとも。500 では実機で細くて読みにくかった）。 */
+.post p, .post-body-text { font-weight: 700; }
 .cmt-img { display: block; margin-top: 8px; max-width: 240px; }
 .cmt-img img { border: 1px solid var(--line); display: block; max-width: 100%; height: auto; }
 .cmt-own-acts { display: flex; gap: 16px; margin-top: 8px; }
@@ -1886,7 +1887,9 @@ button.cell { cursor: pointer; }
 .composer-count.full { color: var(--yellow); }
 .composer-row textarea {
   flex: 1; min-width: 0; padding: 9px 11px; resize: none; font-family: inherit; font-size: 14px;
-  line-height: 1.5; max-height: calc(1.5em * 3 + 20px); overflow-y: auto; /* 3 行まで伸び、その先は中でスクロール */
+  line-height: 1.5; overflow-y: auto;
+  /* 中身に合わせて伸び（field-sizing, 無い端末は Thread.tsx が JS で測る）、3 行で頭打ち・その先は中でスクロール */
+  field-sizing: content; min-height: calc(1.5em + 20px); max-height: calc(1.5em * 3 + 20px);
   border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
 }
 .composer-row textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }

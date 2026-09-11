@@ -332,6 +332,21 @@ function CommentRow(props: {
 /** 返信の最大字数（DB は 2000 まで受けるが、返信はひとことに絞る）。 */
 const MAX_REPLY_BODY = 100;
 
+/**
+ * 返信欄を LINE のように行数に合わせて縦に伸ばす（CSS の max-height＝3 行で頭打ち、その先は中でスクロール）。
+ * 伸ばすのは CSS の field-sizing: content に任せる（Android Chrome など Chromium 123+）。
+ * JS で style.height を毎打鍵書き換えると、変換中（IME）の入力欄をそのたびに組み直すことになる。
+ * JS 版では Android 実機で未確定の入力が 30 字ほどで止まる症状が出たので、その疑いを外すため変換中は触らない。
+ * field-sizing が無い端末（古い iOS Safari など）だけ JS で測る。
+ */
+const CSS_AUTOSIZE = typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content') === true;
+
+function fitReplyHeight(el: HTMLTextAreaElement | null): void {
+  if (!el || CSS_AUTOSIZE) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+}
+
 function Composer(props: {
   onReply: (input: { body: string; imageFile: File | null }) => Promise<Ack>;
 }): JSX.Element {
@@ -341,30 +356,14 @@ function Composer(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
 
-  // LINE のように行数に合わせて縦に伸ばす（CSS の max-height＝3 行で頭打ち、その先は中でスクロール）。
-  // 送信後に空へ戻したときも 1 行に縮むよう、本文が変わるたびに測り直す。
+  // 送信後に空へ戻したときも 1 行に縮むよう、本文が変わるたびに測り直す（field-sizing が無い端末だけ。
+  // 変換中は触らず、確定＝compositionend で測る）。
   useLayoutEffect(() => {
-    const el = textRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+    if (!composingRef.current) fitReplyHeight(textRef.current);
   }, [body]);
-
-  // 返信欄が伸びた分だけスレッドの下余白も広げ、最後の返信が返信欄の裏に隠れないようにする。
-  useEffect(() => {
-    const el = rootRef.current;
-    const host = el?.parentElement;
-    if (!el || !host || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => host.style.setProperty('--composer-h', `${el.offsetHeight}px`));
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      host.style.removeProperty('--composer-h');
-    };
-  }, []);
 
   function pickImage(f: File | null): void {
     setFile(f);
@@ -390,7 +389,7 @@ function Composer(props: {
   }
 
   return (
-    <div className="composer" ref={rootRef}>
+    <div className="composer">
       {preview && (
         <div className="composer-preview">
           <img src={preview} alt="添付プレビュー" />
@@ -409,6 +408,13 @@ function Composer(props: {
           ref={textRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          onCompositionStart={() => {
+            composingRef.current = true;
+          }}
+          onCompositionEnd={(e) => {
+            composingRef.current = false;
+            fitReplyHeight(e.currentTarget);
+          }}
           placeholder="返信する…"
           maxLength={MAX_REPLY_BODY}
           rows={1}

@@ -1783,7 +1783,8 @@ button.cell { cursor: pointer; }
 .pub-comment:disabled { opacity: 0.45; }
 
 /* ---- スレッド詳細 ---- */
-.thread { padding-bottom: 96px; }
+/* --kb＝画面下端のうちソフトキーボードに隠れている高さ（Thread.tsx の useKeyboardInset が書く）。 */
+.thread { padding-bottom: calc(96px + var(--kb, 0px)); }
 .thread-head { padding: 15px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
 .thread-head .col { flex: 1; min-width: 0; }
 
@@ -1811,9 +1812,9 @@ button.cell { cursor: pointer; }
 .btn.sm { width: auto; font-size: 13px; padding: 8px 16px; letter-spacing: 0.04em; }
 .btn.ghost.sm { width: auto; font-size: 13px; padding: 8px 16px; }
 
-/* ---- 返信コンポーザ（下端固定） ---- */
+/* ---- 返信コンポーザ（下端固定・キーボード表示中はその真上） ---- */
 .composer {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  position: fixed; left: 0; right: 0; bottom: var(--kb, 0px); z-index: 20;
   max-width: 480px; margin: 0 auto;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   background: var(--surface); border-top: 1px solid var(--line);

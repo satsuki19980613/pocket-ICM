@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { FeedAuthor, ThreadComment, ThreadDetail } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
 import { Avatar, relTime } from './feedShared';
@@ -22,6 +22,33 @@ function AttachedImage(props: { refUrl: string | null }): JSX.Element | null {
 }
 
 /**
+ * ソフトキーボードに隠れている画面下端の高さを、el の CSS 変数 --kb（px）に書き続ける。
+ * Android Chrome（既定の resizes-visual）も iOS Safari も、キーボードが出ても見えている範囲
+ * （visualViewport）が縮むだけでレイアウトの高さは変わらない。そのため bottom:0 の fixed 要素は
+ * キーボードの裏に回るか、ブラウザが画面ごと持ち上げて上側（スレッド本文）が見えなくなる。
+ * 見えている範囲の下端からレイアウト下端までの差を bottom に足して、入力欄をキーボードの真上に置く。
+ * 再描画を挟むとその間にブラウザが入力欄を見せようと画面をずらすので、React の state は使わず直接書く。
+ */
+function useKeyboardInset(ref: RefObject<HTMLElement>): void {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const el = ref.current;
+    if (!vv || !el) return;
+    const update = (): void => {
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      el.style.setProperty('--kb', `${inset}px`);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [ref]);
+}
+
+/**
  * スレッド詳細（M6・v3 で通常投稿にも対応）。見出しは種別で切り替える
  * （結果投稿＝ResultCard / 通常投稿＝本文＋画像, SPEC §5.1.3）。＋♡＋コメント一覧＋返信（画像添付）。
  * 自分のコメントに加え、自分の通常投稿も本文の編集/削除ができる（PostHead）。
@@ -41,8 +68,10 @@ export function Thread(props: {
   onDeletePost: () => Promise<Ack>;
 }): JSX.Element {
   const d = props.detail;
+  const rootRef = useRef<HTMLDivElement>(null);
+  useKeyboardInset(rootRef);
   return (
-    <div className="thread">
+    <div className="thread" ref={rootRef}>
       <div className="thread-head">
         <Avatar author={d.author} onClick={() => props.onOpenAuthor(d.author)} />
         <div className="col">

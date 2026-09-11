@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { FeedAuthor, ThreadComment, ThreadDetail } from '../supabase/feed';
 import { ResultCard } from './ResultCard';
 import { Avatar, relTime } from './feedShared';
@@ -338,6 +338,30 @@ function Composer(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  // LINE のように行数に合わせて縦に伸ばす（CSS の max-height＝5 行で頭打ち、その先は中でスクロール）。
+  // 送信後に空へ戻したときも 1 行に縮むよう、本文が変わるたびに測り直す。
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [body]);
+
+  // 返信欄が伸びた分だけスレッドの下余白も広げ、最後の返信が返信欄の裏に隠れないようにする。
+  useEffect(() => {
+    const el = rootRef.current;
+    const host = el?.parentElement;
+    if (!el || !host || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => host.style.setProperty('--composer-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      host.style.removeProperty('--composer-h');
+    };
+  }, []);
 
   function pickImage(f: File | null): void {
     setFile(f);
@@ -363,7 +387,7 @@ function Composer(props: {
   }
 
   return (
-    <div className="composer">
+    <div className="composer" ref={rootRef}>
       {preview && (
         <div className="composer-preview">
           <img src={preview} alt="添付プレビュー" />
@@ -375,6 +399,7 @@ function Composer(props: {
       {err && <p className="auth-err">{err}</p>}
       <div className="composer-row">
         <textarea
+          ref={textRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="返信する…"

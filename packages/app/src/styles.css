@@ -426,7 +426,8 @@ select.inp { appearance: none; cursor: pointer; }
   font-family: var(--disp);
   font-size: 40px;
   font-weight: 700;
-  clip-path: var(--chamfer);
+  border-radius: 50%;
+  overflow: hidden;
 }
 .avpick .lbl {
   margin-top: 12px;
@@ -436,12 +437,20 @@ select.inp { appearance: none; cursor: pointer; }
   text-transform: uppercase;
 }
 .avpick .lbl.dim { color: var(--dim2); }
-/* アイコン画像は面取り枠いっぱいに（切り出しは端末内で正方形にしてから上げている）。 */
+/* アイコン画像は円形の枠いっぱいに（切り出しは端末内で正方形にしてから上げている）。 */
 .avbig img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avpick-actions { display: flex; align-items: center; gap: var(--s4); margin-top: 12px; }
 .avpick-err { margin: 10px 0 0; }
-/* 「削除」は実際に押せる操作。.edit.dim の既定（cursor:default＝準備中ラベル用）を打ち消す。 */
-.avpick-actions .edit.dim { cursor: pointer; }
+/* アイコンの操作は文字ボタン。素のボタンのままだとダーク既定の灰色地に文字が沈んで読めない。
+   「削除」は実際に押せる操作なので .edit.dim の既定（cursor:default＝準備中ラベル用）も打ち消す。 */
+.avpick-actions .edit {
+  background: none; border: 0; padding: 4px 6px; cursor: pointer;
+  color: var(--cyan); font-family: var(--body); font-size: 13px; letter-spacing: 0.04em;
+}
+.avpick-actions .edit:hover:not(:disabled) { color: #7ff0ff; }
+.avpick-actions .edit.dim { color: var(--dim); cursor: pointer; }
+.avpick-actions .edit.dim:hover:not(:disabled) { color: var(--red); }
+.avpick-actions .edit:disabled { opacity: 0.5; cursor: default; }
 .edit.dim { color: var(--dim2); cursor: default; }
 /* 設定の readout 行は Confirm と同じ .readout/.row を流用（境界線あり） */
 .settings .readout .row { border-bottom: 1px solid var(--line); }
@@ -785,6 +794,8 @@ select.inp { appearance: none; cursor: pointer; }
   font-weight: 700;
   font-size: 15px;
   background: linear-gradient(140deg, #8a6bd0, #d65b9e);
+  border-radius: 50%;
+  overflow: hidden;
 }
 .av.k { background: linear-gradient(140deg, #2bb6d6, #33e6ff); }
 .av.n { background: linear-gradient(140deg, #d6913f, #ff3b3b); }
@@ -1832,14 +1843,17 @@ button.cell { cursor: pointer; }
 
 /* ---- スレッド詳細 ---- */
 /* --kb＝画面下端のうちソフトキーボードに隠れている高さ（Thread.tsx の useKeyboardInset が書く）。 */
-.thread { padding-bottom: calc(96px + var(--kb, 0px)); }
+/* --composer-h は返信欄の実際の高さ（行数に応じて伸びる, Thread.tsx の Composer が書く）。 */
+.thread { padding-bottom: calc(max(96px, var(--composer-h, 0px) + 16px) + var(--kb, 0px)); }
 .thread-head { padding: 15px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
 .thread-head .col { flex: 1; min-width: 0; }
 
 .comments { display: flex; flex-direction: column; }
 .cmt { padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
 .cmt .col { flex: 1; min-width: 0; }
-.cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; }
+.cmt p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.66; color: #e2e3d4; white-space: pre-wrap; word-break: break-word; font-weight: 500; }
+/* スレッドは読み物なので本文を一段太く（フィードの要約表示は据え置き）。 */
+.thread .post-body-text { font-weight: 500; }
 .cmt-img { display: block; margin-top: 8px; max-width: 240px; }
 .cmt-img img { border: 1px solid var(--line); display: block; max-width: 100%; height: auto; }
 .cmt-own-acts { display: flex; gap: 16px; margin-top: 8px; }
@@ -1870,7 +1884,7 @@ button.cell { cursor: pointer; }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
 .composer-row textarea {
   flex: 1; min-width: 0; padding: 9px 11px; resize: none; font-family: inherit; font-size: 14px;
-  line-height: 1.5; max-height: 120px;
+  line-height: 1.5; max-height: calc(1.5em * 5 + 20px); overflow-y: auto; /* 5 行まで伸び、その先は中でスクロール */
   border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
 }
 .composer-row textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }

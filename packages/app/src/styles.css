@@ -775,7 +775,9 @@ select.inp { appearance: none; cursor: pointer; }
   font-family: var(--mono);
   border-bottom: 1px solid var(--line);
 }
-.post { padding: 15px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 11px; }
+/* アイコンの中心が「画面の左端（.app の枠 1px＋余白 12px）」と「本文の左端」のちょうど中間に来るよう、
+   左の余白（13px＋7px＝20px）とアイコン右の gap（20px）を揃える。アイコン 48px → 本文は左端から 88px。 */
+.post { padding: 15px 14px 15px 7px; border-bottom: 1px solid var(--line); display: flex; gap: 20px; }
 .post .col { flex: 1; min-width: 0; }
 .av {
   width: 34px;
@@ -794,8 +796,8 @@ select.inp { appearance: none; cursor: pointer; }
 .av.k { background: linear-gradient(140deg, #2bb6d6, #33e6ff); }
 .av.n { background: linear-gradient(140deg, #d6913f, #ff3b3b); }
 .av.t { background: linear-gradient(140deg, #5b6bd6, #c9a8ff); }
-/* ホームのフィード（.post は Home.tsx だけ）のアイコンは 1.5 倍。スレッド・ランキング等は 34px のまま。 */
-.post .av { width: 51px; height: 51px; font-size: 22px; }
+/* ホームのフィード（.post は Home.tsx だけ）のアイコンは 1.4 倍。スレッド・ランキング等は 34px のまま。 */
+.post .av { width: 48px; height: 48px; font-size: 21px; }
 .meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; margin-bottom: 4px; }
 .meta b { font-weight: 700; }
 .meta i { font-style: normal; color: var(--dim2); font-size: 11px; font-family: var(--mono); }

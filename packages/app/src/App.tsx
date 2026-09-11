@@ -24,6 +24,8 @@ import { UserPub } from './components/UserPub';
 import { PostComposer } from './components/PostComposer';
 import { TabBar, type TabKey } from './components/TabBar';
 import { Settings } from './components/Settings';
+import { UpdateBanner } from './components/UpdateBanner';
+import { reportAppIdle } from './pwa/appUpdate';
 import { Admin } from './components/Admin';
 import { backLayers } from './backLayers';
 import { createBackController } from './navHistory';
@@ -119,6 +121,12 @@ const TITLES: Record<Screen, string> = {
 
 /** 下段タブを出す画面（トップレベル）。フロー中は隠す。 */
 const TAB_SCREENS: Screen[] = ['home', 'icm', 'training', 'history', 'settings'];
+
+/**
+ * 再読み込みしても失うものが無い画面（アプリ更新を裏から戻った直後に自動で入れ替えてよい画面）。
+ * タブの一覧画面だけ。入力中のモーダル・計算中は App 側で別に除く。
+ */
+const IDLE_SCREENS: Screen[] = TAB_SCREENS;
 
 /** 画面 → アクティブなタブ（history は「記録」タブ、settings は「設定」タブ）。 */
 function tabForScreen(s: Screen): TabKey | null {
@@ -1002,6 +1010,20 @@ export function App(): JSX.Element {
     backCtl.current?.sync(navDepth);
   }, [navDepth]);
 
+  // アプリ更新の自動入れ替え（裏から戻った直後）に使う「いま再読み込みしても失うものが無いか」。
+  // タブの一覧画面にいて、入力途中（手入力・投稿）・読み取り中・計算中でないとき。対局中の
+  // Slumbot・確認画面・結果画面などはここに入らない＝お知らせにとどめる（pwa/appUpdate.ts）。
+  const appIdle =
+    session !== null &&
+    IDLE_SCREENS.includes(screen) &&
+    !manualOpen &&
+    !composerOpen &&
+    !ocrBusy &&
+    solveJob.status !== 'running';
+  useEffect(() => {
+    reportAppIdle(appIdle);
+  }, [appIdle]);
+
   // セッション判定中は最小のローディング（チラつき防止）。
   if (session === undefined) {
     return (
@@ -1053,6 +1075,8 @@ export function App(): JSX.Element {
           <span className="tb-sp" />
         )}
       </header>
+
+      <UpdateBanner blocked={jobRunning} />
 
       {screen === 'home' && (
         <Home
@@ -1184,7 +1208,11 @@ export function App(): JSX.Element {
       {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 
       {screen === 'settings' && (
-        <Settings onBack={() => setScreen('icm')} onOpenAdmin={() => setScreen('admin')} />
+        <Settings
+          onBack={() => setScreen('icm')}
+          onOpenAdmin={() => setScreen('admin')}
+          updateBlocked={jobRunning}
+        />
       )}
 
       {screen === 'admin' && <Admin onBack={() => setScreen('settings')} />}

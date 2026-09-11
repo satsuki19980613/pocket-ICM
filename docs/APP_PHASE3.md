@@ -94,8 +94,11 @@ worker_threads プール経路（`workers`）は不変のまま、ブラウザ�
 
 - **React + Vite + TypeScript**。標準的で情報量が多く後続セッションが保守しやすい。
   vite-plugin-pwa でオフライン/manifest、Vite の Web Worker/`?url` アセットが素直。
-- **PWA**: `vite-plugin-pwa`（`registerType: autoUpdate`）。`base: './'` で GitHub Pages の
+- **PWA**: `vite-plugin-pwa`。`base: './'` で GitHub Pages の
   サブパス配信に対応。HU equity テーブル(.bin, 114KB)を precache に含めオフライン求解可能。
+  更新は 2026-09-11 に `autoUpdate` から `prompt` 方式へ変更（`src/pwa/appUpdate.ts`）:
+  新しい版は待機させ、起動直後・裏から戻った直後（入力途中・計算中でないとき）に自動で入れ替え、
+  使用中に届いたらお知らせを出す。設定に版の表示と「アップデートを確認」ボタン。
 
 ## ブラウザ内求解（最難関の技術リスク → 解決）
 

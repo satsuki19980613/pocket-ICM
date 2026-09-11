@@ -9,7 +9,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 更新は prompt 方式: 新しい版の SW は「待機」で止め、入れ替える時機はアプリ側
+      // （src/pwa/appUpdate.ts）が決める＝起動直後・復帰直後は自動、使用中はお知らせ。
+      // autoUpdate（即 skipWaiting）だと、開いている古い画面の下で SW だけが入れ替わって
+      // 旧ハッシュのファイルが消える上、画面は開き直すまで古いままだった。
+      registerType: 'prompt',
+      // 登録は appUpdate.ts が virtual:pwa-register で行う（registerSW.js の自動挿入はしない）。
+      injectRegister: false,
       includeAssets: ['**/*.bin', 'icon.svg', 'apple-touch-icon.png', 'favicon-32x32.png'],
       manifest: {
         name: 'Black Ops ICM',
@@ -31,8 +37,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,bin,json,woff2,svg,png}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // 新デプロイ時に旧バージョンの precache を確実に破棄する（旧UIが居座らないように）。
-        // registerType:'autoUpdate' は skipWaiting/clientsClaim を有効化＝新SWが即座に支配。
         cleanupOutdatedCaches: true,
+        // 初回インストールはその場でページを支配する（初回の4人求解などのテーブル取得も
+        // キャッシュさせるため。autoUpdate 時代と同じ）。更新時は待機のまま、アプリが
+        // SKIP_WAITING を送った時点で入れ替わる（prompt 方式なので skipWaiting は付かない）。
+        clientsClaim: true,
         // Slumbot 中継（/api/slumbot/*）は Service Worker に一切触らせない。
         // POST なので precache 対象外だが、ナビゲーション fallback で index.html を
         // 返されると通信エラーの原因が分からなくなるため明示的に除外する。

@@ -8,20 +8,49 @@ import {
 import { signOut, deleteAccount } from '../supabase/api';
 import { uploadAvatar, removeAvatar } from '../supabase/avatar';
 import { validatePassword } from '../auth/validate';
+import { checkForUpdate, useAppUpdate, type UpdatePhase } from '../pwa/appUpdate';
 import { InfoMark, InfoModal } from './InfoModal';
 import { useBackLayer } from './BackLayer';
 
+/** 「アップデートを確認」ボタンの文言。 */
+function updateButtonLabel(phase: UpdatePhase): string {
+  switch (phase) {
+    case 'checking':
+      return '確認中…';
+    case 'available':
+      return '新しいバージョンに更新する';
+    case 'applying':
+      return '更新しています…';
+    default:
+      return 'アップデートを確認';
+  }
+}
+
+/** ボタンの下に出す結果メッセージ（無ければ null）。 */
+function updateNote(phase: UpdatePhase, blocked: boolean): string | null {
+  if (blocked) return '計算中は更新できません。計算が終わると押せます。';
+  if (phase === 'latest') return '最新のバージョンです。';
+  if (phase === 'error') return '確認できませんでした。電波の良い所でもう一度お試しください。';
+  return null;
+}
+
 /**
  * 設定画面（M7・モック s-profile 準拠）。表示名／パスワード変更・公開既定トグル・
- * ログアウト・アカウント削除。すべて RLS 下で本人のみ。
+ * アプリの更新（版の表示・手動確認）・ログアウト・アカウント削除。すべて RLS 下で本人のみ。
  * アイコンは端末内で正方形に切り出して 256px へ縮小・再圧縮してから `avatars` バケットへ上げる
  * （`supabase/avatar.ts`）。元の解像度のままは上げない。
  * ※ handle 変更（synthetic email 付け替え・Edge Function 要）は対象外＝読み取り専用。
  *   ログイン成功/削除後は App の onAuthStateChange がゲート（認証画面）へ戻す。
  */
-export function Settings(props: { onBack: () => void; onOpenAdmin: () => void }): JSX.Element {
+export function Settings(props: {
+  onBack: () => void;
+  onOpenAdmin: () => void;
+  /** 計算中（入れ替えると計算が止まるので、アップデートのボタンを押せなくする）。 */
+  updateBlocked: boolean;
+}): JSX.Element {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const upd = useAppUpdate();
 
   useEffect(() => {
     let active = true;
@@ -166,6 +195,7 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
   }
 
   const initial = (profile?.handle ?? '·').trim().charAt(0).toUpperCase() || '·';
+  const updNote = updateNote(upd.phase, props.updateBlocked);
 
   return (
     <div className="settings">
@@ -276,6 +306,25 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
       </div>
 
       <div className="pad pt0">
+        <h2 className="scr-h sm">アプリの更新</h2>
+        <div className="readout">
+          <div className="row">
+            <span className="lb">バージョン</span>
+            <span className="vl">{upd.version}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn ghost"
+          disabled={props.updateBlocked || upd.phase === 'checking' || upd.phase === 'applying'}
+          onClick={() => void checkForUpdate()}
+        >
+          {updateButtonLabel(upd.phase)}
+        </button>
+        {updNote && <p className="upd-note">{updNote}</p>}
+      </div>
+
+      <div className="pad pt0">
         <h2 className="scr-h sm">アカウント</h2>
         {actionErr && <p className="auth-err">{actionErr}</p>}
         <div className="acct-actions">
@@ -322,6 +371,9 @@ export function Settings(props: { onBack: () => void; onOpenAdmin: () => void })
           <h3>公開のしかた</h3>
           {/* 日本語は JSX の改行が空白として入るため、1段落＝1行で書く。 */}
           <p>計算結果の公開はいつでも任意です。既定はオフで、切っておくと1件ずつ自分で公開を選べます。</p>
+          <h3>アプリの更新</h3>
+          <p>新しいバージョンは、アプリを開いたとき（裏から戻したときも含む）に自動で入ります。入力の途中や計算中は入れ替えず、画面の上にお知らせを出します。「今すぐ更新」を押すか、次に開いたときに自動で入ります。</p>
+          <p>「アップデートを確認」を押すと、その場で最新かどうかを確かめ、新しいバージョンがあればすぐに入れ替えます。</p>
           <h3>保存について</h3>
           <p>計算した局面・結果・スクショ（端末内で圧縮した版）はサーバに保存されます。端末を変えてもログインすれば記録は残ります。</p>
           <h3>スクリーンショットの扱い</h3>

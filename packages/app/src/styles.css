@@ -1941,6 +1941,45 @@ button.cell { cursor: pointer; }
   padding: 4px;
 }
 .toast-x:hover { color: var(--fg); }
+
+/* ---- アプリ更新のお知らせ（ヘッダの下・使っている途中に新しい版が届いたとき） ---- */
+.upd-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 var(--s4);
+  padding: 10px 10px 10px 14px;
+  background: rgba(21, 22, 15, 0.97);
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--cyan);
+  animation: toastIn 220ms var(--ease);
+}
+.upd-msg { flex: 1; font-size: 13px; color: var(--fg); line-height: 1.5; }
+.upd-go {
+  flex: none;
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  border: 0;
+  clip-path: var(--chamfer);
+  font-family: var(--disp);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.upd-go:disabled { opacity: 0.4; cursor: default; }
+.upd-x {
+  flex: none;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+}
+.upd-x:hover { color: var(--fg); }
+/* 設定「アプリの更新」の結果メッセージ */
+.upd-note { margin: var(--s2) 2px 0; font-size: 12px; color: var(--dim2); line-height: 1.6; }
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

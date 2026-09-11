@@ -15,7 +15,7 @@
   color-scheme: dark;
 
   /* ---- サーフェス（グラファイト, 明度差は数%） ---- */
-  --bg2: #17181b;        /* 背景の最深部（.bgfield のベース下端・html の下地） */
+  --bg2: #000;           /* 背景の下地（.bgfield・html）。完全な黒 */
   --bg: #0c0d0a;         /* アプリ面 */
   --surface: #15160f;    /* パネル */
   --surface-2: #1c1e13;  /* 入力・段上げ */
@@ -114,15 +114,9 @@ body::before {
   inset: 0;
   z-index: -2;
   pointer-events: none;
-  background:
-    /* 四隅を軽く落として中央を浮かせる（潰しすぎると黒に戻るので浅めに） */
-    radial-gradient(150% 105% at 50% 40%, transparent 42%, rgba(0, 0, 0, 0.30) 100%),
-    /* 斜めの淡いシーン（金属板のような照り。1%台なので模様には見えない） */
-    linear-gradient(115deg, rgba(255, 255, 255, 0.035) 0%, transparent 38%, rgba(255, 255, 255, 0.02) 62%, transparent 100%),
-    /* 上端のハイライト（光源が上にある想定） */
-    radial-gradient(125% 66% at 50% -14%, #45474c 0%, #313338 36%, transparent 74%),
-    /* 下へ向かって沈むベース（ニュートラルなグラファイト） */
-    linear-gradient(180deg, #2f3135 0%, #222429 48%, var(--bg2) 100%);
+  /* 完全な黒（2026-09-11 さつきの指定）。グラファイトの濃淡は灰色に見えて文字が見づらかった。
+     上に重なるデジタルレイン（.rain）はそのまま。 */
+  background: var(--bg2);
 }
 
 /* 0/1 デジタルレイン（DigitalRain.tsx）。下地の上・アプリ面の下に敷く前景。 */

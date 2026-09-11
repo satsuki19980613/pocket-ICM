@@ -22,9 +22,9 @@ export default defineConfig({
         short_name: 'Black Ops ICM',
         description: 'ポーカーチェイス クラブマッチ push/fold ICM 復習ツール',
         lang: 'ja',
-        // アプリ面と同じ近黒グラファイト（styles.css の --bg）。スプラッシュもここで塗られる。
-        theme_color: '#0c0d0a',
-        background_color: '#0c0d0a',
+        // 背景と同じ完全な黒（styles.css の --bg2）。ステータスバーとスプラッシュもここで塗られる。
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

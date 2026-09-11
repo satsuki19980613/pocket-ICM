@@ -1893,13 +1893,14 @@ button.cell { cursor: pointer; }
   border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
 }
 .composer-row textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
-/* 画像添付ボタン。中身はカメラの線画（feedShared の CameraIcon・大きさは font-size、色は color に従う）。 */
+/* 画像添付ボタン。中身はカメラの線画（feedShared の CameraIcon・大きさは font-size、色は color に従う）。
+   四角い枠は付けずアイコンだけを見せる（押せる範囲は 40px 四方のまま）。 */
 .composer-img {
-  flex: none; width: 40px; height: 40px; border: 1px solid var(--line);
+  flex: none; width: 40px; height: 40px; border: 0;
   display: grid; place-items: center; padding: 0;
-  background: var(--surface-2); color: var(--dim); font-size: 20px; cursor: pointer;
+  background: none; color: var(--dim); font-size: 22px; cursor: pointer;
 }
-.composer-img:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.composer-img:hover:not(:disabled) { color: var(--cyan); }
 .composer-preview { position: relative; margin-bottom: 8px; width: fit-content; }
 .composer-preview img { max-height: 120px; max-width: 100%; border: 1px solid var(--line); display: block; }
 .composer-preview button {

@@ -57,6 +57,42 @@
   --chamfer-sm: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 
   --ease: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /*
+   * ---- 端末の安全領域（ノッチ / Dynamic Island / ホームバー / 横向きの丸い角）----
+   * index.html で viewport-fit=cover を指定している＝アプリは画面の端まで広がるので、
+   * ステータスバーやホームバーの下に潜る分は**自分で避ける**必要がある。避けていないと
+   * iPhone の PWA でヘッダーがステータスバーの真下に入り、右上のボタンが押せなくなる
+   * （さつき報告 2026-09-12・iPhone 実機）。
+   *
+   * まず 0px で定義し、env() が使えるブラウザだけ下の @supports で上書きする。こうすると
+   * env() 非対応のブラウザでも var() が「無効」にならず、従来どおりの余白で描ける。
+   * 値は端末とブラウザが決めるので、機種・アスペクト比・向きに関係なくこれ1つで足りる。
+   */
+  --sat: 0px;   /* top    : ステータスバー / ノッチ / Dynamic Island */
+  --sar: 0px;   /* right  : 横向きの丸い角・ノッチ */
+  --sab: 0px;   /* bottom : ホームバー / ジェスチャーバー */
+  --sal: 0px;   /* left   : 横向きの丸い角・ノッチ */
+
+  /* アプリ面の横幅（中央寄せ）。左右の逃げ幅の計算にも使うので変数にしておく。 */
+  --app-w: 420px;
+  /*
+   * 左右の安全領域は**アプリ面が画面の端に接しているときだけ**必要。横向きの広い画面では
+   * 中央寄せの余り（--edge）がノッチより外側にあるので、逃げる必要がない（逃がすと本文が
+   * 無駄に細くなる）。余りで足りないぶんだけを逃げ幅にする。
+   */
+  --edge: max(0px, calc((100vw - var(--app-w)) / 2));
+  --safe-l: max(0px, calc(var(--sal) - var(--edge)));
+  --safe-r: max(0px, calc(var(--sar) - var(--edge)));
+}
+
+@supports (top: env(safe-area-inset-top)) {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+  }
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -93,9 +129,13 @@ body::before {
 
 .app {
   position: relative;
-  max-width: 420px;
+  max-width: var(--app-w);
   margin: 0 auto;
-  padding: var(--s4) var(--s3) var(--s6);
+  /* 上はステータスバー（ノッチ/Dynamic Island）ぶんを足す。左右は普段の 12px と、画面端に
+     接しているときだけ効く逃げ幅（--safe-l/r）の大きい方。 */
+  padding: calc(var(--s4) + var(--sat)) max(var(--s3), var(--safe-r)) var(--s6) max(var(--s3), var(--safe-l));
+  /* dvh 非対応ブラウザ（iOS 15.3 以前など）向けのフォールバックを先に置く。 */
+  min-height: 100vh;
   min-height: 100dvh;
   /* 半透明にして背後の下地とデジタルレインを透かす。負 z-index のレイヤーは祖先の
      不透明背景に隠れるため、ここは必ず rgba（透け）にする。濃さは本文の可読性で決める。 */
@@ -604,7 +644,8 @@ select.inp { appearance: none; cursor: pointer; }
 }
 
 /* ---- ナビ（トップバー・下段タブ・FAB） ---- */
-.app.has-tabs { padding-bottom: 86px; }
+/* 下段タブの高さぶん。タブ自身がホームバーぶん伸びるので、ここも同じだけ足す。 */
+.app.has-tabs { padding-bottom: calc(86px + var(--sab)); }
 .topbar {
   position: relative;
   display: flex;
@@ -687,10 +728,10 @@ select.inp { appearance: none; cursor: pointer; }
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 420px;
+  max-width: var(--app-w);
   z-index: 60;
   display: flex;
-  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  padding: 8px max(var(--safe-l), var(--safe-r)) max(8px, var(--sab));
   background: rgba(12, 13, 10, 0.96);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line-2);
@@ -727,7 +768,7 @@ select.inp { appearance: none; cursor: pointer; }
 
 .fab {
   position: fixed;
-  bottom: 78px;
+  bottom: calc(78px + var(--sab));
   left: 50%;
   margin-left: 120px;
   z-index: 61;
@@ -1380,7 +1421,10 @@ button.cell { cursor: pointer; }
 .modal {
   width: 100%;
   max-width: 440px;
-  max-height: 92dvh;
+  /* dvh 非対応向けのフォールバック → ノッチぶんを引いた高さ。下端はホームバーぶん空ける。 */
+  max-height: 92vh;
+  max-height: calc(92dvh - var(--sat));
+  padding-bottom: var(--sab);
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -1438,10 +1482,13 @@ button.cell { cursor: pointer; }
 .imgmodal-backdrop {
   position: fixed; inset: 0; z-index: 80;
   background: rgba(3, 4, 2, 0.9);
-  display: flex; align-items: center; justify-content: center; padding: 12px;
+  display: flex; align-items: center; justify-content: center;
+  /* 四辺とも安全領域ぶんを足す（横向きだと左右のノッチに画像が食い込むため）。 */
+  padding: calc(12px + var(--sat)) calc(12px + var(--sar)) calc(12px + var(--sab)) calc(12px + var(--sal));
 }
 .imgmodal {
-  width: 100%; max-width: 760px; max-height: 92dvh;
+  /* 高さは上で余白を引いた中身の箱いっぱいまで（dvh 指定だと余白ぶんはみ出す）。 */
+  width: 100%; max-width: 760px; max-height: 100%;
   display: flex; flex-direction: column;
   background: var(--bg); border: 1px solid var(--line-2);
 }
@@ -1895,7 +1942,7 @@ button.cell { cursor: pointer; }
 /* --kb＝画面下端のうちソフトキーボードに隠れている高さ（Thread.tsx の useKeyboardInset が書く）。 */
 /* 下余白は返信欄が一番伸びたとき（字数表示＋3 行）でも最後の返信が隠れない固定値。
    返信欄の高さを JS で測って追いかけると、変換中（IME）にページが組み直されて入力が止まる恐れがある。 */
-.thread { padding-bottom: calc(140px + env(safe-area-inset-bottom) + var(--kb, 0px)); }
+.thread { padding-bottom: calc(140px + var(--sab) + var(--kb, 0px)); }
 /* スレッドもホーム（.post）と同じ配置: アイコン 48px の中心を画面左端と本文の書き出し（88px）の中間に。 */
 .thread-head { padding: 15px 14px 15px 7px; border-bottom: 1px solid var(--line); display: flex; gap: 20px; }
 .thread-head .av, .cmt .av { width: 48px; height: 48px; font-size: 21px; }
@@ -1931,7 +1978,7 @@ button.cell { cursor: pointer; }
 .composer {
   position: fixed; left: 0; right: 0; bottom: var(--kb, 0px); z-index: 20;
   max-width: 480px; margin: 0 auto;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px max(12px, var(--safe-r)) calc(10px + var(--sab)) max(12px, var(--safe-l));
   background: var(--surface); border-top: 1px solid var(--line);
 }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
@@ -2032,7 +2079,7 @@ button.cell { cursor: pointer; }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 92px;
+  bottom: calc(92px + var(--sab));
   z-index: 70;
   width: calc(100% - 24px);
   max-width: 396px;
@@ -2252,9 +2299,10 @@ button.cell { cursor: pointer; }
   flex-direction: column;
   /* dvh 非対応ブラウザ向けのフォールバックを先に置く。 */
   min-height: calc(100vh - 103px);
-  /* 下段タブを出さない画面なので、ホームバーぶんはここで自前に確保する。 */
-  min-height: calc(100dvh - 103px - env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 下段タブを出さない画面なので、ホームバーぶんはここで自前に確保する。
+     ステータスバーぶん（.app の上パディング）も画面から引く。 */
+  min-height: calc(100dvh - 103px - var(--sat) - var(--sab));
+  padding-bottom: var(--sab);
 }
 .sb-wrap > .sb-hud,
 .sb-wrap > .sb-sizer,
@@ -2305,7 +2353,7 @@ button.cell { cursor: pointer; }
      引く 424px は「ヘッダ＋HUD＋プリセット最大3行（ポストフロップ13個）＋スライダー
      ＋ボタン＋上下の余白」の実測ぶん。余った空間は margin-bottom:auto が吸うので、
      卓の位置と大きさはストリートに関係なく常に動かない。 */
-  height: clamp(270px, calc(100dvh - 424px), 420px);
+  height: clamp(270px, calc(100dvh - 424px - var(--sat) - var(--sab)), 420px);
   flex: none;
   margin-bottom: auto;
   /* 真円/楕円。内側のリングはこれを縮小コピーするので、縁と形が必ず一致する。 */

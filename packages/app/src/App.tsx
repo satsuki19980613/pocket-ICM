@@ -315,7 +315,9 @@ export function App(): JSX.Element {
   // スタックを読めないまま残った席（2 席以上は保存則でも埋められない＝仮値 0bb）。
   const [unresolvedStacks, setUnresolvedStacks] = useState<string[]>([]);
 
-  const [form, setForm] = useState<BoardForm>(() => defaultForm(DEFAULT_PLAYERS));
+  // 既定フォームにも**復元したゲーム選択**を載せる。渡さないと常にクラブになり、選択ボタンに触らず
+  // 「手入力する」と進んだとき UI はレジェンド点灯・計算はクラブという食い違いが出る（2026-09-12 レビュー）。
+  const [form, setForm] = useState<BoardForm>(() => defaultForm(DEFAULT_PLAYERS, gameMode));
   const [state, setState] = useState<BoardState | null>(null);
   const [result, setResult] = useState<SolveResultDto | null>(null);
   const [ms, setMs] = useState(0);

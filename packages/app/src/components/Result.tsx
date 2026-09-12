@@ -2,10 +2,18 @@ import { formatBbDisplay } from '@oshihiki/core';
 import { useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
 import { gameModeLabel } from '@oshihiki/core';
+import type { GameMode } from '@oshihiki/core';
 import type { SolveResultDto } from '../solverProtocol';
 import { ActionTree } from './ActionTree';
 import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/model';
 
+/**
+ * pt の単位ラベル。求解はモードの実払い pt で行うが、表示は toDto でクラブ尺度に換算している
+ * （記録一覧で横比較するため）。クラブ以外で「実払い」と書くと誤りなので換算であることを明示する。
+ */
+function ptUnit(mode: GameMode | undefined): string {
+  return (mode ?? 'club') === 'club' ? '実払い pt' : 'クラブ換算 pt';
+}
 const ACTION_JA: Record<string, string> = { PU: '先手プッシュ (PU)', CA: 'コール (CA)', OC: 'オーバーコール (OC)' };
 
 type Ack = { ok: boolean; message?: string };
@@ -157,7 +165,7 @@ export function Result(props: {
             <span className="modetag">{gameModeLabel(state.gameMode)}</span>
           </div>
           <div className="evbox">
-            <span className="evlabel">EV（フォールド比, 実払い pt）</span>
+            <span className="evlabel">EV（フォールド比, {ptUnit(state.gameMode)}）</span>
             <b className={`evval ${evClass(headline.heroEv)}`}>
               {headline.heroEv >= 0 ? '+' : ''}
               {headline.heroEv.toFixed(3)}
@@ -274,7 +282,7 @@ export function Result(props: {
       )}
 
       <div className="panel">
-        <div className="scr-h sm">ICM equity（実払い pt）</div>
+        <div className="scr-h sm">ICM equity（{ptUnit(state.gameMode)}）</div>
         <table className="eqt">
           <thead>
             <tr><th>pos</th><th>EQPre</th><th>EQPost</th><th>EQDiff</th></tr>

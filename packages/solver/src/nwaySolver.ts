@@ -1181,7 +1181,6 @@ export async function solveMultiway(
     opts.maxActive ?? 3, opts.stratifiedMc ?? true, opts.ocCandidates ?? DEFAULT_STRAT.K,
     opts.exact3Budget ?? 6_000_000, opts.mcRunnerParallelism ?? 1, opts.onExact3Stats,
   );
-  const poolPt = eng.payouts.reduce((a, b) => a + b, 0);
   // ノードレベル MC の推定量バイアス + アクション確率のカードリムーバル近似で
   // 均衡でも ~プール比 0.1% の床を持つ（M3 申し送り）。しきい値は床の上に置く。
   //
@@ -1195,14 +1194,19 @@ export async function solveMultiway(
   // ↔ 収束後 78.6%）。exact2/exact3 が入っている前提なら閾値を厳しくしても MC ノイズに
   // 阻まれず到達できるため、狭めても安全に収束する。
   //
-  // **しきい値の尺度**: 既定は poolPt（payout の総和）に比例させる。クラブマッチは総和が 10〜11 で
-  // 振れ幅（最上位−最下位＝3〜6）と同じ桁なので、これで妥当な値になる。しかし payout に負値を
-  // 許すと総和は尺度として壊れる。レジェンドマッチは **ゼロサム**（+40/+15/+3/0/−18/−40 の総和が
-  // ちょうど 0）で、そのまま使うと targetExpl=0 ＝ 早期終了が永久に発火せず、必ず maxIters まで
-  // 回り切る（実測: 6人で 3000 反復・未収束表示）。総和が尺度として使えないときは **振れ幅**
-  // （max−min）に切り替える。クラブは poolPt>0 なので**従来の挙動は一切変わらない**。
+  // **しきい値の尺度**: 既定はクラブマッチの poolPt（payout の総和）に比例させてきた。クラブは総和が
+  // 10〜11 で振れ幅（最上位−最下位＝3〜6）と同じ桁なので、これで妥当な値になる。しかし payout に
+  // 負値を許すと総和は尺度として壊れる。レジェンドマッチの 6 人は **ゼロサム**（総和ちょうど 0）で
+  // targetExpl=0 ＝ 早期終了が永久に発火せず、ランクマッチ STAGE Ⅴ の 6 人は総和 10 に対し振れ幅 63
+  // （クラブの 10 倍）で、振れ幅比ではクラブの 10 倍厳しいしきい値になる（実測: 3000 反復に張り付き
+  // 未収束。club 1100 / rank-4 2500 / legend-avg 1700 で収束）。
+  // そこで尺度は **振れ幅（max−min）** を基準にし、クラブの「総和÷振れ幅」（同じ人数）を掛けて
+  // クラブでは従来の poolPt に厳密一致させる。他モードは振れ幅あたりでクラブと同じ厳しさになる。
   const spanPt = Math.max(...eng.payouts) - Math.min(...eng.payouts);
-  const scalePt = poolPt > 0 ? poolPt : spanPt;
+  const clubPayouts = payoutsForPlayers(eng.payouts.length, 'club');
+  const clubPool = clubPayouts.reduce((a, b) => a + b, 0);
+  const clubSpan = Math.max(...clubPayouts) - Math.min(...clubPayouts);
+  const scalePt = spanPt * (clubPool / clubSpan);
   const targetExpl = opts.targetExploitabilityPt ?? scalePt * (opts.winTie3 !== undefined ? 0.0002 : 0.0015);
   // CRN 時は反復間で同一シードを使い回す（epoch を固定）。非 CRN は従来どおり epoch で再サンプル。
   const iterEpoch = (t: number): number => (commonRandom ? 0 : Math.floor(t / refreshEvery));

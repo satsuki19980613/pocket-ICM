@@ -135,3 +135,35 @@ describe('ゼロサムのペイアウトでも早期終了が効く', () => {
     expect(r.iterations).toBeLessThan(maxIters);
   }, 120_000);
 });
+
+describe('早期終了しきい値の尺度はモード間で一貫する（2026-09-12 レビューの回帰）', () => {
+  it('6人 rank-5（総和 10・振れ幅 63）が maxIters に張り付かず収束する', async () => {
+    // 旧実装は「総和>0 なら総和」を尺度にしていたため、総和がクラブと同じ 10 で振れ幅が 10 倍の
+    // STAGE Ⅴ は振れ幅比で 10 倍厳しいしきい値になり、3000 反復で未収束だった（実測）。
+    const sb = 0.5, bb = 1, ante = 0.25;
+    const stacks = [20, 17, 14, 11, 8, 5];
+    const order = positionsForPlayersLeft(6);
+    const state: BoardState = {
+      street: 'preflop',
+      blinds: { sb, bb },
+      ante: { scheme: 'all', amount: ante },
+      heroHand: 'KQo',
+      playersLeft: 6,
+      heroPos: order[0]!,
+      seats: order.map((pos, i) => ({
+        pos,
+        stack: stacks[i]! - (pos === 'SB' ? sb : pos === 'BB' ? bb : 0) - ante,
+        state: 'live' as const,
+        bet: pos === 'SB' ? sb : pos === 'BB' ? bb : 0,
+      })),
+      gameMode: 'rank-5',
+    };
+    const maxIters = 3000;
+    const r = await solveMultiway(state, {
+      workers: 0, maxIters, samples: 24_000, avgPower: 1,
+      winTie: loadHuWinTieTable(), winTie3: loadWinTie3Table(),
+    });
+    expect(r.converged).toBe(true);
+    expect(r.iterations).toBeLessThan(maxIters);
+  }, 180_000);
+});

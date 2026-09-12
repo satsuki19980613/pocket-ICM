@@ -62,3 +62,16 @@ describe('formModel.buildBoardState', () => {
     expect(Object.keys(f3.stacks).sort()).toEqual(['BB', 'BU', 'SB']);
   });
 });
+
+describe('formModel.defaultForm のゲームモード', () => {
+  it('渡したモードが既定フォームと BoardState に載る（渡さなければクラブ）', () => {
+    // 省略時にクラブへ落ちる仕様のため、App 側で復元した選択を渡し忘れると
+    // UI はレジェンド点灯・計算はクラブという食い違いが出る（2026-09-12 レビューで発見）。
+    expect(defaultForm(4).gameMode).toBe('club');
+    const f = defaultForm(4, 'legend-avg');
+    expect(f.gameMode).toBe('legend-avg');
+    const r = buildBoardState(f);
+    expect(r.ok, r.issues.join('; ')).toBe(true);
+    expect(r.state?.gameMode).toBe('legend-avg');
+  });
+});

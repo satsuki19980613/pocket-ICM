@@ -28,6 +28,7 @@ import {
 } from '../slumbot/sizes';
 import { loadPrefs, loadToken, savePrefs, saveToken, type GamePrefs } from '../slumbot/prefs';
 import { useBgm, type BgmFailure } from '../slumbot/bgm';
+import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
 import { createStartLatch } from '../solveJob';
 import { addPending, flushPending, readPending, writePending } from '../supabase/huStats';
 
@@ -96,6 +97,12 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
   );
 
   /**
+   * 鳴らす曲。設定で選んだものが無ければ先頭に落ちる（曲を消した後も鳴らなくならない）。
+   * 曲が 1 つも置かれていなければ null で、♪ ボタンそのものを出さない。
+   */
+  const track = resolveTrack(BGM_TRACKS, prefs.bgmTrack);
+
+  /**
    * BGM の ON/OFF。鳴らせなかったときは**必ず OFF に戻す**（鳴っていないのに ON と
    * 表示されるのが一番分かりにくい）。理由も 1 行で出す。
    */
@@ -104,31 +111,35 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
       updatePrefs({ ...prefsRef.current, bgmOn: false });
       setBgmNote(
         why === 'missing'
-          ? 'BGM の音源が見つかりませんでした（bgm/slumbot.mp3）。'
+          ? '音源を再生できませんでした（ファイルが壊れている可能性があります）。'
           : 'ブラウザに再生を止められました。もう一度 ♪ を押してください。',
       );
     },
     [updatePrefs],
   );
-  useBgm(prefs.bgmOn, onBgmFail);
+  useBgm(track?.src ?? null, prefs.bgmOn, onBgmFail);
 
   const toggleBgm = useCallback(() => {
     setBgmNote(null);
     updatePrefs({ ...prefsRef.current, bgmOn: !prefsRef.current.bgmOn });
   }, [updatePrefs]);
 
-  /** HUD の右肩に置く BGM ボタン（配っている間も同じ位置に出して、押せる場所を動かさない）。 */
-  const bgmButton = (
+  /**
+   * HUD の右肩に置く BGM ボタン（配っている間も同じ位置に出して、押せる場所を動かさない）。
+   * 曲が 1 つも無いときは出さない——押しても鳴らないボタンを置かないため。
+   */
+  const bgmButton = track ? (
     <button
       type="button"
       className={`sb-gear sb-bgm${prefs.bgmOn ? ' on' : ''}`}
       aria-pressed={prefs.bgmOn}
-      aria-label={prefs.bgmOn ? 'BGM を止める' : 'BGM を鳴らす'}
+      aria-label={prefs.bgmOn ? 'BGM を止める' : `BGM を鳴らす（${track.label}）`}
+      title={track.label}
       onClick={toggleBgm}
     >
       ♪
     </button>
-  );
+  ) : null;
 
   /** ハンド終了時: セッション表示を進め、収支をサーバへ加算する。 */
   const recordHand = useCallback(

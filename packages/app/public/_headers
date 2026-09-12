@@ -3,11 +3,6 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# BGM（/bgm/*.mp3）はファイル名が固定＝内容が変わりうるので、長期キャッシュにはしない。
-# 1 時間だけ持たせる（差し替えが利用者に届くまでの上限がこの時間）。
-/bgm/*
-  Cache-Control: public, max-age=3600
-
 /sw.js
   Cache-Control: no-cache
 

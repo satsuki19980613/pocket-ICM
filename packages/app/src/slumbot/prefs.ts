@@ -14,9 +14,20 @@ export interface GamePrefs {
    * 自動再生を拒否されたら、対戦画面側がこの値を false に戻す（bgm.ts）。
    */
   readonly bgmOn: boolean;
+  /**
+   * 鳴らす曲（bgmTracks.ts の `id` ＝ファイル名）。null なら先頭の曲。
+   * **ハッシュ付きの配信 URL ではなくファイル名で覚える**——URL はビルドごとに変わるため。
+   * 曲を消した/名前を変えた後は resolveTrack が先頭に落とす。
+   */
+  readonly bgmTrack: string | null;
 }
 
-export const DEFAULT_PREFS: GamePrefs = { autoNext: false, revealMs: 600, bgmOn: false };
+export const DEFAULT_PREFS: GamePrefs = {
+  autoNext: false,
+  revealMs: 600,
+  bgmOn: false,
+  bgmTrack: null,
+};
 
 export const REVEAL_CHOICES = [0, 300, 600, 1000] as const;
 
@@ -33,6 +44,7 @@ export function loadPrefs(store: Pick<Storage, 'getItem'> | null): GamePrefs {
       autoNext: typeof o.autoNext === 'boolean' ? o.autoNext : DEFAULT_PREFS.autoNext,
       revealMs: reveal,
       bgmOn: typeof o.bgmOn === 'boolean' ? o.bgmOn : DEFAULT_PREFS.bgmOn,
+      bgmTrack: typeof o.bgmTrack === 'string' ? o.bgmTrack : DEFAULT_PREFS.bgmTrack,
     };
   } catch {
     return DEFAULT_PREFS;

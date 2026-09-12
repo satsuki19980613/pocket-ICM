@@ -24,6 +24,7 @@ import {
   type SizeUnit,
 } from '../slumbot/sizes';
 import { REVEAL_CHOICES, type GamePrefs } from '../slumbot/prefs';
+import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
 
 const CATEGORIES: SizeCategory[] = ['pfOpen', 'pfVsRaise', 'postBet', 'postVsBet'];
 
@@ -156,6 +157,8 @@ export function SlumbotSettings(props: {
 }): JSX.Element {
   useBackLayer(props.onClose);
   const [tab, setTab] = useState<'game' | 'sizes'>('sizes');
+  // 選んだ曲が消えていても先頭に落ちる（対戦画面が実際に鳴らす曲と必ず一致させる）。
+  const selectedTrack = resolveTrack(BGM_TRACKS, props.prefs.bgmTrack);
 
   return (
     <div className="modal-backdrop" onClick={props.onClose} role="presentation">
@@ -244,6 +247,39 @@ export function SlumbotSettings(props: {
                 Slumbot の応答自体に 0.5 秒ほどかかります。ここで指定するのは、返ってきた
                 アクションを読む時間です。
               </p>
+
+              <div className="bs-h">BGM</div>
+              {BGM_TRACKS.length === 0 ? (
+                <p className="bs-note">音源が入っていません。</p>
+              ) : (
+                <>
+                  {/* 選ぶのは曲だけ。鳴らす/止めるは対戦画面の ♪ で行う（音は本人の操作で出す）。 */}
+                  <div className="bs-bgm-list" role="radiogroup" aria-label="BGM の曲">
+                    {BGM_TRACKS.map((t) => {
+                      const on = selectedTrack?.id === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          className={`bs-bgm-row${on ? ' on' : ''}`}
+                          onClick={() => props.onChangePrefs({ ...props.prefs, bgmTrack: t.id })}
+                        >
+                          <span className="bs-bgm-mark">{on ? '♪' : ''}</span>
+                          <span className="bs-bgm-name">{t.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="bs-note">
+                    鳴らす・止めるは対戦画面の ♪ です。
+                    {props.prefs.bgmOn
+                      ? ' 鳴っている間に選び直すと、その場で切り替わります。'
+                      : ' いま選んでいる曲は ♪ を押すと鳴ります。'}
+                  </p>
+                </>
+              )}
             </>
           ) : (
             <>

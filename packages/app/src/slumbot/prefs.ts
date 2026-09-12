@@ -8,9 +8,15 @@ export interface GamePrefs {
   readonly autoNext: boolean;
   /** 相手のアクションを見せる最短時間（ms）。0 なら即座に自分の番へ。 */
   readonly revealMs: number;
+  /**
+   * BGM を鳴らす（対戦画面の ♪ ボタン）。既定は OFF——音は本人が望んだときだけ出す。
+   * 覚えておくのは「次に入ったときも鳴らしてほしい」が自然なため。ただしブラウザに
+   * 自動再生を拒否されたら、対戦画面側がこの値を false に戻す（bgm.ts）。
+   */
+  readonly bgmOn: boolean;
 }
 
-export const DEFAULT_PREFS: GamePrefs = { autoNext: false, revealMs: 600 };
+export const DEFAULT_PREFS: GamePrefs = { autoNext: false, revealMs: 600, bgmOn: false };
 
 export const REVEAL_CHOICES = [0, 300, 600, 1000] as const;
 
@@ -26,6 +32,7 @@ export function loadPrefs(store: Pick<Storage, 'getItem'> | null): GamePrefs {
     return {
       autoNext: typeof o.autoNext === 'boolean' ? o.autoNext : DEFAULT_PREFS.autoNext,
       revealMs: reveal,
+      bgmOn: typeof o.bgmOn === 'boolean' ? o.bgmOn : DEFAULT_PREFS.bgmOn,
     };
   } catch {
     return DEFAULT_PREFS;

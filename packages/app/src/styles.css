@@ -2345,6 +2345,21 @@ button.cell { cursor: pointer; }
 }
 .sb-gear:hover { border-color: var(--cyan); background: rgba(58, 230, 255, 0.08); }
 
+/* BGM の ON/OFF（⚙ の左）。鳴っている間だけブランドの黄で点ける。 */
+.sb-bgm.on {
+  border-color: rgba(252, 238, 10, 0.6);
+  background: rgba(252, 238, 10, 0.1);
+  color: var(--yellow);
+}
+.sb-bgm.on:hover { border-color: var(--yellow); background: rgba(252, 238, 10, 0.18); }
+/* 鳴らせなかった理由（音源が無い・ブラウザに止められた）。卓の上に 1 行だけ出す。 */
+.sb-bgm-note {
+  margin: 0 0 var(--s2);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--red);
+}
+
 /* ---- Slumbot HU: 卓（ヘッズアップなので上下 2 席だけ） ---- */
 .sb-felt {
   position: relative;

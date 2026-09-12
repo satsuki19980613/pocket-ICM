@@ -27,6 +27,7 @@ import {
   type BetSizeConfig,
 } from '../slumbot/sizes';
 import { loadPrefs, loadToken, savePrefs, saveToken, type GamePrefs } from '../slumbot/prefs';
+import { useBgm, type BgmFailure } from '../slumbot/bgm';
 import { createStartLatch } from '../solveJob';
 import { addPending, flushPending, readPending, writePending } from '../supabase/huStats';
 
@@ -76,6 +77,8 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
   const [armed, setArmed] = useState(true);
   const [session, setSession] = useState({ hands: 0, netChips: 0 });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** BGM を鳴らせなかったときの一言（音源が無い・ブラウザに止められた）。 */
+  const [bgmNote, setBgmNote] = useState<string | null>(null);
 
   const updateConfig = useCallback(
     (next: BetSizeConfig) => {
@@ -90,6 +93,41 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
       savePrefs(store, next);
     },
     [store],
+  );
+
+  /**
+   * BGM の ON/OFF。鳴らせなかったときは**必ず OFF に戻す**（鳴っていないのに ON と
+   * 表示されるのが一番分かりにくい）。理由も 1 行で出す。
+   */
+  const onBgmFail = useCallback(
+    (why: BgmFailure) => {
+      updatePrefs({ ...prefsRef.current, bgmOn: false });
+      setBgmNote(
+        why === 'missing'
+          ? 'BGM の音源が見つかりませんでした（bgm/slumbot.mp3）。'
+          : 'ブラウザに再生を止められました。もう一度 ♪ を押してください。',
+      );
+    },
+    [updatePrefs],
+  );
+  useBgm(prefs.bgmOn, onBgmFail);
+
+  const toggleBgm = useCallback(() => {
+    setBgmNote(null);
+    updatePrefs({ ...prefsRef.current, bgmOn: !prefsRef.current.bgmOn });
+  }, [updatePrefs]);
+
+  /** HUD の右肩に置く BGM ボタン（配っている間も同じ位置に出して、押せる場所を動かさない）。 */
+  const bgmButton = (
+    <button
+      type="button"
+      className={`sb-gear sb-bgm${prefs.bgmOn ? ' on' : ''}`}
+      aria-pressed={prefs.bgmOn}
+      aria-label={prefs.bgmOn ? 'BGM を止める' : 'BGM を鳴らす'}
+      onClick={toggleBgm}
+    >
+      ♪
+    </button>
   );
 
   /** ハンド終了時: セッション表示を進め、収支をサーバへ加算する。 */
@@ -269,8 +307,10 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
             <span className="dh-lbl">SESSION</span>
             <b className={session.netChips >= 0 ? 'up' : 'down'}>{signedBbLabel(session.netChips)}bb</b>
           </span>
+          {bgmButton}
           <span className="sb-gear-sp" />
         </div>
+        {bgmNote && <p className="sb-bgm-note">{bgmNote}</p>}
         <div className="sb-felt sb-dealing">
           <div className="sb-deal">
             <div className="spinner" />
@@ -296,6 +336,7 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
           <span className="dh-lbl">SESSION</span>
           <b className={session.netChips >= 0 ? 'up' : 'down'}>{signedBbLabel(session.netChips)}bb</b>
         </span>
+        {bgmButton}
         <button
           type="button"
           className="sb-gear"
@@ -305,6 +346,8 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
           ⚙
         </button>
       </div>
+
+      {bgmNote && <p className="sb-bgm-note">{bgmNote}</p>}
 
       <SlumbotTable view={view} last={last} thinking={thinking} streetLabel={streetLabel} />
 

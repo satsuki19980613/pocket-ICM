@@ -3,6 +3,11 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# BGM（/bgm/*.mp3）はファイル名が固定＝内容が変わりうるので、長期キャッシュにはしない。
+# 1 時間だけ持たせる（差し替えが利用者に届くまでの上限がこの時間）。
+/bgm/*
+  Cache-Control: public, max-age=3600
+
 /sw.js
   Cache-Control: no-cache
 
@@ -23,4 +28,4 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://bpxrbxnylgedjhvhfsvk.supabase.co; connect-src 'self' data: https://bpxrbxnylgedjhvhfsvk.supabase.co wss://bpxrbxnylgedjhvhfsvk.supabase.co; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; media-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://bpxrbxnylgedjhvhfsvk.supabase.co; connect-src 'self' data: https://bpxrbxnylgedjhvhfsvk.supabase.co wss://bpxrbxnylgedjhvhfsvk.supabase.co; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'

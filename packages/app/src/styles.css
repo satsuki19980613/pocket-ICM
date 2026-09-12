@@ -926,6 +926,16 @@ select.inp { appearance: none; cursor: pointer; }
   line-height: 1.6;
   color: var(--fg);
 }
+/* ゲームを選び直したときの返事（効いた=シアン / 弾かれた=赤）。無言だと「選び直せない」と読まれる */
+.mode-note { margin: var(--s2) 0 0; font-size: 12.5px; line-height: 1.6; }
+.mode-note.ok { color: var(--cyan); }
+.mode-note.ng { color: var(--red); }
+/* 「選んだゲームで読み直す」（確認画面・エラー画面で共有） */
+.gm-reread { margin: var(--s2) 0 var(--s3); }
+/* エラー画面のゲーム取り違え救済ブロック */
+.err-gamefix { margin: 0 0 var(--s4); }
+.err-gamefix .gamefix-lead { margin: 0 0 var(--s2); font-size: 12.5px; line-height: 1.6; color: var(--dim2); }
+
 /* 「読み取れる条件」モーダルを開くボタン（常設リストから置換） */
 .cond-open { margin-top: var(--s3); }
 /* 記録・結果に出すゲームモード名（どの尺度の pt かを取り違えないため） */
@@ -1314,7 +1324,6 @@ button.cell { cursor: pointer; }
   letter-spacing: 0.03em;
 }
 .btn.line:hover:not(:disabled) { background: rgba(58, 230, 255, 0.06); border-style: solid; filter: none; }
-.icm-note { margin: var(--s2) 0 var(--s5); font-size: 12px; color: var(--dim2); text-align: center; }
 
 /* 読み取り条件チェックリスト（icm ガイド / エラーの原因一覧で共有） */
 .check-h { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); margin: 0 0 var(--s2); }

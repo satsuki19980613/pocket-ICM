@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { OcrReadout } from '@oshihiki/ocr';
 import { ImageModal } from './ImageModal';
 import { READ_CONDITIONS, READ_CONDITIONS_NOTE } from './IcmInput';
+import { GameModeSelect, type GameSel } from './GameModeSelect';
 
 /**
  * エラー画面（3-1d・M3）。求解不能・対象外フレーム・検証失敗の理由を出し、写真経路なら
@@ -26,8 +27,19 @@ export function ErrorView(props: {
   readout?: OcrReadout;
   /** 元画像の寸法（照合表ヘッダの「画像サイズ」用）。 */
   imageSize?: { w: number; h: number };
+  /**
+   * ゲームの取り違えで棄却された可能性がある写真のときだけ渡す（生読み値が残っているとき）。
+   * ここでゲームを選び直して読み直せば、写真を選び直さずに確認画面へ進める
+   * （以前は起点へ戻るしかなかった・さつき指摘 2026-09-12）。
+   */
+  gameSel?: GameSel;
+  onGameModeChange?: (next: GameSel) => void;
+  onReread?: () => void;
+  /** 読み直した結果の一言（受理できなかったときは「見つかった問題」も差し替わる）。 */
+  modeNote?: { ok: boolean; text: string } | null;
 }): JSX.Element {
   const fromPhoto = !!props.onRetry;
+  const canFixGame = !!props.onReread && !!props.gameSel && !!props.onGameModeChange;
   const [showImage, setShowImage] = useState(false);
   return (
     <div className="panel err-view">
@@ -45,6 +57,22 @@ export function ErrorView(props: {
         <button type="button" className="btn line img-check" onClick={() => setShowImage(true)}>
           🖼 元画像とOCR結果を見る
         </button>
+      )}
+
+      {canFixGame && (
+        <div className="err-gamefix">
+          <div className="check-h">ゲームの選択を直す</div>
+          <p className="gamefix-lead">
+            選んだゲームと写真のゲームが違うと、場のチップの総量が合わず読み取れません。正しいゲームを選んで読み直せます（写真を選び直す必要はありません）。
+          </p>
+          <GameModeSelect sel={props.gameSel!} onChange={props.onGameModeChange!} />
+          {props.modeNote && (
+            <p className={`mode-note ${props.modeNote.ok ? 'ok' : 'ng'}`}>{props.modeNote.text}</p>
+          )}
+          <button type="button" className="btn line gm-reread" onClick={props.onReread}>
+            選んだゲームで読み直す
+          </button>
+        </div>
       )}
 
       {props.issues.length > 0 && (

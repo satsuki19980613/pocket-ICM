@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState, GameMode } from '@oshihiki/core';
-import { GAME_MODES } from '@oshihiki/core';
+import { GAME_MODES, gameModeLabel } from '@oshihiki/core';
 import type { OcrReadout, RawReads } from '@oshihiki/ocr';
 import { Auth } from './components/Auth';
 import { supabase, isConfigured } from './supabase/client';
@@ -311,24 +311,46 @@ export function App(): JSX.Element {
     // 以前は「選択が違うとこの値がずれます」と警告するだけで、切り替えても復元値・警告が
     // 古いモードのまま残っていた（2026-09-12 レビュー）。
     if (screen === 'confirm' && ocrReads) applyOcrForMode(ocrReads, mode);
+    // エラー画面は「読み直す」を押すまで走らせない（押す前に前の結果が消えると理由が読めなくなる）。
+    else setModeNote(null);
   }
 
   /**
    * 同じ生読み値を切り替え先のモードで pipeline に通し直し、警告・未読席・復元値を更新する。
-   * 利用者が「修正」で値を直した後（ocrEdited）は、値は上書きせず警告だけ更新する。
+   * 利用者が「修正」で値を直した後（ocrEdited）は、値は上書きせず警告だけ更新する。ただし
+   * 「選んだゲームで読み直す」を押したとき（force）は、直した値ごと入れ直す（押した本人の意思）。
+   *
+   * 切り替えた結果は必ず `modeNote` に 1 行で出す。無言で入れ替えると「押しても何も起きない＝
+   * 選び直す手段が無い」と読めてしまい、起点まで戻るしかないと思わせてしまうため
+   * （さつき指摘 2026-09-12）。
+   *
+   * 戻り値の `state` は**値まで入れ直せたとき**だけ入る（棄却・手直し保持のときは undefined）。
+   * エラー画面からの読み直しで確認画面へ進んでよいかの判定に使う。
    */
-  function applyOcrForMode(reads: RawReads, mode: GameMode): void {
+  function applyOcrForMode(
+    reads: RawReads,
+    mode: GameMode,
+    force = false,
+  ): { res: OcrPrefillResult; state?: BoardState } {
     const res = reprefillForGameMode(reads, mode, imageSize);
+    const label = gameModeLabel(mode);
     setReadout(res.readout);
     if (!res.ok || !res.form) {
       // 切り替え前は受理できた読み値が切り替え先で棄却された＝モード依存の判定（総チップ）で弾かれた
       // ということ。値は触らず、取り違えの疑いだけ出す。
       setModeMismatch(true);
-      return;
+      setModeNote({
+        ok: false,
+        text: `この写真は「${label}」としては読み取れませんでした。表示中の値は切り替える前のままです。`,
+      });
+      return { res };
     }
     setModeMismatch(!!res.modeMismatch);
     setUnresolvedStacks(res.unresolvedStacks ?? []);
-    if (ocrEdited) return;
+    if (ocrEdited && !force) {
+      setModeNote({ ok: true, text: `「${label}」で計算します（手で直した値はそのまま使います）。` });
+      return { res };
+    }
     setStackRecovered(!!res.stackRecovered);
     setForm(res.form);
     setLowConf(res.lowConfidenceFields);
@@ -337,10 +359,44 @@ export function App(): JSX.Element {
       setOcrOriginalState(built.state);
       setState(built.state);
     }
+    setModeNote({ ok: true, text: `「${label}」として読み直しました。下の内容をご確認ください。` });
+    return { res, state: built.ok ? built.state : undefined };
+  }
+
+  /**
+   * 「選んだゲームで読み直す」。いま選んでいるゲームで生読み値だけを通し直す（画像の処理は
+   * やり直さないので一瞬で終わる・アップロードも OCR ログも増やさない）。
+   *
+   * エラー画面からも押せる。ゲームの取り違えで棄却された写真は、ここで受理されればそのまま
+   * 確認画面へ進む（以前は起点へ戻って写真を選び直すしかなかった・さつき指摘 2026-09-12）。
+   */
+  function rereadForSelectedMode(): void {
+    if (!ocrReads) return;
+    const { res, state: next } = applyOcrForMode(ocrReads, gameMode, true);
+    if (!res.ok || !res.form || !next) {
+      // 読み直しても受理できないときは、エラー画面なら理由を今の選択のものに差し替える。
+      if (screen === 'error') {
+        setIssues([
+          `この写真は「${gameModeLabel(gameMode)}」としては読み取れませんでした。`,
+          ...res.issues,
+        ]);
+      }
+      return;
+    }
+    if (next.playersLeft > MAX_PLAYERS) {
+      setIssues([OVER_SCOPE_MSG]);
+      setScreen('error');
+      return;
+    }
+    setOcrEdited(false); // 値を入れ直したので、以後のゲーム切り替えでも追従してよい。
+    setScreen('confirm');
   }
 
   // 選んだモードの総チップと場のチップ総量が食い違った印（棄却はせず確認画面で警告する）。
   const [modeMismatch, setModeMismatch] = useState(false);
+  // ゲームを選び直した結果の一言（確認画面・エラー画面で選択ボタンの下に出す）。切り替えが
+  // 効いたのかを必ず返すためのもの（無言だと「選び直せない」と読めてしまう）。
+  const [modeNote, setModeNote] = useState<{ ok: boolean; text: string } | null>(null);
   // 未読 1 席を選択モードの総チップから復元した印（復元値はゲーム選択に依存する）。
   const [stackRecovered, setStackRecovered] = useState(false);
   // スタックを読めないまま残った席（2 席以上は保存則でも埋められない＝仮値 0bb）。
@@ -799,6 +855,7 @@ export function App(): JSX.Element {
     setManualOpen(false);
     setOcrEdited(true); // 確認画面の「修正」経由なら、以後のゲーム切り替えで値を上書きしない。
     setLowConf([]);
+    setModeNote(null); // 手で直したら、切り替え時の一言は古くなるので消す。
     const built = buildBoardState(f);
     if (!built.ok || !built.state) {
       setErrFromPhoto(false);
@@ -833,6 +890,7 @@ export function App(): JSX.Element {
     clearOcrPending();
     setOcrReads(null);
     setOcrEdited(false);
+    setModeNote(null);
     setManualOpen(true);
   }
 
@@ -846,6 +904,7 @@ export function App(): JSX.Element {
     clearOcrPending();
     setOcrReads(null);
     setOcrEdited(false);
+    setModeNote(null);
     try {
       const { res, imageId, ocrReadId } = await runOcrAndLog(file, gameMode);
       setOcrReads(res.reads ?? null);
@@ -1329,6 +1388,9 @@ export function App(): JSX.Element {
           // 「修正」で埋めた席（仮値 0bb でなくなった席）は警告から外す。
           unresolvedStacks={unresolvedStacks.filter((p) => state.seats.some((s) => s.pos === p && s.stack === 0))}
           onGameModeChange={changeGameSel}
+          // 写真経由（生読み値が残っている）ときだけ「選んだゲームで読み直す」を出す。
+          onReread={ocrReads ? rereadForSelectedMode : undefined}
+          modeNote={modeNote}
           onSolve={solve}
         />
       )}
@@ -1408,6 +1470,12 @@ export function App(): JSX.Element {
           imageUrl={ocrImageUrl ?? undefined}
           readout={readout}
           imageSize={imageSize}
+          // 生読み値が残っている＝画像自体は読めていて、モード依存の判定で弾かれた可能性がある。
+          // その場合だけ、ここでゲームを選び直して読み直せるようにする。
+          gameSel={errFromPhoto && ocrReads ? gameSel : undefined}
+          onGameModeChange={errFromPhoto && ocrReads ? changeGameSel : undefined}
+          onReread={errFromPhoto && ocrReads ? rereadForSelectedMode : undefined}
+          modeNote={modeNote}
         />
       )}
 

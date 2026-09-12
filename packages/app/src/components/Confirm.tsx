@@ -33,6 +33,14 @@ export function Confirm(props: {
   /** ゲーム選択（入力画面で選んだもの。ここでも計算直前に切り替えられる）。 */
   gameSel: GameSel;
   onGameModeChange: (next: GameSel) => void;
+  /**
+   * 写真経由のときだけ渡す。いま選んでいるゲームで読み直す（画像処理はやり直さない）。
+   * 切り替えは押した時点で自動追従するが、**押せるボタンとして見えていないと
+   * 「選び直す手段が無い」と読めてしまう**ため、明示の入口を置く（さつき指摘 2026-09-12）。
+   */
+  onReread?: () => void;
+  /** ゲームを選び直した結果の一言（効いたのか・弾かれたのかを必ず返す）。 */
+  modeNote?: { ok: boolean; text: string } | null;
   /** 選んだモードの総チップと場のチップ総量が食い違う＝モード取り違えの疑い。 */
   modeMismatch?: boolean;
   /** 未読 1 席のスタックを、選んだゲームの総チップから復元した（値がゲーム選択に依存する）。 */
@@ -73,6 +81,16 @@ export function Confirm(props: {
       </div>
 
       <GameModeSelect sel={props.gameSel} onChange={props.onGameModeChange} />
+
+      {props.modeNote && (
+        <p className={`mode-note ${props.modeNote.ok ? 'ok' : 'ng'}`}>{props.modeNote.text}</p>
+      )}
+
+      {props.onReread && (
+        <button type="button" className="btn line gm-reread" onClick={props.onReread}>
+          選んだゲームで読み直す
+        </button>
+      )}
 
       {props.modeMismatch && (
         <p className="mode-warn">

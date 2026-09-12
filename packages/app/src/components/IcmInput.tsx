@@ -129,7 +129,6 @@ export function IcmInput(props: {
       <button type="button" className="btn line" disabled={props.blocked} onClick={props.onManual}>
         手入力する
       </button>
-      <p className="icm-note">写真がなくても、手入力だけで計算できます。</p>
 
       <button type="button" className="btn line cond-open" onClick={() => setShowConditions(true)}>
         読み取れる条件

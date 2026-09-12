@@ -1,7 +1,8 @@
 /**
  * ICM equity — Malmuth-Harville（IMPLEMENTATION_PLAN 1-2 / SPEC §2.2, §3.3）。
  *
- * 実払いペイアウト `+5,+3,+2,+1,0,-1` を「直接」payout 重みとして使う。
+ * 実払いペイアウト（クラブマッチなら `+5,+3,+2,+1,0,-1`）を「直接」payout 重みとして使う。
+ * ペイアウトは**ゲームモードで変わる**（@oshihiki/core の GAME_MODE_SPECS）。
  * MH は着順確率 × payout の線形結合であり、payout の符号に制約はない。
  * シフト変換は不要（HRC 照合時の換算のみ）。
  *
@@ -13,7 +14,9 @@
  * 参照用に着順列挙（720通り）版も持ち、両者一致をテストする。
  */
 
-/** 6-max クラブマッチの実払いペイアウト（1位→6位）。SPEC §2.1。 */
+import { gameModeSpec, type GameMode } from '@oshihiki/core';
+
+/** 6-max クラブマッチの実払いペイアウト（1位→6位）。SPEC §2.1。他モードは GAME_MODE_SPECS 参照。 */
 export const REAL_PAYOUTS_6 = [5, 3, 2, 1, 0, -1] as const;
 
 /** HRC 入力形（シフト後）。SPEC §2.2。照合時の換算にのみ使う。 */
@@ -21,13 +24,15 @@ export const HRC_PAYOUTS_6 = [6, 4, 3, 2, 1, 0] as const;
 
 /**
  * 残り人数 n の実払いペイアウト。既に飛んだプレイヤーが下位を確定しているため、
- * 残る n 人は上位 n 着（+5,+3,...）を争う。
+ * 残る n 人は上位 n 着（クラブマッチなら +5,+3,...）を争う。
+ * @param mode ゲームモード。省略時はクラブマッチ（v3 以前の記録・既存の呼び出しと同じ挙動）。
  */
-export function payoutsForPlayers(n: number): number[] {
-  if (!Number.isInteger(n) || n < 1 || n > REAL_PAYOUTS_6.length) {
-    throw new RangeError(`players must be 1..${REAL_PAYOUTS_6.length}, got ${n}`);
+export function payoutsForPlayers(n: number, mode?: GameMode): number[] {
+  const full = gameModeSpec(mode).payouts;
+  if (!Number.isInteger(n) || n < 1 || n > full.length) {
+    throw new RangeError(`players must be 1..${full.length}, got ${n}`);
   }
-  return REAL_PAYOUTS_6.slice(0, n);
+  return full.slice(0, n);
 }
 
 function popcount(x: number): number {

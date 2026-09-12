@@ -10,7 +10,7 @@
  *   CA ノード: key "SB:P,BB:-"  actor BB  actionType CA   → SB push に対する BB の call レンジ
  *
  * ## ICM とスタック
- * 実払い payout `+5,+3`（残り2人=上位2着）を直接使う（SPEC §2.2）。
+ * 実払い payout（クラブマッチなら `+5,+3`）を直接使う（SPEC §2.2）。モード差は payoutsHu。
  * HU は総チップ保存のため ICM equity は終局スタックに「線形」:
  *   V_i(stack) = 3 + 2·stack/Ttot     （Ttot = Tsb + Tbb）
  * よって all-in ショーダウンのタイ（分割）は勝敗の平均に厳密一致し、
@@ -33,7 +33,7 @@ import {
   comboCount as classComboCount,
   parseHandClass,
 } from '@oshihiki/core';
-import { icmEquities } from './icm.js';
+import { icmEquities, payoutsForPlayers } from './icm.js';
 import { HAND_CLASS_ORDER, handClassToCombos } from './huEquity.js';
 import type { LoadedHuTable } from './huTableCore.js';
 
@@ -174,7 +174,14 @@ interface HuTerminals {
   eqPre: { sb: number; bb: number };
 }
 
-const PAYOUTS_HU = [5, 3] as const;
+/**
+ * 残り2人のペイアウト。**HU の戦略はモードに依らない**（2着払いは必ずアフィン等価で、
+ * ICM エクイティが b + (a−b)·s/S ＝ スタックの線形関数になるため）。それでも表示 pt の単位を
+ * 他人数とそろえるためモードのペイアウトを使う（事前計算 HU 表もそのまま流用できる）。
+ */
+function payoutsHu(state: BoardState): number[] {
+  return payoutsForPlayers(2, state.gameMode);
+}
 
 function antePaid(state: BoardState, pos: 'SB' | 'BB'): number {
   const { scheme, amount } = state.ante;
@@ -200,8 +207,9 @@ function buildTerminals(state: BoardState): HuTerminals {
   const bBB = Tbb - bb - anteBB; // BB fold 時に残る額
   const E = Math.min(Tsb, Tbb); // 実効オールイン額
 
+  const payouts = payoutsHu(state);
   const eqi = (a: number, b: number): [number, number] => {
-    const e = icmEquities([a, b], PAYOUTS_HU);
+    const e = icmEquities([a, b], payouts);
     return [e[0]!, e[1]!];
   };
 
@@ -287,7 +295,13 @@ export function solveHu(state: BoardState, opts: HuSolveOptions = {}): HuSolveRe
   const checkEvery = opts.checkEvery ?? 25;
   // 既定の収束目標は実払い pt。SPEC §3.1 のゲート（プール比 0.05% = pool16 で 0.008pt）を
   // 十分下回る 1e-3pt を既定にする（余裕を持って品質担保）。
-  const targetExpl = opts.targetExploitabilityPt ?? 1e-3;
+  // しきい値は pt の絶対値なので、**ペイアウトの振れ幅に比例させないとモードで厳しさが変わる**
+  // （レジェンドは 2 人ぶんの振れ幅が club の 12.5 倍＝同じ 1e-3 では 12.5 倍厳しく、収束前に
+  // 反復上限へ張り付く）。club は比 1 なので**従来の挙動は変わらない**。
+  const huPayouts = payoutsHu(state);
+  const clubHu = payoutsForPlayers(2, 'club');
+  const spanRatio = (huPayouts[0]! - huPayouts[1]!) / (clubHu[0]! - clubHu[1]!);
+  const targetExpl = opts.targetExploitabilityPt ?? 1e-3 * spanRatio;
 
   // EV_SBpush(i) = (numCall[i] + vSbPushBbFold·(AVAIL - denCall[i])) / AVAIL
   const evSbPush = (acc: Accum, i: number): number =>

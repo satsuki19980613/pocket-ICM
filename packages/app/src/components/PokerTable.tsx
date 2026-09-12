@@ -6,6 +6,7 @@
  * 回転させ、下→周囲のスロットに割り当てる。
  */
 
+import { formatBbDisplay } from '@oshihiki/core';
 import type { BoardState, Position } from '@oshihiki/core';
 
 /** 人数別の席スロット（コンテナ % 座標, [x,y]）。先頭=手前(下)中央, 以降は周回。 */
@@ -117,9 +118,9 @@ export function PokerTable(props: { state: BoardState; heroHand: string }): JSX.
             )}
             <div className="pt-plate">
               <span className={`pt-pos${isHero ? ' hero' : ''}`}>{s.pos as Position}</span>
-              <span className="pt-stack">{s.stack + s.bet}bb</span>
+              <span className="pt-stack">{formatBbDisplay(s.stack + s.bet)}bb</span>
             </div>
-            {s.bet > 0 && <span className="pt-bet">{s.bet}</span>}
+            {s.bet > 0 && <span className="pt-bet">{formatBbDisplay(s.bet)}</span>}
             {isHero && <span className="pt-turn">手番</span>}
           </div>
         );

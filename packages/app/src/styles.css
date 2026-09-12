@@ -895,6 +895,49 @@ select.inp { appearance: none; cursor: pointer; }
   border-color: var(--yellow);
 }
 
+/* ゲーム選択（2段セグメント・GameModeSelect.tsx） */
+.gmsel { display: flex; flex-direction: column; gap: var(--s1); }
+.gmsel-row { width: 100%; }
+.gmsel-row .segbtn { font-size: 14px; line-height: 1.5; }
+/*
+ * 下段（ランクの STAGE・レジェンドの指標）はクラブ選択時も**中身を残したまま隠す**。段が出没すると
+ * 下の「この内容で計算する」が上下に動き、押す瞬間にずれて誤タップになる（さつき指示）。
+ * min-height での予約は実測 14px ずれたため採らない（中身を残せば高さは定義上一致する）。
+ */
+.gmsel-variant.is-hidden { visibility: hidden; }
+/*
+ * 上段は3ゲーム、下段は最大3つ。狭い端末でも1行に収まるよう詰める。
+ * 行高を明示するのは、ローマ数字（STAGE Ⅲ）と仮名で既定の行高が変わり、実測で 1px ずれたため。
+ */
+.gmsel-row .segbtn { min-width: 0; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+@media (max-width: 380px) {
+  .gmsel-row .segbtn { font-size: 12.5px; }
+}
+
+/* モード取り違えの警告（棄却はせず注意だけ促す） */
+.stack-warn { border-color: rgba(255, 92, 92, 0.55); background: rgba(255, 92, 92, 0.08); }
+.mode-warn {
+  margin: 0 0 var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid rgba(252, 238, 10, 0.45);
+  background: rgba(252, 238, 10, 0.06);
+  clip-path: var(--chamfer);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+/* 「読み取れる条件」モーダルを開くボタン（常設リストから置換） */
+.cond-open { margin-top: var(--s3); }
+/* 記録・結果に出すゲームモード名（どの尺度の pt かを取り違えないため） */
+.modetag {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 .seats { display: flex; flex-direction: column; gap: var(--s2); }
 .seatrow { display: flex; align-items: center; gap: var(--s3); }
 

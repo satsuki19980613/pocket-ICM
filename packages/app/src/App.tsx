@@ -1,11 +1,18 @@
 import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import type { BoardState } from '@oshihiki/core';
+import type { BoardState, GameMode } from '@oshihiki/core';
+import { GAME_MODES } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
 import { Auth } from './components/Auth';
 import { supabase, isConfigured } from './supabase/client';
 import { getMyProfile } from './supabase/profile';
 import { IcmInput } from './components/IcmInput';
+import {
+  DEFAULT_GAME_SEL,
+  selFromMode,
+  selectedMode,
+  type GameSel,
+} from './components/GameModeSelect';
 import { InputForm } from './components/InputForm';
 import { Confirm } from './components/Confirm';
 import { Result } from './components/Result';
@@ -201,6 +208,9 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
   }
 }
 
+/** ゲーム選択の保存キー（前回選んだモードを次回の既定にする）。 */
+const GAME_MODE_KEY = 'blackops.gameMode';
+
 /**
  * スクショ1枚に対する OCR 実行＋サーバ記録（画像アップロード・OCR ログ）をまとめて行う
  * （SPEC §5.7 の A: スクショ投入時）。アップロード・ログの失敗はアプリを止めない
@@ -210,6 +220,7 @@ function solveOptsForN(n: number): { maxIters?: number; samples?: number } {
  */
 async function runOcrAndLog(
   file: File,
+  gameMode: GameMode,
 ): Promise<{ res: OcrPrefillResult; imageId?: string; ocrReadId?: string }> {
   let imageId: string | undefined;
   try {
@@ -223,7 +234,7 @@ async function runOcrAndLog(
     reportClientError('sync', e, 'スクショの圧縮・アップロード中');
   }
 
-  const res = await prefillFromScreenshot(file);
+  const res = await prefillFromScreenshot(file, gameMode);
 
   let ocrReadId: string | undefined;
   try {
@@ -272,6 +283,38 @@ export function App(): JSX.Element {
   const [manualOpen, setManualOpen] = useState(false);
   // エラーが写真経路由来か（「別の写真を選ぶ」を出すか）。
   const [errFromPhoto, setErrFromPhoto] = useState(false);
+  // ゲーム選択。**前回選んだモードを記憶**する（自動判定を廃したので既定が要る。
+  // 毎回選ばせるのは摩擦が大きい・さつき決定 2026-09-12）。系統ごとの選択（ランクの STAGE・
+  // レジェンドの指標）は往復しても保持する。
+  const [gameSel, setGameSel] = useState<GameSel>(() => {
+    try {
+      const saved = localStorage.getItem(GAME_MODE_KEY);
+      if (saved && (GAME_MODES as readonly string[]).includes(saved)) return selFromMode(saved as GameMode);
+    } catch {
+      /* プライベートモード等で localStorage が使えなくても既定で動く。 */
+    }
+    return DEFAULT_GAME_SEL;
+  });
+  const gameMode = selectedMode(gameSel);
+  function changeGameSel(next: GameSel): void {
+    setGameSel(next);
+    const mode = selectedMode(next);
+    setForm((f) => ({ ...f, gameMode: mode }));
+    setState((st) => (st ? { ...st, gameMode: mode } : st));
+    try {
+      localStorage.setItem(GAME_MODE_KEY, mode);
+    } catch {
+      /* 保存できなくても今回の選択は効く。 */
+    }
+  }
+
+  // 選んだモードの総チップと場のチップ総量が食い違った印（棄却はせず確認画面で警告する）。
+  const [modeMismatch, setModeMismatch] = useState(false);
+  // 未読 1 席を選択モードの総チップから復元した印（復元値はゲーム選択に依存する）。
+  const [stackRecovered, setStackRecovered] = useState(false);
+  // スタックを読めないまま残った席（2 席以上は保存則でも埋められない＝仮値 0bb）。
+  const [unresolvedStacks, setUnresolvedStacks] = useState<string[]>([]);
+
   const [form, setForm] = useState<BoardForm>(() => defaultForm(DEFAULT_PLAYERS));
   const [state, setState] = useState<BoardState | null>(null);
   const [result, setResult] = useState<SolveResultDto | null>(null);
@@ -761,7 +804,10 @@ export function App(): JSX.Element {
     setImageSize(undefined);
     clearOcrPending();
     try {
-      const { res, imageId, ocrReadId } = await runOcrAndLog(file);
+      const { res, imageId, ocrReadId } = await runOcrAndLog(file, gameMode);
+      setModeMismatch(!!res.modeMismatch);
+      setStackRecovered(!!res.stackRecovered);
+      setUnresolvedStacks(res.unresolvedStacks ?? []);
       setReadout(res.readout);
       setImageSize(res.imageSize);
       setPendingImageId(imageId);
@@ -1210,6 +1256,8 @@ export function App(): JSX.Element {
           onManual={startFreshManual}
           ocrBusy={ocrBusy}
           blocked={jobRunning}
+          gameSel={gameSel}
+          onGameModeChange={changeGameSel}
         />
       )}
 
@@ -1230,6 +1278,11 @@ export function App(): JSX.Element {
             const built = buildBoardState(nf);
             if (built.ok && built.state) setState(built.state);
           }}
+          gameSel={gameSel}
+          modeMismatch={modeMismatch}
+          stackRecovered={stackRecovered}
+          unresolvedStacks={unresolvedStacks}
+          onGameModeChange={changeGameSel}
           onSolve={solve}
         />
       )}

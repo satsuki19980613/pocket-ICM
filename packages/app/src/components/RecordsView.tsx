@@ -1,3 +1,4 @@
+import { gameModeLabel } from '@oshihiki/core';
 import { aggregate, type SpotRecord } from '../records/model';
 
 const ACT_JA: Record<string, string> = { PUSH: 'ALL IN', FOLD: 'FOLD' };
@@ -108,6 +109,10 @@ export function RecordsView(props: {
                   <span className="rechand">{r.heroHand}</span>
                   <span className="recmeta">
                     {r.heroPos}・{r.playersLeft} left
+                    {/* クラブ以外はモード名を出す（クラブは既定なので付けず、一覧を静かに保つ）。 */}
+                    {(r.state.gameMode ?? 'club') !== 'club' && (
+                      <span className="modetag">{gameModeLabel(r.state.gameMode)}</span>
+                    )}
                     {r.published && <span className="rectag">公開中</span>}
                   </span>
                   <span className={`recverd ${r.verdict === 'PUSH' ? 'push' : 'fold'}`}>{ACT_JA[r.verdict]}</span>

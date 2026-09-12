@@ -15,6 +15,7 @@
  * 早期棄却したときも含め、**全経路で返す**（既存4フィールドの意味・型は不変）。
  */
 
+import type { GameMode } from '@oshihiki/core';
 import {
   extractAnchored,
   extractRawReadsAuto,
@@ -48,6 +49,21 @@ export interface OcrPrefillResult {
   readonly issueCodes?: string[];
   /** 元画像の寸法（照合ビューのヘッダ表示用）。 */
   readonly imageSize?: { w: number; h: number };
+  /**
+   * 選んだゲームモードの総チップと場のチップ総量が大きく食い違う＝**モード取り違えの疑い**。
+   * 棄却はせず確認画面で警告するだけ（さつき決定 2026-09-12）。
+   */
+  readonly modeMismatch?: boolean;
+  /**
+   * **未読 1 席のスタックを、選んだゲームの総チップから復元した**。復元値はゲーム選択に直接
+   * 依存する（選択が違うとこの席だけ大きくずれる）ので、確認画面で値の確認を促す。
+   */
+  readonly stackRecovered?: boolean;
+  /**
+   * スタックを読めないまま残った席（ポジション）。**2 席以上は保存則でも埋められない**ので
+   * 仮値 0bb が入る。確認画面で明示的に修正を促す（さつき指示 2026-09-12）。
+   */
+  readonly unresolvedStacks?: string[];
 }
 
 /** ベット読みの minCh は chips プロファイルの確定値（extractFrame と同一）。 */
@@ -65,6 +81,7 @@ export function ocrPrefillFromRgba(
   img: Rgba,
   templates: ExtractTemplates,
   opts: ExtractOptions = {},
+  gameMode: GameMode = 'club',
 ): OcrPrefillResult {
   // 抽出はアンカー方式に一本化（解像度・アスペクト非依存・docs/OCR_PHASE2.md）。固定座標プロファイル
   // ＋`img.w>=2400` の機種二値分岐は、較正解像度から外れた実機（例 1310×536）で全席ズレて棄却/誤読
@@ -97,7 +114,7 @@ export function ocrPrefillFromRgba(
       imageSize,
     };
   }
-  const res = runOcrPipeline(reads);
+  const res = runOcrPipeline(reads, { gameMode });
   if (!res.ok || !res.state) {
     return {
       ok: false,
@@ -111,6 +128,9 @@ export function ocrPrefillFromRgba(
   return {
     ok: true,
     form: boardStateToForm(res.state),
+    ...(res.chipCheck?.modeMismatch ? { modeMismatch: true } : {}),
+    ...(res.chipCheck?.modeDependentRecovery ? { stackRecovered: true } : {}),
+    ...(res.unresolvedStacks.length > 0 ? { unresolvedStacks: res.unresolvedStacks } : {}),
     issues: res.issues,
     lowConfidenceFields: res.lowConfidenceFields,
     readout: res.readout,

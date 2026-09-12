@@ -116,7 +116,7 @@ interface AllEVs {
 /** 状態から終局構造と MC ヘルパを組んだ「エンジン」。solve と evaluate で共用する。 */
 function buildEngine(state: BoardState, samples: number, seed: number) {
   const order = positionsForPlayersLeft(3); // [BU, SB, BB]
-  const payouts = payoutsForPlayers(3); // [5,3,2]
+  const payouts = payoutsForPlayers(3, state.gameMode); // club: [5,3,2]
   const seatOf = (pos: Position) => {
     const s = state.seats.find((x) => x.pos === pos && x.state !== 'empty');
     if (!s) throw new Error(`solveThreeWay: missing live seat ${pos}`);

@@ -13,8 +13,8 @@
  * 完全に検証できる。
  */
 
-import type { BoardState, Position } from '@oshihiki/core';
-import { parseBoardState, checkBoardStateSemantics } from '@oshihiki/core';
+import type { BoardState, GameMode, Position } from '@oshihiki/core';
+import { checkBoardStateSemantics, parseBoardState, totalChipsOf } from '@oshihiki/core';
 import type { RawReads } from './types.js';
 import { streetGate } from './gate.js';
 import { reconstructSpot, type SeatFacts } from './spotReconstruction.js';
@@ -34,6 +34,15 @@ export interface OcrValidation {
   readonly checksum?: ChecksumResult;
   /** 総チップ保存チェック結果（クラブマッチ・レベル確定時のみ applied）。 */
   readonly chipCheck?: ChipConsistencyResult;
+  /**
+   * **スタックを読めないまま残った席**（ポジション）。保存則で復元できた席は含まない。
+   *
+   * 未読 1 席なら総チップから逆算して埋められるが、**2 席以上は一意に解けない**ので埋められない
+   * （`applyChipConsistency` の multi-unreadable-skip）。その席は仮値 0bb のまま下流へ行くため、
+   * 確認画面で**明示的に修正を促す**（さつき指示 2026-09-12。従来は CHECK バッジだけで、
+   * 「0bb」がバスト寸前の値として見過ごされ得た）。
+   */
+  readonly unresolvedStacks: Position[];
   /** チェックサム/整合性で補正・強調した席（診断用）。 */
   readonly correctedSeatId?: string;
   /**
@@ -64,6 +73,13 @@ export interface OcrPipelineOptions {
   readonly confidenceThreshold?: number;
   /** チェックサム許容差（bb）。既定 0.5。 */
   readonly checksumTol?: number;
+  /**
+   * 利用者が選んだゲームモード（既定クラブマッチ）。総チップ保存チェックの基準
+   * （＝開始人数×開始スタック）と、復元した BoardState の gameMode に使う。
+   * **総チップからモードを推定してはならない**（STAGE Ⅳ=90,000=クラブ, STAGE Ⅴ=120,000=
+   * レジェンドと衝突するため。さつき決定 2026-09-12）。判定はこの選択だけを根拠にする。
+   */
+  readonly gameMode?: GameMode;
 }
 
 /**
@@ -88,6 +104,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
       ok: false,
       issues: gate.issues,
       lowConfidenceFields: [],
+      unresolvedStacks: [],
       readout: buildReadout(reads, { issues: gate.issues, ...(threshold !== undefined ? { threshold } : {}) }),
     };
   }
@@ -99,7 +116,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
   // 読み取り結果（readout）にはこちらを残す（確認画面のポット照合・照合ビュー・OCR ログ用）。
   // 計算に使う state.pot は従来どおり置き換え後の計算値（さつき指摘: ポットは人数×アンティ+SB+BB で厳密）。
   const potAsRead = reads.pot;
-  const { reads: cReads, result: chipCheck } = applyChipConsistency(reads);
+  const { reads: cReads, result: chipCheck } = applyChipConsistency(reads, totalChipsOf(opts.gameMode));
   reads = cReads;
   const chipCheckReadout = chipCheckForReadout(chipCheck);
 
@@ -112,6 +129,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
       ok: false,
       issues: recon.issues,
       lowConfidenceFields: [],
+      unresolvedStacks: [],
       readout: buildReadout(reads, {
         issues: recon.issues,
         chipCheck: chipCheckReadout,
@@ -135,6 +153,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
       ok: false,
       issues,
       lowConfidenceFields: [],
+      unresolvedStacks: [],
       readout: buildReadout(reads, {
         issues,
         posById,
@@ -145,13 +164,16 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     };
   }
 
-  // core の構造・意味論検証（保険）。
-  const parsed = parseBoardState(recon.state);
+  // core の構造・意味論検証（保険）。選んだモードは復元した盤面に載せる（以降 Worker・記録へ流れる）。
+  const parsed = parseBoardState(
+    opts.gameMode ? { ...recon.state, gameMode: opts.gameMode } : recon.state,
+  );
   if (!parsed.ok || !parsed.value) {
     return {
       ok: false,
       issues: parsed.issues,
       lowConfidenceFields: [],
+      unresolvedStacks: [],
       readout: buildReadout(reads, {
         issues: parsed.issues,
         posById,
@@ -167,6 +189,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
       ok: false,
       issues: sem.issues,
       lowConfidenceFields: [],
+      unresolvedStacks: [],
       readout: buildReadout(reads, {
         issues: sem.issues,
         posById,
@@ -191,6 +214,9 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     ? [...new Set([...conf.lowConfidenceFields, `${correctedPos}.stack`])].sort()
     : conf.lowConfidenceFields;
 
+  // 復元後もスタックが数値にならなかった席（＝仮値 0bb が入った席）。
+  const unresolvedStacks = facts.filter((f) => !Number.isFinite(f.screenStack)).map((f) => f.pos);
+
   return {
     ok: true,
     issues: [],
@@ -198,6 +224,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     lowConfidenceFields: low,
     checksum: conf.checksum,
     chipCheck,
+    unresolvedStacks,
     ...(correctedPos ? { correctedSeatId: correctedPos } : {}),
     readout: buildReadout(reads, {
       posById,

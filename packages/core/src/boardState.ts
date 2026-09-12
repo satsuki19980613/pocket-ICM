@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { GAME_MODES } from './gameMode.js';
 import { POSITIONS } from './positions.js';
 import { isHandClass } from './cards.js';
 import { positionsMatchPlayersLeft, isValidPlayersLeft } from './positions.js';
@@ -57,6 +58,12 @@ export const BoardStateSchema = z.object({
   heroPos: z.enum(POSITIONS),
   pot: unitAmount.optional(),
   heroHandConfidence: z.number().min(0).max(1).optional(),
+  /**
+   * どのゲームモードの局面か（プライズ表・開始スタックが決まる）。**省略時はクラブマッチ**。
+   * `results.spot` は BoardState をそのまま jsonb で持つので、ここに足すだけで記録にも
+   * Worker にも自動で流れる（DB マイグレーション不要）。v3 以前の記録は未指定＝クラブ。
+   */
+  gameMode: z.enum(GAME_MODES).optional(),
 });
 export type BoardState = z.infer<typeof BoardStateSchema>;
 

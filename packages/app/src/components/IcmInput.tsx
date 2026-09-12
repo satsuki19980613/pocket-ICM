@@ -1,5 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { CameraIcon } from './feedShared';
+import { GameModeSelect, type GameSel } from './GameModeSelect';
+import { InfoModal } from './InfoModal';
 
 /**
  * 読み取れる条件のチェックリスト（撮り方ガイド）。icm とエラー画面で共有。
@@ -35,9 +37,35 @@ export const READ_CONDITIONS: { title: string; hint: string }[] = [
 export const READ_CONDITIONS_NOTE =
   '対応形式: PNG / JPEG / WebP。画像の解析は端末内で完結します。';
 
+/** 「読み取れる条件」チェックリスト本体。icm はモーダルで、エラー画面は本文でそのまま使う。 */
+export function ReadConditionsList(): JSX.Element {
+  return (
+    <>
+      <ul className="check">
+        {READ_CONDITIONS.map((c) => (
+          <li key={c.title} className="ok">
+            <span className="mark">✓</span>
+            <div>
+              {c.title}
+              <small>{c.hint}</small>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="check-note">{READ_CONDITIONS_NOTE}</p>
+    </>
+  );
+}
+
 /**
- * ICM 入力の起点（3-1a）。写真選択を最上位に据え、なければ手入力へ。下に
- * 「読み取れる条件」チェックリストを常設（SPEC §6.1・M3）。
+ * ICM 入力の起点（3-1a）。写真選択を最上位に据え、なければ手入力へ。
+ *
+ * **ゲーム選択は写真選択より前**に置く（さつき決定 2026-09-12）。選んだモードは OCR の
+ * 総チップ保存チェックの基準（開始人数×開始スタック）になるため、読み取りより先に確定して
+ * いる必要がある。総チップからの自動判定はしない（モード間で値が衝突するため）。
+ *
+ * 「読み取れる条件」はゲーム選択ボタンと同居すると画面が窮屈になるので**モーダルに格納**した
+ * （同指示）。エラー画面側は理由説明そのものなので本文表示のまま。
  */
 export function IcmInput(props: {
   /** スクショ添付 → OCR プリフィル。 */
@@ -51,8 +79,12 @@ export function IcmInput(props: {
    * 「写真を選ぶ」「手入力する」の両方を無効化し、専用の注意文を出す。
    */
   blocked?: boolean;
+  /** ゲーム選択（写真より先に決める）。 */
+  gameSel: GameSel;
+  onGameModeChange: (next: GameSel) => void;
 }): JSX.Element {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [showConditions, setShowConditions] = useState(false);
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
@@ -67,6 +99,12 @@ export function IcmInput(props: {
       {props.blocked && (
         <p className="icm-blocked">計算中は次の画像を追加できません（完了までお待ちください）。</p>
       )}
+
+      <GameModeSelect
+        sel={props.gameSel}
+        onChange={props.onGameModeChange}
+        disabled={props.blocked || props.ocrBusy}
+      />
 
       <div className="shot">
         <div className="ic">
@@ -93,19 +131,15 @@ export function IcmInput(props: {
       </button>
       <p className="icm-note">写真がなくても、手入力だけで計算できます。</p>
 
-      <div className="check-h">読み取れる条件</div>
-      <ul className="check">
-        {READ_CONDITIONS.map((c) => (
-          <li key={c.title} className="ok">
-            <span className="mark">✓</span>
-            <div>
-              {c.title}
-              <small>{c.hint}</small>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <p className="check-note">{READ_CONDITIONS_NOTE}</p>
+      <button type="button" className="btn line cond-open" onClick={() => setShowConditions(true)}>
+        読み取れる条件
+      </button>
+
+      {showConditions && (
+        <InfoModal title="読み取れる条件" onClose={() => setShowConditions(false)}>
+          <ReadConditionsList />
+        </InfoModal>
+      )}
     </div>
   );
 }

@@ -95,6 +95,7 @@ export function generateSpot(rng: Rng, filter: DrillFilter = DEFAULT_FILTER): Bo
       heroPos,
       heroHand,
       stacks,
+      gameMode: 'club', // ドリルはクラブマッチ固定。
     };
 
     const built = buildBoardState(form);
@@ -102,6 +103,7 @@ export function generateSpot(rng: Rng, filter: DrillFilter = DEFAULT_FILTER): Bo
   }
   // ここに到達しないはずだが、保険として既定 HU を返す。
   const fallback = buildBoardState({
+    gameMode: 'club',
     playersLeft: 2,
     sb: '0.5',
     bb: '1',

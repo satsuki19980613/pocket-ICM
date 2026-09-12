@@ -1,3 +1,4 @@
+import { formatBbDisplay } from '@oshihiki/core';
 import { useEffect, useState } from 'react';
 import type { SolveResultDto } from '../solverProtocol';
 import { RangeGrid } from './RangeGrid';
@@ -48,7 +49,7 @@ export function ActionTree(props: { result: SolveResultDto; stacks?: Record<stri
         {rows.map((row) => (
           <div key={row.pos} className="arow" data-active={String(state.active === row.seatIdx)} data-locked={String(row.walk)}>
             <span className={`posbadge sm pos-${row.pos}`}>{row.pos}</span>
-            <span className="arow-stack">{stacks && stacks[row.pos] != null ? `${stacks[row.pos]}bb` : ''}</span>
+            <span className="arow-stack">{stacks && stacks[row.pos] != null ? `${formatBbDisplay(stacks[row.pos]!)}bb` : ''}</span>
             {row.walk ? (
               <span className="term">no decision</span>
             ) : (

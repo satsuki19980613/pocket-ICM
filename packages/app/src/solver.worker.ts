@@ -4,6 +4,8 @@
  * HU（2人）は同梱 169×169 equity テーブルを fetch して解く。3〜6人は N-way ソルバー。
  */
 
+import type { GameMode } from '@oshihiki/core';
+import { ptDisplayScale } from '@oshihiki/core';
 import {
   solveMultiway,
   solveHu,
@@ -156,16 +158,36 @@ interface CommonResult {
   converged: boolean;
 }
 
-function toDto(r: CommonResult, playersLeft: number, heroPos: string, heroHand: string): SolveResultDto {
+/**
+ * 求解結果 → 画面 DTO。
+ *
+ * **pt はここでクラブマッチの尺度にそろえる**（さつき決定 2026-09-12 の (b) 案）。求解自体は
+ * モードの実払い pt で行うが、モードごとに pt の桁が変わると（クラブの振れ幅6に対し
+ * レジェンドは75）記録一覧の EV ロスを並べても比較にならない。表示・保存する数値をここで
+ * 一度だけ換算しておけば、下流（結果画面・記録一覧・ドリル・フィード・DB の ev_loss）は
+ * 何も知らなくてよい。戦略・収束判定は換算前の値で行っているので影響しない。
+ */
+function toDto(
+  r: CommonResult,
+  playersLeft: number,
+  heroPos: string,
+  heroHand: string,
+  mode: GameMode | undefined,
+): SolveResultDto {
+  const k = ptDisplayScale(mode);
   const equity = r.nodes.length > 0 ? r.nodes[0]!.equity : {};
+  const scaledEquity: Record<string, { pre: number; post: number }> = {};
+  for (const [pos, e] of Object.entries(equity)) {
+    scaledEquity[pos] = { pre: e.pre * k, post: e.post * k };
+  }
   return {
     playersLeft,
     heroPos,
     heroHand,
     iterations: r.iterations,
-    exploitabilityPt: r.exploitabilityPt,
+    exploitabilityPt: r.exploitabilityPt * k,
     converged: r.converged,
-    equity,
+    equity: scaledEquity,
     nodes: r.nodes.map((n) => ({
       key: n.key,
       actor: n.actor,
@@ -174,7 +196,7 @@ function toDto(r: CommonResult, playersLeft: number, heroPos: string, heroHand: 
       range: n.range,
       hands: n.hands,
       heroFreq: n.freq[heroHand] ?? 0,
-      heroEv: n.ev[heroHand] ?? 0,
+      heroEv: (n.ev[heroHand] ?? 0) * k,
     })),
   };
 }
@@ -199,7 +221,7 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
     if (state.playersLeft === 2) {
       const table = await getHuTable();
       const r = solveHu(state, { table, ...(opts?.maxIters ? { maxIters: opts.maxIters } : {}) });
-      dto = toDto(r as unknown as CommonResult, 2, state.heroPos, state.heroHand);
+      dto = toDto(r as unknown as CommonResult, 2, state.heroPos, state.heroHand, state.gameMode);
     } else if (state.playersLeft === 3) {
       // 3人は事前計算テーブル（GOLD精度）を補間して即時解。相手だけが25bb超なら
       // その席を25bbにクランプして即時。hero自身が25bb超なら対象外。条件不一致・
@@ -220,7 +242,7 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
           mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
         })) as unknown as CommonResult;
       }
-      dto = toDto(r, 3, state.heroPos, state.heroHand);
+      dto = toDto(r, 3, state.heroPos, state.heroHand, state.gameMode);
     } else if (state.playersLeft === 4) {
       let r: CommonResult | null = null;
       const pf = await getPf4wayTable().catch(() => null);
@@ -236,7 +258,7 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
           mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
         })) as unknown as CommonResult;
       }
-      dto = toDto(r, 4, state.heroPos, state.heroHand);
+      dto = toDto(r, 4, state.heroPos, state.heroHand, state.gameMode);
     } else if (state.playersLeft === 5) {
       // 5人は蒸留 NN（GOLD 解を学習した即時ルックアップ）。範囲内（標準ブラインド/アンティ・
       // 全席25bb以下）なら即時解、範囲外（深いスタック等）や読込失敗は N-way ソルバーへ
@@ -253,7 +275,7 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
           mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
         })) as unknown as CommonResult;
       }
-      dto = toDto(r, 5, state.heroPos, state.heroHand);
+      dto = toDto(r, 5, state.heroPos, state.heroHand, state.gameMode);
     } else {
       // 6人（nn6way 未生成）＝直接求解。
       const [winTie, winTie3] = await Promise.all([getWinTie(), getWinTie3()]);
@@ -261,7 +283,7 @@ self.onmessage = async (e: MessageEvent<SolveRequest | McResultMsg>): Promise<vo
         workers: 0, mcRunner, winTie, winTie3, avgPower: 1, refreshSchedule: 'geometric',
         mcRunnerParallelism: MC_RUNNER_PARALLELISM, ...opts,
       });
-      dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand);
+      dto = toDto(r as unknown as CommonResult, state.playersLeft, state.heroPos, state.heroHand, state.gameMode);
     }
     const res: SolveResponse = { id, ok: true, result: dto, ms: performance.now() - t0 };
     self.postMessage(res);

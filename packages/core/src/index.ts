@@ -5,3 +5,4 @@ export * from './key.js';
 export * from './boardState.js';
 export * from './bbDisplay.js';
 export * from './solution.js';
+export * from './gameMode.js';

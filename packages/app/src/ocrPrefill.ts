@@ -35,5 +35,6 @@ export function boardStateToForm(state: BoardState): BoardForm {
     heroPos: state.heroPos,
     heroHand: state.heroHand,
     stacks,
+    gameMode: state.gameMode ?? 'club',
   };
 }

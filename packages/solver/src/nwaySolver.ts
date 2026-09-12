@@ -480,7 +480,7 @@ function buildEngine(
 ) {
   const n = state.playersLeft;
   const order = positionsForPlayersLeft(n);
-  const payouts = payoutsForPlayers(n);
+  const payouts = payoutsForPlayers(n, state.gameMode);
   const last = n - 1; // BB 席インデックス
 
   const seatOf = (pos: Position) => {
@@ -1194,7 +1194,16 @@ export async function solveMultiway(
   // 停止する（実測: 6-player UTG23/HJ11/CO3/BU43/SB2/BB22 で 900 反復停止・BU push 76.8%
   // ↔ 収束後 78.6%）。exact2/exact3 が入っている前提なら閾値を厳しくしても MC ノイズに
   // 阻まれず到達できるため、狭めても安全に収束する。
-  const targetExpl = opts.targetExploitabilityPt ?? poolPt * (opts.winTie3 !== undefined ? 0.0002 : 0.0015);
+  //
+  // **しきい値の尺度**: 既定は poolPt（payout の総和）に比例させる。クラブマッチは総和が 10〜11 で
+  // 振れ幅（最上位−最下位＝3〜6）と同じ桁なので、これで妥当な値になる。しかし payout に負値を
+  // 許すと総和は尺度として壊れる。レジェンドマッチは **ゼロサム**（+40/+15/+3/0/−18/−40 の総和が
+  // ちょうど 0）で、そのまま使うと targetExpl=0 ＝ 早期終了が永久に発火せず、必ず maxIters まで
+  // 回り切る（実測: 6人で 3000 反復・未収束表示）。総和が尺度として使えないときは **振れ幅**
+  // （max−min）に切り替える。クラブは poolPt>0 なので**従来の挙動は一切変わらない**。
+  const spanPt = Math.max(...eng.payouts) - Math.min(...eng.payouts);
+  const scalePt = poolPt > 0 ? poolPt : spanPt;
+  const targetExpl = opts.targetExploitabilityPt ?? scalePt * (opts.winTie3 !== undefined ? 0.0002 : 0.0015);
   // CRN 時は反復間で同一シードを使い回す（epoch を固定）。非 CRN は従来どおり epoch で再サンプル。
   const iterEpoch = (t: number): number => (commonRandom ? 0 : Math.floor(t / refreshEvery));
 

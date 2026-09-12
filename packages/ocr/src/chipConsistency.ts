@@ -20,7 +20,7 @@
  */
 
 import type { RawReads, RawSeatRead } from './types.js';
-import { totalBbFromBbChips } from './blindLevels.js';
+import { CLUB_MATCH_TOTAL_CHIPS, totalBbFromBbChips } from './blindLevels.js';
 
 const SB_BB = 0.5;
 const BB_BB = 1;
@@ -92,8 +92,26 @@ export interface ChipConsistencyResult {
   readonly potComputed?: number;
   /** OCR が読んだ中央ポット（照合用・参考）。 */
   readonly potRead?: number;
-  /** オールイン時: 総チップ保存（90,000÷bb）が成立したか（クラブマッチのみ意味を持つフラグ）。 */
+  /** オールイン時: 総チップ保存（総チップ÷bb）が成立したか。 */
   readonly conserved?: boolean;
+  /**
+   * **選択されたゲームモードの総チップと大きく食い違う**（公式表に一致したフレームでも立つ）。
+   * 棄却はせず警告に留める（さつき決定 2026-09-12）: 古いシーズンの告知が消えており
+   * 「開始チップが一度も変わっていない」保証が取れないため、弾くと正しい局面を落としかねない。
+   * モード取り違え（クラブを選んだままレジェンドのスクショを入れた等）の検出が主目的。
+   */
+  readonly modeMismatch?: boolean;
+  /**
+   * **未読 1 席のスタックを、選択モードの総チップから復元した**（recover）。
+   *
+   * このとき復元値 = 総チップ − (読めた席の合計 + デッドポット) なので、**選んだゲームが違うと
+   * この 1 席だけ大きく変わる**（実測: 同じフレームで club 275.5bb / rank-3 168.4bb /
+   * legend 382.7bb）。しかも未読席が差分を丸ごと吸収する構造上、総チップ照合では
+   * 取り違えを検出できない（`modeMismatch` は原理的に立たない）。
+   * そこで「モード依存の復元をした」ことを印として返し、確認画面で値とゲーム選択の確認を促す。
+   * 2026-09-12 の実機フィクスチャ総当たりで発見（それまで無警告で最大 2.3 倍ずれていた）。
+   */
+  readonly modeDependentRecovery?: boolean;
   readonly notes: readonly string[];
 }
 
@@ -125,7 +143,10 @@ function anteContribution(reads: RawReads, players: number, anteBb: number): num
  * 総チップ保存チェックを適用し、必要なら 1 席のスタックを復元/調整した reads を返す。
  * 無効条件では reads をそのまま返す。
  */
-export function applyChipConsistency(reads: RawReads): { reads: RawReads; result: ChipConsistencyResult } {
+export function applyChipConsistency(
+  reads: RawReads,
+  totalChips: number = CLUB_MATCH_TOTAL_CHIPS,
+): { reads: RawReads; result: ChipConsistencyResult } {
   const bc = reads.blindChips;
   if (!bc || !(bc.bb > 0) || (reads.displayMode && reads.displayMode !== 'bb')) {
     return { reads, result: { applied: false, mode: 'disabled', notes: [] } };
@@ -135,7 +156,7 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
   const players = occ.length;
   if (players < 2) return { reads, result: { applied: false, mode: 'disabled', notes: ['players<2'] } };
 
-  const totalBbTheory = totalBbFromBbChips(bc.bb); // 90,000 / bb
+  const totalBbTheory = totalBbFromBbChips(bc.bb, totalChips); // 選択モードの総チップ / bb
   const anteBb = bc.ante / bc.bb;
   const deadPot = anteContribution(reads, players, anteBb) + SB_BB + BB_BB;
   // オールイン無しのプリフロップ（＝受理対象の push/fold 局面）のポットはデッドポットに等しい。
@@ -221,7 +242,8 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
         reads: { ...reads, seats, pot: potFixed },
         result: {
           applied: true, mode: 'recover', totalBbTheory, totalBbRead: totalBbTheory, deltaBb: 0,
-          correctedSeatId: target.id, notes: [`recovered ${target.id}.stack=${recovered} from chip conservation`],
+          correctedSeatId: target.id, modeDependentRecovery: true,
+          notes: [`recovered ${target.id}.stack=${recovered} from chip conservation (mode-dependent)`],
         },
       };
     }
@@ -249,25 +271,27 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
   // ただし**登録済みの公式ストラクチャに一致したフレームは弾かない**（さつき指示 2026-09-10）。
   // ブラインドとアンティが公式表（通常／ゆっくり／もっとゆっくり）にタイト一致する時点で
   // クラブマッチの局面とみなす、という運用判断。level>0 が「表に一致した」印。
-  if (bc.level === 0 && Math.abs(delta) >= NOT_CLUB_FRAC * totalBbTheory) {
+  // 公式表に一致していても総チップが桁違いなら「モード取り違え」の疑い。棄却はせず印だけ付ける。
+  const modeMismatch = Math.abs(delta) >= NOT_CLUB_FRAC * totalBbTheory;
+  if (bc.level === 0 && modeMismatch) {
     return {
       reads,
       result: {
-        applied: false, mode: 'not-club-skip', totalBbTheory, totalBbRead, deltaBb: delta,
-        notes: [`chip total ${totalBbRead}bb vs club-match theory ${round2(totalBbTheory)}bb (${Math.round((100 * Math.abs(delta)) / totalBbTheory)}% off)`],
+        applied: false, mode: 'not-club-skip', totalBbTheory, totalBbRead, deltaBb: delta, modeMismatch,
+        notes: [`chip total ${totalBbRead}bb vs selected-mode theory ${round2(totalBbTheory)}bb (${Math.round((100 * Math.abs(delta)) / totalBbTheory)}% off)`],
       },
     };
   }
   if (Math.abs(delta) > LARGE_DELTA_FRAC * totalBbTheory) {
-    return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, notes: [`delta ${delta} too large; not adjusting`] } };
+    return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, modeMismatch, notes: [`delta ${delta} too large; not adjusting`] } };
   }
   let target: RawSeatRead | undefined;
   for (const s of readable) if (!target || s.stack.conf < target.stack.conf) target = s;
-  if (!target) return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, notes: [] } };
+  if (!target) return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, modeMismatch, notes: [] } };
   // 補正後の値も画面と同じ 0.1 刻みに載せる（表示され得ない端数を作らない）。
   const newVal = snapDisplay(target.stack.value + delta);
   if (newVal <= 0) {
-    return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, notes: ['adjustment would make stack<=0'] } };
+    return { reads, result: { applied: false, mode: 'large-delta-skip', totalBbTheory, totalBbRead, deltaBb: delta, modeMismatch, notes: ['adjustment would make stack<=0'] } };
   }
   const targetId = target.id;
   const seats = reads.seats.map((s): RawSeatRead =>
@@ -276,7 +300,7 @@ export function applyChipConsistency(reads: RawReads): { reads: RawReads; result
   return {
     reads: { ...reads, seats, pot: potFixed },
     result: {
-      applied: true, mode: 'adjust', totalBbTheory, totalBbRead, deltaBb: delta, correctedSeatId: targetId,
+      applied: true, mode: 'adjust', totalBbTheory, totalBbRead, deltaBb: delta, modeMismatch, correctedSeatId: targetId,
       notes: [`adjusted ${targetId}.stack by ${delta} (lowest-conf) to match chip total`],
     },
   };

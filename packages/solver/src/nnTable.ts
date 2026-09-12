@@ -117,6 +117,8 @@ export function buildNnTable(meta: NnMeta, buf: ArrayBuffer): NnTable {
 
 /** この state を NN モデルで解けるか（D人・条件一致・学習レンジ内）。 */
 export function nnInRange(table: NnTable, state: BoardState): boolean {
+  // 蒸留 NN も**クラブマッチのペイアウト**で解いた GOLD を学習している（pfTable と同じ理由）。
+  if ((state.gameMode ?? 'club') !== 'club') return false;
   if (state.playersLeft !== table.dims) return false;
   const { blinds, ante, axis } = table.meta;
   if (state.blinds.sb !== blinds.sb || state.blinds.bb !== blinds.bb) return false;

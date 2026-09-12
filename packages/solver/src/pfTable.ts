@@ -109,7 +109,14 @@ export function pfCoverage(table: PfTable, state: BoardState): PfCoverage {
   const hi = axis[axis.length - 1]!;
   const totals = totalsOf(table, state); // order 順
   const heroIdx = order.indexOf(state.heroPos);
+  // **hero が深い判定はモード非依存**（「概ね 25bb 超では AOF が最適でない」はペイアウト構造と
+  // 無関係な一般則で、表の有無の話ではない）。モード判定を先に置いていたため、同じ盤面でも
+  // クラブなら「対象外」と出るのにランクへ切り替えると黙って数値を返す、という非対称が出ていた
+  // （2026-09-12 の実機フィクスチャ検証で発見）。判定順を入れ替えて解消する。
   if (heroIdx >= 0 && totals[heroIdx]! > hi + 1e-6) return 'heroDeep';
+  // 事前計算表は**クラブマッチのペイアウトを焼き込んで**生成している（buildPfTable の payouts）。
+  // 他モードは EV 差そのものが別物になるため表を使わず、厳密 MC へ回す。
+  if ((state.gameMode ?? 'club') !== 'club') return 'off';
   // 相手に上限超の深い席があればテーブル不可＝厳密 MC へ（クランプしない）。
   if (totals.some((t) => t > hi + 1e-6)) return 'off';
   return 'in';

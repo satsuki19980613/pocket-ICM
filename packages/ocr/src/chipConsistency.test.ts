@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { totalChipsOf } from '@oshihiki/core';
 import { applyChipConsistency } from './chipConsistency.js';
 import type { RawReads, RawSeatRead, Occupancy, SeatAction } from './types.js';
 
@@ -228,4 +229,74 @@ describe('chipConsistency', () => {
   });
 
   void FIVE;
+});
+
+describe('ゲームモードと総チップ（2026-09-12 の実機総当たりで発見した回帰）', () => {
+  /** 未読 1 席（NaN）を含む 5 席。復元値は選択モードの総チップに直接依存する。 */
+  const unread = () =>
+    reads([
+      { id: 'UTG', v: 11.5 }, { id: 'CO', v: 31.9 }, { id: 'BU', v: 22.3 },
+      { id: 'SB', v: 14.4 }, { id: 'BB', v: NaN },
+    ]);
+
+  it('未読 1 席の復元は「モード依存でやった」印を返す（無警告で値が変わるのを防ぐ）', () => {
+    const { result } = applyChipConsistency(unread(), totalChipsOf('club'));
+    expect(result.mode).toBe('recover');
+    expect(result.applied).toBe(true);
+    expect(result.modeDependentRecovery).toBe(true);
+  });
+
+  it('復元値はモードで実際に変わる（だから印が要る）', () => {
+    const pick = (total: number) => {
+      const { reads: out, result } = applyChipConsistency(unread(), total);
+      return { stack: out.seats.find((x) => x.id === 'BB')!.stack.value, mode: result.mode };
+    };
+    const club = pick(totalChipsOf('club')); // 総 93.75bb → 10.9
+    const legend = pick(totalChipsOf('legend-avg')); // 総 125bb → 42.15
+    expect(club.mode).toBe('recover');
+    expect(legend.mode).toBe('recover');
+    // **同じフレームなのに復元値が 4 倍近く違う**。これが無警告だったのが今回のバグ。
+    expect(legend.stack).toBeGreaterThan(club.stack * 3);
+
+    // 総チップ 90,000 の rank-4 は club と同値になる（総チップが衝突する設計どおり）。
+    expect(pick(totalChipsOf('rank-4')).stack).toBe(club.stack);
+
+    // 総チップが小さすぎて復元値が負になる場合は復元しない（既存の範囲ガードが効く）。
+    const rank3 = pick(totalChipsOf('rank-3')); // 総 62.5bb < 読めた合計 82.85bb
+    expect(rank3.mode).toBe('multi-unreadable-skip');
+    expect(Number.isNaN(rank3.stack)).toBe(true);
+  });
+
+  it('全席読めているときは復元の印を立てない', () => {
+    const r = reads([
+      { id: 'UTG', v: 11.5 }, { id: 'CO', v: 31.9 }, { id: 'BU', v: 22.3 },
+      { id: 'SB', v: 14.4 }, { id: 'BB', v: 10.9 },
+    ]);
+    const { result } = applyChipConsistency(r, totalChipsOf('club'));
+    expect(result.modeDependentRecovery).toBeUndefined();
+  });
+});
+
+describe('未読席の扱い（さつき指示 2026-09-12: 1席は補正・2席以上は修正を促す）', () => {
+  const withUnread = (n: number) =>
+    reads([
+      { id: 'UTG', v: 11.5 }, { id: 'CO', v: 31.9 }, { id: 'BU', v: 22.3 },
+      { id: 'SB', v: n >= 2 ? NaN : 14.4 }, { id: 'BB', v: NaN },
+    ]);
+
+  it('1 席だけ未読 → 合計から補正する', () => {
+    const { reads: out, result } = applyChipConsistency(withUnread(1), totalChipsOf('club'));
+    expect(result.mode).toBe('recover');
+    expect(result.applied).toBe(true);
+    expect(Number.isFinite(out.seats.find((s) => s.id === 'BB')!.stack.value)).toBe(true);
+  });
+
+  it('2 席以上が未読 → 補正しない（一意に解けないため）。値も書き換えない', () => {
+    const input = withUnread(2);
+    const { reads: out, result } = applyChipConsistency(input, totalChipsOf('club'));
+    expect(result.mode).toBe('multi-unreadable-skip');
+    expect(result.applied).toBe(false);
+    // 読めた席の値は一切触らない。
+    expect(out.seats.map((s) => s.stack.value)).toEqual(input.seats.map((s) => s.stack.value));
+  });
 });

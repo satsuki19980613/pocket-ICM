@@ -1,5 +1,7 @@
+import { formatBbDisplay } from '@oshihiki/core';
 import { useState } from 'react';
 import type { BoardState } from '@oshihiki/core';
+import { gameModeLabel } from '@oshihiki/core';
 import type { SolveResultDto } from '../solverProtocol';
 import { ActionTree } from './ActionTree';
 import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/model';
@@ -145,11 +147,14 @@ export function Result(props: {
           <div className="vmeta">
             <b className="vhand">{result.heroHand}</b>
             <span>
-              {result.heroPos}・{heroSeat ? `${heroSeat.stack}bb` : ''}・{result.playersLeft} left
+              {result.heroPos}・{heroSeat ? `${formatBbDisplay(heroSeat.stack)}bb` : ''}・{result.playersLeft} left
             </span>
             <span className="vaction">
               {ACTION_JA[headline.actionType] ?? headline.actionType}・レンジ {headline.pct.toFixed(1)}%
             </span>
+            {/* どのゲームのプライズで解いた結果かを必ず出す（pt は表示上クラブ尺度にそろえて
+                いるので、モードが分からないと数字の意味を取り違える）。 */}
+            <span className="modetag">{gameModeLabel(state.gameMode)}</span>
           </div>
           <div className="evbox">
             <span className="evlabel">EV（フォールド比, 実払い pt）</span>

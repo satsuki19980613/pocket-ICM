@@ -4,7 +4,7 @@
  * 上流アクション（誰が push/fold したか）は結果画面のノード選択で扱う（solver は全木を解く）。
  */
 
-import type { BoardState, Position } from '@oshihiki/core';
+import type { BoardState, GameMode, Position } from '@oshihiki/core';
 import {
   positionsForPlayersLeft,
   parseBoardState,
@@ -25,6 +25,8 @@ export interface BoardForm {
   heroHand: string;
   /** ポジション → スタック（bb, 画面表示＝ベット差引後）の入力文字列。 */
   stacks: Partial<Record<Position, string>>;
+  /** どのゲームモードか（プライズ表が決まる）。UI のゲーム選択ボタンが唯一の根拠。 */
+  gameMode: GameMode;
 }
 
 /**
@@ -33,7 +35,7 @@ export interface BoardForm {
  * 呼び出し側（App.tsx）の既定人数は 4 人のまま据え置く（さつき決定）。5〜6 人は
  * 手入力で人数を切り替えれば直接求解の対象になる。
  */
-export function defaultForm(playersLeft = 4): BoardForm {
+export function defaultForm(playersLeft = 4, gameMode: GameMode = 'club'): BoardForm {
   const positions = positionsForPlayersLeft(playersLeft);
   const stacks: Partial<Record<Position, string>> = {};
   for (const p of positions) stacks[p] = '15';
@@ -46,6 +48,7 @@ export function defaultForm(playersLeft = 4): BoardForm {
     heroPos: positions[0]!,
     heroHand: 'A5s',
     stacks,
+    gameMode,
   };
 }
 
@@ -110,6 +113,7 @@ export function buildBoardState(form: BoardForm): BuildResult {
     seats,
     heroPos: form.heroPos,
     pot: potBets + anteContribution,
+    gameMode: form.gameMode,
   };
 
   const parsed = parseBoardState(candidate);

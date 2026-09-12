@@ -249,7 +249,7 @@ describe('ゲームモードと総チップ（2026-09-12 の実機総当たり�
   it('復元値はモードで実際に変わる（だから印が要る）', () => {
     const pick = (total: number) => {
       const { reads: out, result } = applyChipConsistency(unread(), total);
-      return { stack: out.seats.find((x) => x.id === 'BB')!.stack.value, mode: result.mode };
+      return { stack: out.seats.find((x) => x.id === 'BB')!.stack.value, mode: result.mode, mismatch: result.modeMismatch };
     };
     const club = pick(totalChipsOf('club')); // 総 93.75bb → 10.9
     const legend = pick(totalChipsOf('legend-avg')); // 総 125bb → 42.15
@@ -265,6 +265,9 @@ describe('ゲームモードと総チップ（2026-09-12 の実機総当たり�
     const rank3 = pick(totalChipsOf('rank-3')); // 総 62.5bb < 読めた合計 82.85bb
     expect(rank3.mode).toBe('multi-unreadable-skip');
     expect(Number.isNaN(rank3.stack)).toBe(true);
+    // 読めた席だけで rank-3 の総チップを 3 割超えている＝モード取り違えの疑いを立てる（2026-09-12 レビュー）。
+    expect(rank3.mismatch).toBe(true);
+    expect(club.mismatch).toBeUndefined();
   });
 
   it('全席読めているときは復元の印を立てない', () => {

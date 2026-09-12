@@ -247,7 +247,20 @@ export function applyChipConsistency(
         },
       };
     }
-    return { reads, result: { applied: false, mode: 'multi-unreadable-skip', totalBbTheory, notes: ['recovered value out of range'] } };
+    // 復元値が範囲外＝読めた席だけで選択モードの総チップを使い切っている（か大きく超えている）。
+    // 未読席が差分を吸収する構造上、取り違えはここでしか顔を出さない。超過が NOT_CLUB_FRAC 以上なら
+    // 「モード取り違えの疑い」を立てる（例: rank-3 を選んだままクラブのスクショを入れた）。
+    // 値は触らず、席は未読のまま下流へ（確認画面で修正を促す）。
+    const readTotal = round2(readableSum + deadPot);
+    const excess = readTotal - totalBbTheory;
+    return {
+      reads,
+      result: {
+        applied: false, mode: 'multi-unreadable-skip', totalBbTheory, totalBbRead: readTotal, deltaBb: round2(-excess),
+        ...(excess >= NOT_CLUB_FRAC * totalBbTheory ? { modeMismatch: true } : {}),
+        notes: [`recovered value ${recovered} out of range (read ${readTotal}bb vs theory ${round2(totalBbTheory)}bb)`],
+      },
+    };
   }
   if (unreadable.length > 1) {
     return { reads, result: { applied: false, mode: 'multi-unreadable-skip', totalBbTheory, notes: [`${unreadable.length} unreadable stacks`] } };

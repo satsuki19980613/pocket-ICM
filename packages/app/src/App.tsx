@@ -2,11 +2,12 @@ import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } fro
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState, GameMode } from '@oshihiki/core';
 import { GAME_MODES } from '@oshihiki/core';
-import type { OcrReadout } from '@oshihiki/ocr';
+import type { OcrReadout, RawReads } from '@oshihiki/ocr';
 import { Auth } from './components/Auth';
 import { supabase, isConfigured } from './supabase/client';
 import { getMyProfile } from './supabase/profile';
 import { IcmInput } from './components/IcmInput';
+import { reprefillForGameMode } from './ocr/prefill';
 import {
   DEFAULT_GAME_SEL,
   selFromMode,
@@ -306,6 +307,36 @@ export function App(): JSX.Element {
     } catch {
       /* 保存できなくても今回の選択は効く。 */
     }
+    // 確認画面での切り替えは、保持している生読み値で pipeline を再実行して OCR 側の結果も追従させる。
+    // 以前は「選択が違うとこの値がずれます」と警告するだけで、切り替えても復元値・警告が
+    // 古いモードのまま残っていた（2026-09-12 レビュー）。
+    if (screen === 'confirm' && ocrReads) applyOcrForMode(ocrReads, mode);
+  }
+
+  /**
+   * 同じ生読み値を切り替え先のモードで pipeline に通し直し、警告・未読席・復元値を更新する。
+   * 利用者が「修正」で値を直した後（ocrEdited）は、値は上書きせず警告だけ更新する。
+   */
+  function applyOcrForMode(reads: RawReads, mode: GameMode): void {
+    const res = reprefillForGameMode(reads, mode, imageSize);
+    setReadout(res.readout);
+    if (!res.ok || !res.form) {
+      // 切り替え前は受理できた読み値が切り替え先で棄却された＝モード依存の判定（総チップ）で弾かれた
+      // ということ。値は触らず、取り違えの疑いだけ出す。
+      setModeMismatch(true);
+      return;
+    }
+    setModeMismatch(!!res.modeMismatch);
+    setUnresolvedStacks(res.unresolvedStacks ?? []);
+    if (ocrEdited) return;
+    setStackRecovered(!!res.stackRecovered);
+    setForm(res.form);
+    setLowConf(res.lowConfidenceFields);
+    const built = buildBoardState(res.form);
+    if (built.ok && built.state) {
+      setOcrOriginalState(built.state);
+      setState(built.state);
+    }
   }
 
   // 選んだモードの総チップと場のチップ総量が食い違った印（棄却はせず確認画面で警告する）。
@@ -314,6 +345,11 @@ export function App(): JSX.Element {
   const [stackRecovered, setStackRecovered] = useState(false);
   // スタックを読めないまま残った席（2 席以上は保存則でも埋められない＝仮値 0bb）。
   const [unresolvedStacks, setUnresolvedStacks] = useState<string[]>([]);
+  // OCR の生読み値（総チップ保存チェック前）。確認画面でゲームを切り替えたとき、画像処理をやり直さず
+  // pipeline だけ再実行して警告・未読席・復元スタックを追従させるために保持する（2026-09-12 レビュー）。
+  const [ocrReads, setOcrReads] = useState<RawReads | null>(null);
+  // 確認画面で利用者が値を手で直したか。直した後の切り替えでは値を上書きせず、警告だけ更新する。
+  const [ocrEdited, setOcrEdited] = useState(false);
 
   // 既定フォームにも**復元したゲーム選択**を載せる。渡さないと常にクラブになり、選択ボタンに触らず
   // 「手入力する」と進んだとき UI はレジェンド点灯・計算はクラブという食い違いが出る（2026-09-12 レビュー）。
@@ -761,6 +797,7 @@ export function App(): JSX.Element {
   /** 手入力モーダルの確定 → 条件確認へ。無効ならエラー画面。 */
   function submitManual(f: BoardForm): void {
     setManualOpen(false);
+    setOcrEdited(true); // 確認画面の「修正」経由なら、以後のゲーム切り替えで値を上書きしない。
     setLowConf([]);
     const built = buildBoardState(f);
     if (!built.ok || !built.state) {
@@ -794,6 +831,8 @@ export function App(): JSX.Element {
     setReadout(undefined);
     setImageSize(undefined);
     clearOcrPending();
+    setOcrReads(null);
+    setOcrEdited(false);
     setManualOpen(true);
   }
 
@@ -805,8 +844,11 @@ export function App(): JSX.Element {
     setReadout(undefined);
     setImageSize(undefined);
     clearOcrPending();
+    setOcrReads(null);
+    setOcrEdited(false);
     try {
       const { res, imageId, ocrReadId } = await runOcrAndLog(file, gameMode);
+      setOcrReads(res.reads ?? null);
       setModeMismatch(!!res.modeMismatch);
       setStackRecovered(!!res.stackRecovered);
       setUnresolvedStacks(res.unresolvedStacks ?? []);
@@ -1275,6 +1317,7 @@ export function App(): JSX.Element {
             // 安全網: 写真取り込みで席を1つ取りこぼす（スタック未読=空席扱い）と人数が
             // 少なく出る。確認画面で人数を選び直すと reconcilePositions が席を補い、
             // 誤った人数のまま黙って解くのを防ぐ（補った席のスタックは下で要確認）。
+            setOcrEdited(true);
             const nf = reconcilePositions({ ...form, playersLeft: n });
             setForm(nf);
             const built = buildBoardState(nf);
@@ -1283,7 +1326,8 @@ export function App(): JSX.Element {
           gameSel={gameSel}
           modeMismatch={modeMismatch}
           stackRecovered={stackRecovered}
-          unresolvedStacks={unresolvedStacks}
+          // 「修正」で埋めた席（仮値 0bb でなくなった席）は警告から外す。
+          unresolvedStacks={unresolvedStacks.filter((p) => state.seats.some((s) => s.pos === p && s.stack === 0))}
           onGameModeChange={changeGameSel}
           onSolve={solve}
         />

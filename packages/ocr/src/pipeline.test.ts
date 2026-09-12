@@ -339,3 +339,47 @@ describe('reconstructSpot — 直接', () => {
     expect(recon.issues.join()).toMatch(/ボタン/);
   });
 });
+
+describe('pipeline — 同じ生読み値をゲームモードだけ変えて通し直す（確認画面の切り替え・2026-09-12 レビュー）', () => {
+  /** 5 人・CO のスタックだけ未読（NaN）・BB 800 チップ（アンティ無し）。 */
+  const readsWithUnreadCo = (): RawReads => ({
+    ...mkReads({
+      pot: 1.5,
+      seats: [
+        { id: 'BU', button: true, stack: 30, bet: 0 },
+        { id: 'SB', stack: 24.5, bet: 0.5 },
+        { id: 'BB', stack: 19, bet: 1 },
+        { id: 'UTG', hero: true, stack: 20, bet: 0 },
+        { id: 'CO', stack: NaN, bet: 0 },
+      ],
+    }),
+    displayMode: 'bb',
+    blindChips: { sb: 400, bb: 800, ante: 0, level: 5 },
+  });
+  const coStack = (r: ReturnType<typeof runOcrPipeline>): number | undefined =>
+    r.state?.seats.find((s) => s.pos === 'CO')?.stack;
+
+  it('復元値は選んだモードの総チップに追従する（club 112.5bb / legend 150bb）', () => {
+    const club = runOcrPipeline(readsWithUnreadCo(), { gameMode: 'club' });
+    const legend = runOcrPipeline(readsWithUnreadCo(), { gameMode: 'legend-avg' });
+    expect(club.ok).toBe(true);
+    expect(legend.ok).toBe(true);
+    expect(club.state?.gameMode).toBe('club');
+    expect(legend.state?.gameMode).toBe('legend-avg');
+    // 読めた席 93.5 + デッドポット 1.5 = 95 → club 112.5−95 = 17.5 / legend 150−95 = 55
+    expect(coStack(club)).toBe(17.5);
+    expect(coStack(legend)).toBe(55);
+    expect(club.chipCheck?.modeDependentRecovery).toBe(true);
+    expect(legend.chipCheck?.modeDependentRecovery).toBe(true);
+    expect(club.unresolvedStacks).toEqual([]);
+  });
+
+  it('総チップが小さいモード（rank-3: 75bb）では復元できず、未読席＋取り違えの疑いを返す', () => {
+    const r = runOcrPipeline(readsWithUnreadCo(), { gameMode: 'rank-3' });
+    expect(r.ok).toBe(true);
+    expect(r.unresolvedStacks).toEqual(['CO']);
+    expect(r.chipCheck?.mode).toBe('multi-unreadable-skip');
+    expect(r.chipCheck?.modeMismatch).toBe(true);
+    expect(r.chipCheck?.modeDependentRecovery).toBeUndefined();
+  });
+});

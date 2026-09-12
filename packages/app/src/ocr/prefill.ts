@@ -64,6 +64,11 @@ export interface OcrPrefillResult {
    * 仮値 0bb が入る。確認画面で明示的に修正を促す（さつき指示 2026-09-12）。
    */
   readonly unresolvedStacks?: string[];
+  /**
+   * 抽出層の生読み値（総チップ保存チェック**前**）。確認画面でゲームを切り替えたとき、画像処理を
+   * やり直さずに `reprefillForGameMode` で pipeline だけ再実行するために持ち帰る。
+   */
+  readonly reads?: RawReads;
 }
 
 /** ベット読みの minCh は chips プロファイルの確定値（extractFrame と同一）。 */
@@ -114,6 +119,25 @@ export function ocrPrefillFromRgba(
       imageSize,
     };
   }
+  return packagePipeline(reads, gameMode, imageSize);
+}
+
+/**
+ * 同じ生読み値を**別のゲームモード**で pipeline に通し直す（確認画面でゲームを切り替えたとき用）。
+ * pipeline は純関数で、モードに依存するのは総チップ保存チェック（取り違え警告・未読 1 席の復元値）
+ * だけなので、画像処理をやり直さずに警告と復元値を切り替え先へ追従させられる（2026-09-12 レビュー）。
+ */
+export function reprefillForGameMode(
+  reads: RawReads,
+  gameMode: GameMode,
+  imageSize?: { w: number; h: number },
+): OcrPrefillResult {
+  return packagePipeline(reads, gameMode, imageSize);
+}
+
+/** 生読み値 → pipeline → プリフィル結果。初回取り込みと切り替え時の再実行が共用する。 */
+function packagePipeline(reads: RawReads, gameMode: GameMode, imageSize?: { w: number; h: number }): OcrPrefillResult {
+  const size = imageSize ? { imageSize } : {};
   const res = runOcrPipeline(reads, { gameMode });
   if (!res.ok || !res.state) {
     return {
@@ -122,7 +146,8 @@ export function ocrPrefillFromRgba(
       lowConfidenceFields: res.lowConfidenceFields,
       readout: res.readout,
       issueCodes: res.readout.issueCodes,
-      imageSize,
+      reads,
+      ...size,
     };
   }
   return {
@@ -135,6 +160,7 @@ export function ocrPrefillFromRgba(
     lowConfidenceFields: res.lowConfidenceFields,
     readout: res.readout,
     issueCodes: res.readout.issueCodes,
-    imageSize,
+    reads,
+    ...size,
   };
 }

@@ -80,3 +80,43 @@ describe('boardStateToForm', () => {
     expect(built.ok).toBe(true);
   });
 });
+
+describe('reprefillForGameMode（確認画面でのゲーム切り替え・2026-09-12 レビュー）', () => {
+  it('生読み値を持ち帰り、別モードで通し直すと復元スタックと印が切り替え先に追従する', async () => {
+    const { reprefillForGameMode } = await import('./ocr/prefill');
+    const reads: RawReads = {
+      street: { value: 'プリフロップ', conf: 1 },
+      blinds: { sb: { value: 0.5, conf: 1 }, bb: { value: 1, conf: 1 } },
+      ante: { scheme: 'none', amount: { value: 0, conf: 1 } },
+      pot: { value: 1.5, conf: 1 },
+      heroHand: { value: 'A5s', conf: 1 },
+      displayMode: 'bb',
+      blindChips: { sb: 400, bb: 800, ante: 0, level: 5 },
+      seats: [
+        { id: 'BU', isHero: false, isButton: true, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 30, conf: 1 }, bet: { value: 0, conf: 1 } },
+        { id: 'SB', isHero: false, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 24.5, conf: 1 }, bet: { value: 0.5, conf: 1 } },
+        { id: 'BB', isHero: false, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 19, conf: 1 }, bet: { value: 1, conf: 1 } },
+        { id: 'UTG', isHero: true, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: 20, conf: 1 }, bet: { value: 0, conf: 1 } },
+        { id: 'CO', isHero: false, isButton: false, occupancy: { value: 'occupied', conf: 1 }, action: { value: 'none', conf: 1 }, stack: { value: NaN, conf: 0 }, bet: { value: 0, conf: 1 } },
+      ],
+    };
+    const club = reprefillForGameMode(reads, 'club', { w: 100, h: 50 });
+    expect(club.ok).toBe(true);
+    expect(club.reads).toBe(reads); // 再実行に使えるよう生読み値を持ち帰る
+    expect(club.imageSize).toEqual({ w: 100, h: 50 });
+    expect(club.stackRecovered).toBe(true);
+    expect(club.form?.gameMode).toBe('club');
+    expect(club.form?.stacks.CO).toBe('17.5');
+
+    const legend = reprefillForGameMode(club.reads!, 'legend-avg');
+    expect(legend.form?.gameMode).toBe('legend-avg');
+    expect(legend.form?.stacks.CO).toBe('55');
+    expect(legend.imageSize).toBeUndefined();
+
+    const rank3 = reprefillForGameMode(club.reads!, 'rank-3');
+    expect(rank3.ok).toBe(true);
+    expect(rank3.stackRecovered).toBeUndefined();
+    expect(rank3.unresolvedStacks).toEqual(['CO']);
+    expect(rank3.modeMismatch).toBe(true);
+  });
+});

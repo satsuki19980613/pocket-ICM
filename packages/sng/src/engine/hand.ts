@@ -66,7 +66,16 @@ function isStreetComplete(hand: HandState): boolean {
  * （＝コール/フォールドの機会は必ず与える）。
  */
 function shouldCloseStreet(hand: HandState): boolean {
-  return isStreetComplete(hand);
+  if (isStreetComplete(hand)) return true;
+  // 賭けられる相手が居ない（actionable が 1 人以下）なら、その人が直前のベットに追いついている
+  // 限り（＝コール/フォールドの必要が無い）ストリートを閉じ、残りのボードを一気に配る。
+  // これが無いと「相手が短いスタックでオールイン → 自分がコール」のあと、フロップ・ターン・
+  // リバーで自分だけに手番が回り、毎回 CHECK を押さないと進まない（さつき実機報告 2026-09-15）。
+  const actionable = actionableSeats(hand);
+  if (actionable.length <= 1) {
+    return actionable.every((s) => hand.streetBet[s] === hand.streetLastBetTo);
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

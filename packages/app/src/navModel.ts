@@ -17,6 +17,8 @@ export type Screen =
   | 'history'
   | 'training'
   | 'slumbot'
+  | 'huhistory'
+  | 'hustats'
   | 'settings'
   | 'admin'
   | 'diag';
@@ -45,9 +47,11 @@ export function screenDepth(screen: Screen, ctx: NavContext = NAV_CONTEXT_ROOT):
     case 'confirm':
     case 'error':
     case 'admin':
-    // Training ハブ（深さ1）から潜る機能画面。
+    // Training ハブ（深さ1）から潜る機能画面（対戦・ハンド履歴・成績）。
     // ランキングは画面ではなく重なり（backLayers）なのでここには無い。
     case 'slumbot':
+    case 'huhistory':
+    case 'hustats':
       return 2;
     case 'result':
       // 記録タブ（深さ1）からもスレッド（深さ1）からも、その1つ下。

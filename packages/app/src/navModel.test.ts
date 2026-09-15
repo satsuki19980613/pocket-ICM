@@ -18,6 +18,8 @@ const PARENT: Record<Exclude<Screen, 'home'>, Screen> = {
   admin: 'settings',
   diag: 'admin',
   slumbot: 'training',
+  huhistory: 'training',
+  hustats: 'training',
   result: 'history', // スレッド経由でも戻り先は深さ1の thread なので同じ
 };
 

@@ -25,6 +25,8 @@ import { Toast } from './components/Toast';
 // AOF ドリル（DrillView）はハブ上で Coming Soon 扱いのまま（実装はコード上温存）。
 import { TrainingHub } from './components/TrainingHub';
 import { SlumbotView } from './components/SlumbotView';
+import { HuHistoryView } from './components/HuHistoryView';
+import { HuStatsView } from './components/HuStatsView';
 import { RankingModal } from './components/RankingModal';
 import { Home, type FeedState } from './components/Home';
 import { Thread } from './components/Thread';
@@ -124,6 +126,8 @@ const TITLES: Record<Screen, string> = {
   history: '記録',
   training: 'Training',
   slumbot: 'Slumbot HU',
+  huhistory: 'Hand History',
+  hustats: 'Stats',
   settings: '設定',
   admin: 'クラブ管理',
   diag: '診断ログ',
@@ -164,6 +168,8 @@ function tabForScreen(s: Screen): TabKey | null {
       return 'icm';
     case 'training':
     case 'slumbot':
+    case 'huhistory':
+    case 'hustats':
       return 'training';
     case 'history':
       return 'records';
@@ -1144,6 +1150,8 @@ export function App(): JSX.Element {
       case 'diag':
         return () => setScreen('admin');
       case 'slumbot':
+      case 'huhistory':
+      case 'hustats':
         return () => setScreen('training');
       case 'thread':
         return () => setScreen('home');
@@ -1435,10 +1443,16 @@ export function App(): JSX.Element {
       )}
 
       {screen === 'training' && (
-        <TrainingHub onOpenSlumbot={() => setScreen('slumbot')} />
+        <TrainingHub
+          onOpenSlumbot={() => setScreen('slumbot')}
+          onOpenHistory={() => setScreen('huhistory')}
+          onOpenStats={() => setScreen('hustats')}
+        />
       )}
 
       {screen === 'slumbot' && <SlumbotView onExit={() => setScreen('training')} />}
+      {screen === 'huhistory' && <HuHistoryView />}
+      {screen === 'hustats' && <HuStatsView />}
 
       {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 

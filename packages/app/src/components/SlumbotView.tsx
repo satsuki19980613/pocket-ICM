@@ -31,6 +31,10 @@ import { useBgm, type BgmFailure } from '../slumbot/bgm';
 import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
 import { createStartLatch } from '../solveJob';
 import { addPending, flushPending, readPending, writePending } from '../supabase/huStats';
+import { buildRecord, newHandId } from '../slumbot/history';
+import { withEv } from '../slumbot/allInEv';
+import { putHand } from '../slumbot/historyStore';
+import { syncHands } from '../slumbot/historySync';
 
 type Phase = 'starting' | 'acting' | 'sending' | 'over' | 'error';
 
@@ -141,12 +145,30 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
     </button>
   ) : null;
 
-  /** ハンド終了時: セッション表示を進め、収支をサーバへ加算する。 */
+  /**
+   * ハンド終了時: セッション表示を進め、収支をサーバへ加算し、ハンドを履歴に残す。
+   * 履歴は端末（IndexedDB）が正。捲り合いの EV は結果を描いた後に計算し（プリフロップは
+   * 0.3 秒ほど）、埋めてからサーバへ控えを送る。
+   */
   const recordHand = useCallback(
-    (winnings: number) => {
+    (v: HandView) => {
+      const winnings = v.winnings ?? 0;
       setSession((s) => ({ hands: s.hands + 1, netChips: s.netChips + winnings }));
       writePending(store, addPending(readPending(store), winnings));
       void flushPending(store);
+
+      const rec = buildRecord(v, Date.now(), newHandId());
+      if (!rec) return;
+      void putHand(rec)
+        .then(() => {
+          if (rec.evWinnings !== null) return syncHands(store);
+          return new Promise<void>((resolve) => setTimeout(resolve, 0))
+            .then(() => putHand(withEv(rec)))
+            .then(() => syncHands(store));
+        })
+        .catch(() => {
+          /* 履歴に残せなくても対局は続ける（通算成績は別経路で加算済み）。 */
+        });
     },
     [store],
   );
@@ -170,7 +192,7 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
       setErrMsg(null);
 
       if (v.over) {
-        recordHand(v.winnings ?? 0);
+        recordHand(v);
         setPhase('over');
         if (prefsRef.current.autoNext) {
           autoTimer.current = setTimeout(() => {

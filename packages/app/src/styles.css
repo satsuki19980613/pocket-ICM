@@ -2936,13 +2936,13 @@ button.cell { cursor: pointer; }
   font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 .hs-val.loss { color: var(--red); }
 .hs-val.gain { color: var(--yellow); }
-.hs-unit { font-family: var(--mono); font-size: 9.5px; font-weight: 400; color: var(--dim); margin-left: 2px; }
+/* 単位は inline-block にして、狭い幅（320〜375px）では数字の後ろで次の行に落とす（「bb/…」と切らない）。 */
+.hs-unit { display: inline-block; font-family: var(--mono); font-size: 9.5px; font-weight: 400; color: var(--dim); margin-left: 2px; }
 .hs-sub { font-family: var(--mono); font-size: 9.5px; color: var(--dim2); }
 .hs-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s2); }
 .hs-lg {

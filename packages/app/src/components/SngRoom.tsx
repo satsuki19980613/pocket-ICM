@@ -106,30 +106,30 @@ export function SngRoom(props: {
     [store],
   );
 
-  // BGM は Slumbot と同じ音源・同じ好み保存を使う（Training タブで 1 つの設定でよい）。
+  // BGM は Slumbot と同じ音源・同じ曲選択（prefs.bgmTrack）を使うが、**入室時は必ず止まった状態**で始める
+  // （さつき指示 2026-09-15: 部屋を作った瞬間に鳴るのは困る）。ON/OFF はこの画面の中だけの状態で、
+  // Slumbot 側の保存（prefs.bgmOn）には書き戻さない。
   const track = resolveTrack(BGM_TRACKS, prefs.bgmTrack);
-  const onBgmFail = useCallback(
-    (why: BgmFailure) => {
-      updatePrefs({ ...prefsRef.current, bgmOn: false });
-      setBgmNote(
-        why === 'missing'
-          ? '音源を再生できませんでした（ファイルが壊れている可能性があります）。'
-          : 'ブラウザに再生を止められました。もう一度 ♪ を押してください。',
-      );
-    },
-    [updatePrefs],
-  );
-  useBgm(track?.src ?? null, prefs.bgmOn, onBgmFail);
+  const [bgmOn, setBgmOn] = useState(false);
+  const onBgmFail = useCallback((why: BgmFailure) => {
+    setBgmOn(false);
+    setBgmNote(
+      why === 'missing'
+        ? '音源を再生できませんでした（ファイルが壊れている可能性があります）。'
+        : 'ブラウザに再生を止められました。もう一度 ♪ を押してください。',
+    );
+  }, []);
+  useBgm(track?.src ?? null, bgmOn, onBgmFail);
   const toggleBgm = useCallback(() => {
     setBgmNote(null);
-    updatePrefs({ ...prefsRef.current, bgmOn: !prefsRef.current.bgmOn });
-  }, [updatePrefs]);
+    setBgmOn((v) => !v);
+  }, []);
   const bgmButton = track ? (
     <button
       type="button"
-      className={`sb-gear sb-bgm${prefs.bgmOn ? ' on' : ''}`}
-      aria-pressed={prefs.bgmOn}
-      aria-label={prefs.bgmOn ? 'BGM を止める' : `BGM を鳴らす（${track.label}）`}
+      className={`sb-gear sb-bgm${bgmOn ? ' on' : ''}`}
+      aria-pressed={bgmOn}
+      aria-label={bgmOn ? 'BGM を止める' : `BGM を鳴らす（${track.label}）`}
       title={track.label}
       onClick={toggleBgm}
     >
@@ -519,6 +519,7 @@ export function SngRoom(props: {
           roomConfig={table.config}
           config={config}
           prefs={prefs}
+          bgmOn={bgmOn}
           onChangeConfig={updateConfig}
           onChangePrefs={updatePrefs}
           onClose={() => setSettingsOpen(false)}

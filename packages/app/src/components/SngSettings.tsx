@@ -32,6 +32,8 @@ export function SngSettings(props: {
   roomConfig: SngConfig;
   config: BetSizeConfig;
   prefs: GamePrefs;
+  /** いまこの部屋で鳴っているか（Slumbot の保存値ではなく、この画面のトグル）。 */
+  bgmOn: boolean;
   onChangeConfig: (next: BetSizeConfig) => void;
   onChangePrefs: (next: GamePrefs) => void;
   onClose: () => void;
@@ -120,7 +122,7 @@ export function SngSettings(props: {
                   </div>
                   <p className="bs-note">
                     鳴らす・止めるは対戦画面の ♪ です。
-                    {props.prefs.bgmOn
+                    {props.bgmOn
                       ? ' 鳴っている間に選び直すと、その場で切り替わります。'
                       : ' いま選んでいる曲は ♪ を押すと鳴ります。'}
                   </p>

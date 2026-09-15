@@ -38,14 +38,20 @@ async function request<T>(method: 'GET' | 'POST', body?: unknown): Promise<FnRes
     /* 空ボディ */
   }
   if (!res.ok || payload.error) {
-    return {
-      ok: false,
-      error: String(payload.error ?? `http_${res.status}`),
-      message: String(payload.message ?? 'エラーが発生しました'),
-    };
+    const error = String(payload.error ?? `http_${res.status}`);
+    return { ok: false, error, message: String(payload.message ?? MESSAGES[error] ?? 'エラーが発生しました') };
   }
   return { ok: true, data: payload as T };
 }
+
+/** サーバーのエラーコード → 利用者向けの文言（本番で 409 が「エラーが発生しました」としか出なかった）。 */
+const MESSAGES: Record<string, string> = {
+  already_seated: '別の部屋に参加中です。「参加中の部屋へ戻る」から戻れます',
+  unauthorized: 'ログインし直してください',
+  not_configured: 'サーバーの設定が終わっていません',
+  bad_message: '入力が正しくありません',
+  internal: 'サーバーで問題が起きました。少し待ってやり直してください',
+};
 
 /** POST /api/sng/rooms（部屋を作る。作成者は着席済みで返る）。 */
 export async function createRoom(config: SngConfig): Promise<FnResult<CreateRoomResponse>> {

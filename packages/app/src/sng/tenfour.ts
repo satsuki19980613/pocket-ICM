@@ -22,9 +22,10 @@
  * ## 金額
  *
  * すべて「そのハンドの bb」（`record.bb`）で割った値。`street_pots` はそのストリートが
- * 始まった時点のポット（アンティ・ブラインド込み）。アクション文字列に含まれない
- * アンティ・ブラインドの拠出は `forcedOf` で復元する（`SngHandRecord` は圧縮のため
- * 拠出額を明示的には持たない。docs/SNG_DESIGN.md §4）。
+ * 始まった時点のポット（アンティ・ブラインド込み）で、規則そのものは `history/pots.ts`
+ * の `sngStreetPotChips` / `sngCommittedOf`（`history/sngHandView.ts` と共通）に置く。
+ * アクション文字列に含まれないアンティ・ブラインドの拠出は `sngForcedOf` で復元する
+ * （`SngHandRecord` は圧縮のため拠出額を明示的には持たない。docs/SNG_DESIGN.md §4）。
  *
  * ## 表示名・試合の見出し
  *
@@ -38,6 +39,7 @@
 import { gameModeLabel, positionsForPlayersLeft } from '@oshihiki/core';
 import type { ActionKind, SngConfig, SngHandRecord, Speed } from '@oshihiki/sng';
 
+import { sngCommittedOf, sngStreetPotChips } from '../history/pots';
 import {
   tenfourParsedAt,
   tenfourTimestamp,
@@ -117,27 +119,9 @@ function tenfourPositions(n: number, deadSb: boolean): string[] {
     .filter((p) => p !== 'SB');
 }
 
-/** アンティ→ブラインドの順に min(stack, 額) を出す（SNG_DESIGN.md §1「短いスタック」）。 */
-function forcedOf(seat: number, rec: SngHandRecord): number {
-  const stack = rec.startStacks[seat] ?? 0;
-  if (stack <= 0) return 0;
-  let amt = Math.min(rec.ante, stack);
-  const remaining = stack - amt;
-  if (seat === rec.sbSeat) amt += Math.min(rec.sb, remaining);
-  else if (seat === rec.bbSeat) amt += Math.min(rec.bb, remaining);
-  return amt;
-}
-
-/** その席がこのハンドで拠出した総額（アンティ・ブラインド＋アクション分）。 */
-function committedOf(seat: number, rec: SngHandRecord): number {
-  let amt = forcedOf(seat, rec);
-  for (const a of rec.actions) if (a.seat === seat) amt += a.put;
-  return amt;
-}
-
 /** その席のこのハンドの純収支（チップ）。SngHistoryView の一覧表示にも使う。 */
 export function netOf(seat: number, rec: SngHandRecord): number {
-  return (rec.won[seat] ?? 0) - committedOf(seat, rec);
+  return (rec.won[seat] ?? 0) - sngCommittedOf(seat, rec);
 }
 
 /** チップ → そのハンドの bb（小数第 2 位で四捨五入）。 */
@@ -231,7 +215,7 @@ export function toTenfourSngHand(
     return {
       position: seatPos.get(seat) ?? '?',
       name: nameOf(seat),
-      stack_delta_bb: toBb((record.won[seat] ?? 0) - committedOf(seat, record)),
+      stack_delta_bb: toBb((record.won[seat] ?? 0) - sngCommittedOf(seat, record)),
       cards: cards ? pairCards(cards) : [UNKNOWN, UNKNOWN],
       is_hero: isHero,
     };
@@ -253,13 +237,11 @@ export function toTenfourSngHand(
   const reached = reachedStreet(record.board);
   const street_pots: Record<string, number> = {};
   for (let s = 1; s <= reached; s += 1) {
-    let pot = live.reduce((a, seat) => a + forcedOf(seat, record), 0);
-    for (const a of record.actions) if (a.street < s) pot += a.put;
-    street_pots[STREETS[s]!] = toBb(pot);
+    street_pots[STREETS[s]!] = toBb(sngStreetPotChips(record, live, s));
   }
   const isShowdown = Object.keys(record.shown).length > 0;
   if (isShowdown) {
-    const totalPot = live.reduce((a, seat) => a + committedOf(seat, record), 0);
+    const totalPot = live.reduce((a, seat) => a + sngCommittedOf(seat, record), 0);
     street_pots.showdown = toBb(totalPot);
   }
 

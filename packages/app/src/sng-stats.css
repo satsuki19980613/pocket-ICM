@@ -97,6 +97,8 @@
 .sh-pos.p-btn { background: var(--bu); }
 .sh-pos.p-sb { background: var(--sb); }
 .sh-pos.p-bb { background: var(--bb-c); }
+/* ポジションが分からない（'?'）ときのフォールバック。 */
+.sh-pos.p-unk { background: var(--line-2); color: var(--dim); }
 
 /* ---- 320px でも溢れないよう、試合見出しとハンド行を詰める ---- */
 @media (max-width: 360px) {

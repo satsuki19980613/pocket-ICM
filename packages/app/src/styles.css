@@ -3018,7 +3018,7 @@ button.cell { cursor: pointer; }
 .hh-top .hh-msg { margin: var(--s2) 0 0; }
 .hh-list { display: flex; flex-direction: column; gap: 6px; }
 .hh-item { background: var(--surface); border: 1px solid var(--line); }
-.hh-item.open { border-color: var(--line-2); }
+.hh-item:active { border-color: var(--line-2); }
 .hh-row {
   display: flex;
   justify-content: space-between;
@@ -3047,6 +3047,10 @@ button.cell { cursor: pointer; }
   line-height: 1.3;
 }
 .hh-cards.dim .hh-card { background: #d9d8cc; font-size: 11px; }
+/* 一覧の行で自分の手札とボードを見分けやすくする、ごく小さいラベル
+   （行の高さはカード列より低いので高さは増えない）。 */
+.hh-board { display: inline-flex; align-items: center; gap: 4px; }
+.hh-board-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; color: var(--dim2); }
 .hh-card.suit-s { color: #16150d; }
 .hh-card.suit-h { color: #d81f2f; }
 .hh-card.suit-d { color: #2b6be0; }
@@ -3065,27 +3069,79 @@ button.cell { cursor: pointer; }
   color: var(--dim2);
 }
 .hh-tag.sd { color: var(--cyan); border-color: rgba(58, 230, 255, 0.4); }
-.hh-detail { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
-.hh-street { display: flex; align-items: flex-start; gap: 8px; }
-.hh-street-lbl { flex: none; width: 56px; padding-top: 3px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; color: var(--dim2); }
-.hh-street ul { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
-.hh-street li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.hh-tag.pot { color: var(--fg); font-weight: 700; }
+/* デコード不能な 1 行（一覧は壊さず、そのハンドだけ印を出す）。 */
+.hh-item-err { opacity: 0.7; }
+.hh-row-err { cursor: default; }
 .hh-who { flex: none; width: 62px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--dim2); }
-.hh-street li.me .hh-who { color: var(--yellow); }
 .hh-act { font-family: var(--disp); font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
-.hh-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding-top: 6px;
-  border-top: 1px dashed var(--line);
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--dim2);
-}
 .hh-foot-item { display: inline-flex; align-items: center; gap: 6px; }
 .hh-foot-item.dim { font-family: var(--body); font-size: 11px; letter-spacing: 0; color: var(--faint); }
-.hh-foot-item b.gain { color: var(--yellow); }
-.hh-foot-item b.loss { color: var(--red); }
+/* 手札が非公開のプレースホルダ（裏向き）。 */
+.hh-card.back { background: var(--surface-2); border: 1px solid var(--line-2); color: var(--faint); }
+.hh-cards.dim .hh-card.back { background: var(--surface-2); }
+/* そのストリートで新しくめくれた札の強調（詳細モーダルのストリート見出し）。
+   古い札は .hh-cards.dim で沈め、新しい札はこちらでリングを付けて目を引く。 */
+.hh-card.new { box-shadow: 0 0 0 1px var(--cyan); }
+
+/* ---- ハンド詳細モーダル（HandDetailModal, HU/SNG 共通） ---- */
+.hh-modal { max-width: 460px; }
+.hhd-body { display: flex; flex-direction: column; gap: var(--s4); }
+.hhd-sub { margin: -6px 0 0; font-size: 11.5px; color: var(--dim); line-height: 1.6; }
+
+.hhd-players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.hhd-prow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.hhd-prow.me { border-color: rgba(252, 238, 10, 0.4); background: rgba(252, 238, 10, 0.05); }
+.hhd-pname { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hhd-prow.me .hhd-pname { color: var(--fg); }
+.hhd-pnet { flex: none; font-family: var(--disp); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hhd-pnet.gain { color: var(--yellow); }
+.hhd-pnet.loss { color: var(--red); }
+.hhd-pnet.unk { color: var(--dim2); font-family: var(--mono); font-weight: 400; }
+
+.hhd-streets { display: flex; flex-direction: column; gap: var(--s3); }
+.hhd-street { padding: 8px 0 0; border-top: 1px solid var(--line); }
+.hhd-street:first-child { padding-top: 0; border-top: 0; }
+.hhd-street-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.hh-street-lbl { flex: none; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; color: var(--dim2); }
+.hhd-pot { font-family: var(--disp); font-size: 13px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+.hhd-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.hhd-steps li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.hhd-steps li.me .hh-who { color: var(--yellow); }
+.hhd-flag {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  padding: 1px 5px;
+  border: 1px solid var(--line-2);
+  color: var(--dim2);
+}
+.hhd-flag.allin { color: var(--red); border-color: rgba(255, 59, 59, 0.45); }
+
+.hhd-result { padding-top: var(--s3); border-top: 1px dashed var(--line); }
+.hhd-result-lbl { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--dim2); margin-bottom: 6px; }
+.hhd-result-line { margin: 0 0 4px; font-size: 12.5px; color: var(--fg); line-height: 1.6; }
+.hhd-result-line:last-child { margin-bottom: 0; }
+.hhd-result-line.sub { font-family: var(--mono); font-size: 11px; color: var(--dim2); letter-spacing: 0.02em; }
+/* 「獲得」（勝者がポットから持ち帰った額）と「収支」（自分の純増減）を混同しないよう、
+   行の先頭に小さいラベルを付けて区別する（一覧の ±bb と一致するのは「収支」の方）。 */
+.hhd-result-tag {
+  display: inline-block;
+  min-width: 34px;
+  margin-right: 2px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--dim2);
+}
+.hhd-won { color: var(--yellow); }
+.hhd-mynet { font-variant-numeric: tabular-nums; }
+.hhd-mynet.gain { color: var(--yellow); }
+.hhd-mynet.loss { color: var(--red); }

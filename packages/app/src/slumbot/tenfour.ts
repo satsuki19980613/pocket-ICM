@@ -15,6 +15,7 @@
  *   - `result_won_bb` は勝者が実際に獲得したポット（コールされなかった分は含めない）
  */
 
+import { huStreetPotChips } from '../history/pots';
 import { walkActions, type ActionStep, type HuHandRecord } from './history';
 import { committed, type HandState } from './rules';
 
@@ -127,9 +128,7 @@ function streetPots(steps: readonly ActionStep[], fin: HandState): Record<string
   const out: Record<string, number> = {};
   const reached = fin.allIn ? 3 : fin.street;
   for (let s = 1; s <= reached; s += 1) {
-    let pot = 150; // SB 50 + BB 100
-    for (const st of steps) if (st.street < s) pot += st.put;
-    out[STREETS[s]!] = bb(pot);
+    out[STREETS[s]!] = bb(huStreetPotChips(steps, s));
   }
   if (!fin.folded) out.showdown = bb(committed(fin, 0) + committed(fin, 1));
   return out;

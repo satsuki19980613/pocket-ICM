@@ -1,11 +1,13 @@
 /**
  * SIT & GO のハンド履歴（docs/SNG_DESIGN.md §5）。試合ごとにまとめた新しい順の一覧。
- * 試合の見出しをタップせずとも見えるようにし、ハンド行をタップして展開する
- * （`slumbot/HuHistoryView.tsx` と同じ操作感）。
+ * 試合の見出しは今まで通りタップせずに見えるが、ハンド行は一覧だけを出し、
+ * タップすると `HandDetailModal` を開いて個別の詳細（ポット・アクション・結果）を見る
+ * （`HuHistoryView.tsx` と同じ操作感）。
  *
  * 圧縮表現のデコード（`@oshihiki/sng` の `decodeHand`）は担当 A1 と並行実装中で、
  * 今はまだ throw する仮置きの可能性がある。**ここでは必ず try/catch で包み**、
  * 失敗しても一覧そのものは壊さない（該当ハンドだけ「詳細を読み込めませんでした」を出す）。
+ * `history/sngHandView.ts` の組み立てが失敗した場合も同様に扱う（行は出すがモーダルは開かない）。
  *
  * 相手の表示名・試合の見出し（人数・開始bb・構造・上昇間隔・モード）は `sng_games`
  * （`useSngHands` の `games`）が唯一の材料。このカラム追加前の古い試合は `game` が
@@ -13,34 +15,17 @@
  */
 
 import { decodeHand } from '@oshihiki/sng';
-import type { ActionRecord, SngHandRecord } from '@oshihiki/sng';
+import type { SngHandRecord } from '@oshihiki/sng';
 import { useMemo, useState } from 'react';
 
-import { STREET_LABEL } from '../slumbot/rules';
+import type { HandDetailView } from '../history/handView';
+import { sngHandView } from '../history/sngHandView';
 import type { SngGameLocal, SngHandLocal, SngResultLocal } from '../sng/historyStore';
-import { chipsToBbSng, namesFromSeats, netOf, positionMapOf, sngConfigSummary } from '../sng/tenfour';
+import { chipsToBbSng, netOf, sngConfigSummary } from '../sng/tenfour';
 import { useSngHands } from '../sng/useSngHands';
+import { Cards, HandDetailModal, fmtBb } from './HandDetailModal';
 
-const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 const PAGE = 50;
-
-const ACTION_DISPLAY: Record<ActionRecord['kind'], string> = {
-  fold: 'FOLD',
-  check: 'CHECK',
-  call: 'CALL',
-  bet: 'BET',
-  raise: 'RAISE',
-  allin: 'ALL IN',
-};
-
-const POS_CLASS: Record<string, string> = {
-  UTG: 'p-utg',
-  HJ: 'p-hj',
-  CO: 'p-co',
-  BTN: 'p-btn',
-  SB: 'p-sb',
-  BB: 'p-bb',
-};
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -52,27 +37,6 @@ function signedNum(v: number): string {
   if (v === 0) return '±0';
   const s = (Math.round(Math.abs(v) * 100) / 100).toString();
   return `${v > 0 ? '+' : '−'}${s}`;
-}
-
-function PosBadge(props: { pos: string }): JSX.Element {
-  return <span className={`sh-pos ${POS_CLASS[props.pos] ?? ''}`}>{props.pos}</span>;
-}
-
-function Cards(props: { cards: readonly string[]; dim?: boolean }): JSX.Element {
-  return (
-    <span className={`hh-cards${props.dim ? ' dim' : ''}`}>
-      {props.cards.map((c, i) => {
-        const suit = c[1]?.toLowerCase() ?? '';
-        const rank = c[0] === 'T' ? '10' : c[0];
-        return (
-          <span key={`${c}-${i}`} className={`hh-card suit-${suit}`}>
-            {rank}
-            {SUIT_GLYPH[suit] ?? ''}
-          </span>
-        );
-      })}
-    </span>
-  );
 }
 
 function decodeSafe(hand: SngHandLocal): SngHandRecord | null {
@@ -142,87 +106,52 @@ function useGroups(
   }, [hands, results, games]);
 }
 
-function HandDetail(props: { rec: SngHandRecord; mySeat: number | null; game: SngGameLocal | null }): JSX.Element {
-  const { rec, mySeat, game } = props;
-  const posMap = positionMapOf(rec);
-  // 表示名は `sng_games.seats` が唯一の材料。無い（古い試合・未同期）席だけ `Seat n`。
-  const names = useMemo(
-    () => namesFromSeats(game?.seats ?? [], game?.config.players ?? rec.startStacks.length),
-    [game, rec.startStacks.length],
-  );
-  const nameOf = (seat: number): string => (seat === mySeat ? 'YOU' : names[seat] ?? `Seat ${seat}`);
-  const byStreet: ActionRecord[][] = [[], [], [], []];
-  for (const a of rec.actions) byStreet[a.street]?.push(a);
-  const shownEntries = Object.entries(rec.shown);
-
-  return (
-    <div className="hh-detail">
-      {byStreet.map((steps, s) =>
-        steps.length === 0 ? null : (
-          <div key={s} className="hh-street">
-            <span className="hh-street-lbl">{STREET_LABEL[s]}</span>
-            <ul>
-              {steps.map((a, i) => (
-                <li key={i} className={a.seat === mySeat ? 'me' : 'bot'}>
-                  <PosBadge pos={posMap?.get(a.seat) ?? '?'} />
-                  <span className="hh-who">{nameOf(a.seat)}</span>
-                  <span className="hh-act">
-                    {ACTION_DISPLAY[a.kind]}
-                    {a.kind !== 'fold' && a.kind !== 'check' ? ` ${chipsToBbSng(a.betTo, rec.bb)}bb` : ''}
-                    {a.auto ? ' (自動)' : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ),
-      )}
-      {shownEntries.length > 0 && (
-        <div className="hh-foot">
-          {shownEntries.map(([seat, cards]) => (
-            <span key={seat} className="hh-foot-item">
-              {nameOf(Number(seat))} <Cards cards={cards} />
-            </span>
-          ))}
-        </div>
-      )}
-      {rec.eliminated.length > 0 && (
-        <div className="hh-foot">
-          {rec.eliminated.map((e) => (
-            <span key={e.seat} className="hh-foot-item">
-              {nameOf(e.seat)} <b className="loss">脱落（{e.place}位）</b>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HandRow(props: {
-  hand: SngHandLocal;
-  game: SngGameLocal | null;
-  open: boolean;
-  onToggle: () => void;
-}): JSX.Element {
-  const { hand, game, open, onToggle } = props;
+function HandRow(props: { hand: SngHandLocal; game: SngGameLocal | null; onOpen: (view: HandDetailView) => void }): JSX.Element {
+  const { hand, game, onOpen } = props;
   const rec = useMemo(() => decodeSafe(hand), [hand]);
   const mySeat = hand.mySeat;
-  const eliminated = rec && mySeat !== null ? rec.eliminated.find((e) => e.seat === mySeat) ?? null : null;
+  const eliminated = rec && mySeat !== null ? (rec.eliminated.find((e) => e.seat === mySeat) ?? null) : null;
   const net = rec && mySeat !== null ? chipsToBbSng(netOf(mySeat, rec), rec.bb) : null;
+  // 詳細ビューは行の POT タグとモーダル起動の両方に使う。rec がデコードできていても
+  // ビルダー側の事情で null が返ることはあり得るので、その場合は POT タグを省くだけにする。
+  const view = useMemo(() => {
+    if (!rec) return null;
+    try {
+      return sngHandView({ rec, game, mySeat, handNo: hand.handNo, level: hand.level, myCards: hand.myCards });
+    } catch {
+      return null;
+    }
+  }, [rec, game, mySeat, hand.handNo, hand.level, hand.myCards]);
+
+  if (!rec) {
+    return (
+      <div className="hh-item hh-item-err">
+        <span className="hh-row hh-row-err">
+          <span className="hh-time">#{hand.handNo} L{hand.level}</span>
+          <span className="hh-foot-item dim">詳細を読み込めませんでした</span>
+        </span>
+      </div>
+    );
+  }
 
   return (
-    <div className={`hh-item${open ? ' open' : ''}`}>
-      <button type="button" className="hh-row" aria-expanded={open} onClick={onToggle}>
+    <div className="hh-item">
+      <button type="button" className="hh-row" onClick={() => view && onOpen(view)}>
         <span className="hh-main">
           <span className="hh-time">
             #{hand.handNo} L{hand.level}
           </span>
           {hand.myCards && <Cards cards={hand.myCards} />}
-          {rec && rec.board.length > 0 && <Cards cards={rec.board} dim />}
+          {rec.board.length > 0 && (
+            <span className="hh-board">
+              <span className="hh-board-lbl">BOARD</span>
+              <Cards cards={rec.board} dim />
+            </span>
+          )}
           {eliminated && <span className="sh-out">OUT #{eliminated.place}</span>}
         </span>
         <span className="hh-side">
+          {view && <span className="hh-tag pot">POT {fmtBb(view.result.finalPotBb)}bb</span>}
           {net !== null ? (
             <b className={`hh-net${net < 0 ? ' loss' : net > 0 ? ' gain' : ''}`}>
               {signedNum(net)}
@@ -233,14 +162,6 @@ function HandRow(props: {
           )}
         </span>
       </button>
-      {open &&
-        (rec ? (
-          <HandDetail rec={rec} mySeat={mySeat} game={game} />
-        ) : (
-          <div className="hh-detail">
-            <span className="hh-foot-item dim">詳細を読み込めませんでした。</span>
-          </div>
-        ))}
     </div>
   );
 }
@@ -248,7 +169,7 @@ function HandRow(props: {
 export function SngHistoryView(): JSX.Element {
   const { hands, results, games, note } = useSngHands();
   const groups = useGroups(hands, results, games);
-  const [openHand, setOpenHand] = useState<string | null>(null);
+  const [openView, setOpenView] = useState<HandDetailView | null>(null);
   const [limit, setLimit] = useState(PAGE);
 
   if (hands === null) {
@@ -303,18 +224,9 @@ export function SngHistoryView(): JSX.Element {
                   </span>
                 </div>
                 <div className="hh-list sh-hands">
-                  {g.hands.map((h) => {
-                    const key = `${h.gameId}:${h.handNo}`;
-                    return (
-                      <HandRow
-                        key={key}
-                        hand={h}
-                        game={g.game}
-                        open={openHand === key}
-                        onToggle={() => setOpenHand(openHand === key ? null : key)}
-                      />
-                    );
-                  })}
+                  {g.hands.map((h) => (
+                    <HandRow key={`${h.gameId}:${h.handNo}`} hand={h} game={g.game} onOpen={setOpenView} />
+                  ))}
                 </div>
               </div>
             );
@@ -326,6 +238,8 @@ export function SngHistoryView(): JSX.Element {
           )}
         </div>
       )}
+
+      {openView && <HandDetailModal view={openView} onClose={() => setOpenView(null)} />}
     </div>
   );
 }

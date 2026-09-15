@@ -1,15 +1,19 @@
 /**
  * Training ▸ Hand History（Slumbot HU のハンド履歴, SPEC §7.4.6）。
- * 新しい順の一覧。タップで展開してストリート別のアクションと相手の手札を見る。
+ * 新しい順の一覧だけを出す。行をタップすると `HandDetailModal` でストリート別の
+ * ポット・アクション・相手の手札を見られる（詳細はここでは組み立てず、
+ * `history/huHandView.ts` に委ねる。契約は `history/handView.ts` の `HandDetailView`）。
  */
 
 import { useMemo, useState } from 'react';
 
-import { walkActions, type ActionStep, type HuHandRecord } from '../slumbot/history';
-import { STREET_LABEL, bbLabel, signedBbLabel } from '../slumbot/rules';
+import type { HandDetailView } from '../history/handView';
+import { huHandView } from '../history/huHandView';
+import { signedBbLabel } from '../slumbot/rules';
 import { useHuHands } from '../slumbot/useHuHands';
+import type { HuHandRecord } from '../slumbot/history';
+import { Cards, HandDetailModal, fmtBb } from './HandDetailModal';
 
-const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 const PAGE = 50;
 
 function fmtTime(ms: number): string {
@@ -18,84 +22,46 @@ function fmtTime(ms: number): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function Cards(props: { cards: readonly string[]; dim?: boolean }): JSX.Element {
-  return (
-    <span className={`hh-cards${props.dim ? ' dim' : ''}`}>
-      {props.cards.map((c, i) => {
-        const suit = c[1]?.toLowerCase() ?? '';
-        const rank = c[0] === 'T' ? '10' : c[0];
-        return (
-          <span key={`${c}-${i}`} className={`hh-card suit-${suit}`}>
-            {rank}
-            {SUIT_GLYPH[suit] ?? ''}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
+function HandRow(props: { rec: HuHandRecord; onOpen: (view: HandDetailView) => void }): JSX.Element {
+  const { rec: r, onOpen } = props;
+  // 詳細ビューはここで一度だけ組み立て、行の POT タグとモーダル起動の両方に使う
+  // （失敗しても一覧は壊さない。ビルダーが例外を投げても POT タグを出さないだけにする）。
+  const view = useMemo(() => {
+    try {
+      return huHandView(r);
+    } catch {
+      return null;
+    }
+  }, [r]);
 
-function stepLabel(st: ActionStep): string {
-  switch (st.kind) {
-    case 'fold':
-      return 'FOLD';
-    case 'check':
-      return 'CHECK';
-    case 'call':
-      return st.allIn ? `CALL ${bbLabel(st.betTo, 1)}bb (ALL IN)` : `CALL ${bbLabel(st.betTo, 1)}bb`;
-    case 'bet':
-      return st.allIn ? `ALL IN ${bbLabel(st.betTo, 1)}bb` : `BET ${bbLabel(st.betTo, 1)}bb`;
-    case 'raise':
-      return st.allIn ? `ALL IN ${bbLabel(st.betTo, 1)}bb` : `RAISE ${bbLabel(st.betTo, 1)}bb`;
-  }
-}
-
-function Detail(props: { rec: HuHandRecord }): JSX.Element {
-  const { rec } = props;
-  const w = walkActions(rec.action);
-  if (!w) return <div className="hh-detail">（アクションを読み取れません）</div>;
-  const byStreet: ActionStep[][] = [[], [], [], []];
-  for (const st of w.steps) byStreet[st.street]!.push(st);
-  const evDelta = rec.evWinnings === null ? null : rec.evWinnings - rec.winnings;
   return (
-    <div className="hh-detail">
-      {byStreet.map((steps, s) =>
-        steps.length === 0 ? null : (
-          <div key={s} className="hh-street">
-            <span className="hh-street-lbl">{STREET_LABEL[s]}</span>
-            <ul>
-              {steps.map((st, i) => (
-                <li key={i} className={st.seat === rec.heroSeat ? 'me' : 'bot'}>
-                  <span className={`sb-pos p-${st.seat === 1 ? 'sb' : 'bb'}`}>{st.seat === 1 ? 'SB' : 'BB'}</span>
-                  <span className="hh-who">{st.seat === rec.heroSeat ? 'YOU' : 'SLUMBOT'}</span>
-                  <span className="hh-act">{stepLabel(st)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ),
-      )}
-      <div className="hh-foot">
-        {rec.botCards ? (
-          <span className="hh-foot-item">
-            SLUMBOT <Cards cards={rec.botCards} />
-          </span>
-        ) : (
-          <span className="hh-foot-item dim">相手の手札は非公開（降りて終了）</span>
-        )}
-        {evDelta !== null && evDelta !== 0 && (
-          <span className="hh-foot-item">
-            ALL-IN EV <b className={evDelta > 0 ? 'gain' : 'loss'}>{signedBbLabel(evDelta, 1)}bb</b>
+    <button type="button" className="hh-row" onClick={() => view && onOpen(view)}>
+      <span className="hh-main">
+        <span className="hh-time">{fmtTime(r.playedAt)}</span>
+        <span className={`sh-pos ${r.heroSeat === 1 ? 'p-sb' : 'p-bb'}`}>{r.heroSeat === 1 ? 'SB' : 'BB'}</span>
+        <Cards cards={r.heroCards} />
+        {r.board.length > 0 && (
+          <span className="hh-board">
+            <span className="hh-board-lbl">BOARD</span>
+            <Cards cards={r.board} dim />
           </span>
         )}
-      </div>
-    </div>
+      </span>
+      <span className="hh-side">
+        {view && <span className="hh-tag pot">POT {fmtBb(view.result.finalPotBb)}bb</span>}
+        <b className={`hh-net${r.winnings < 0 ? ' loss' : r.winnings > 0 ? ' gain' : ''}`}>
+          {signedBbLabel(r.winnings, 1)}
+          <span className="hh-unit">bb</span>
+        </b>
+        <span className={`hh-tag${r.showdown ? ' sd' : ''}`}>{r.showdown ? 'SD' : 'NSD'}</span>
+      </span>
+    </button>
   );
 }
 
 export function HuHistoryView(): JSX.Element {
   const { hands, note } = useHuHands();
-  const [open, setOpen] = useState<string | null>(null);
+  const [openView, setOpenView] = useState<HandDetailView | null>(null);
   const [limit, setLimit] = useState(PAGE);
 
   const desc = useMemo(() => (hands ? [...hands].reverse() : []), [hands]);
@@ -126,29 +92,11 @@ export function HuHistoryView(): JSX.Element {
         <div className="panel emptyrec">まだ履歴がありません。Slumbot HU を打つと、ここに貯まります。</div>
       ) : (
         <div className="hh-list">
-          {desc.slice(0, limit).map((r) => {
-            const isOpen = open === r.id;
-            return (
-              <div key={r.id} className={`hh-item${isOpen ? ' open' : ''}`}>
-                <button type="button" className="hh-row" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : r.id)}>
-                  <span className="hh-main">
-                    <span className="hh-time">{fmtTime(r.playedAt)}</span>
-                    <span className={`sb-pos p-${r.heroSeat === 1 ? 'sb' : 'bb'}`}>{r.heroSeat === 1 ? 'SB' : 'BB'}</span>
-                    <Cards cards={r.heroCards} />
-                    {r.board.length > 0 && <Cards cards={r.board} dim />}
-                  </span>
-                  <span className="hh-side">
-                    <b className={`hh-net${r.winnings < 0 ? ' loss' : r.winnings > 0 ? ' gain' : ''}`}>
-                      {signedBbLabel(r.winnings, 1)}
-                      <span className="hh-unit">bb</span>
-                    </b>
-                    <span className={`hh-tag${r.showdown ? ' sd' : ''}`}>{r.showdown ? 'SD' : 'NSD'}</span>
-                  </span>
-                </button>
-                {isOpen && <Detail rec={r} />}
-              </div>
-            );
-          })}
+          {desc.slice(0, limit).map((r) => (
+            <div key={r.id} className="hh-item">
+              <HandRow rec={r} onOpen={setOpenView} />
+            </div>
+          ))}
           {desc.length > limit && (
             <button type="button" className="btn ghost wide" onClick={() => setLimit((l) => l + PAGE)}>
               もっと見る（残り {desc.length - limit}）
@@ -156,6 +104,8 @@ export function HuHistoryView(): JSX.Element {
           )}
         </div>
       )}
+
+      {openView && <HandDetailModal view={openView} onClose={() => setOpenView(null)} />}
     </div>
   );
 }

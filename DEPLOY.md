@@ -139,6 +139,11 @@ Worker には Supabase の URL/鍵を**すべてシークレットとして**登
    - `SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`（Supabase ダッシュボード → **Project Settings** → **API** →
      `service_role` からコピー。絶対にフロントには渡さない）
+
+   **型は必ず「Secret」**（「Text」だと平文で、しかも `keep_vars` を付ける前の自動デプロイで消えた）。
+   追加後は画面の **Deploy**（または「Save and deploy」）を押して新しいバージョンに載せる。
+   載っているかは手元で `npx wrangler secret list` を実行すると名前だけ一覧できる（値は出ない）。
+   載っていない Worker は `/api/sng/*` が **503 `not_configured`** を返す（401 とは区別している）。
 2. `supabase/migrations/0011_sng.sql` を Supabase の **SQL Editor** で 1 回実行する
    （`sng_games` / `sng_results` / `sng_hands` / `sng_hole_cards` を作る。冪等）。
 

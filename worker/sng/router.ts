@@ -132,6 +132,14 @@ function isWebSocketUpgrade(request: Request): boolean {
 export async function handleSng(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
+  // シークレット（SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY）が載っていない
+  // Worker では認証も保存もできない。401 に紛れさせず 503 で「設定漏れ」と分かるようにする
+  // （2026-09-15 の本番初回デプロイで、ダッシュボードの登録が反映されておらず 401 の原因調査に
+  // 手間取ったため）。
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return json({ error: 'not_configured', message: 'Worker secrets are missing (see DEPLOY.md)' }, 503);
+  }
+
   if (url.pathname === ROOMS_PATH) {
     return handleRooms(request, env);
   }

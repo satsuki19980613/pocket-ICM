@@ -24,6 +24,9 @@
   //   超過すると Error 1027 で新規リクエストが止まるだけで、無料プランのまま自動課金はされない。
   "name": "pocket-icm",
   "compatibility_date": "2024-11-01",
+  // ダッシュボードで登録した変数を `wrangler deploy`（Workers Builds の自動デプロイ）が消さないようにする。
+  // SIT & GO の Supabase 接続情報はダッシュボードの Secret で持つ（リポジトリには置かない）。
+  "keep_vars": true,
   "main": "worker/index.ts",
   "assets": {
     "directory": "./packages/app/dist",

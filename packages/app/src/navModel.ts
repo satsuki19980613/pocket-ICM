@@ -18,7 +18,10 @@ export type Screen =
   | 'training'
   | 'slumbot'
   | 'huhistory'
-  | 'hustats'
+  | 'sng'
+  | 'sngroom'
+  | 'stats'
+  | 'snghistory'
   | 'settings'
   | 'admin'
   | 'diag';
@@ -47,15 +50,21 @@ export function screenDepth(screen: Screen, ctx: NavContext = NAV_CONTEXT_ROOT):
     case 'confirm':
     case 'error':
     case 'admin':
-    // Training ハブ（深さ1）から潜る機能画面（対戦・ハンド履歴・成績）。
+    // Training ハブ（深さ1）から潜る機能画面（対戦・SIT & GO ロビー・成績）。
     // ランキングは画面ではなく重なり（backLayers）なのでここには無い。
     case 'slumbot':
-    case 'huhistory':
-    case 'hustats':
+    case 'sng':
+    case 'stats':
       return 2;
     case 'result':
       // 記録タブ（深さ1）からもスレッド（深さ1）からも、その1つ下。
       return 2;
+    // SIT & GO ロビー（深さ2）から開く部屋・Slumbot ハンド履歴/SIT & GO ハンド履歴は
+    // STATS（深さ2）から開く。
+    case 'sngroom':
+    case 'huhistory':
+    case 'snghistory':
+      return 3;
     case 'diag':
       // 診断ログはクラブ管理（深さ2）から開く。
       return 3;

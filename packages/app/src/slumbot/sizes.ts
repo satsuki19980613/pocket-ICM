@@ -10,11 +10,27 @@
  * どのカテゴリにも「Max（オールイン）」が必ず末尾に付き、これは削除できない。
  * 利用者が足せるのは各カテゴリ 15 個まで（画面右下の「n/15」がこれ）。
  *
- * 単位は一貫してチップ（BB=100）。プリセットの解決結果は
- * 「そのストリートでの累計ベット額（＝Slumbot の b<N> の N）」で返す。
+ * 単位は一貫してチップ。プリセットの解決結果は「そのストリートでの累計ベット額」で返す
+ * （Slumbot（HU）なら b<N> の N、SIT & GO なら act の betTo）。
+ *
+ * ---- 一般化（docs/SNG_DESIGN.md §6・A3a）----
+ * 当初 Slumbot HU 専用の `HandState`（2 席固定・両者常に同スタック 20000）だけを受けていたが、
+ * SIT & GO（2〜6 席・スタック不同）でも同じプリセット計算を使うため、**必要な数値だけの
+ * 最小インターフェース `SizingState`** を切り出した。中身は全部 `*Sizing` 関数に集約し、
+ * HU 向けの公開関数（`categoryOf` 等）は `HandState → SizingState` の薄い変換
+ * （`fromHandState`）を挟むだけの後方互換ラッパーにした。
+ *
+ * `fromHandState` が `actingRemaining`/`actingStreetBet` に落とし込む値は、HU の
+ * `legalActions()`（rules.ts）が使う `STACK − totalLastBetTo` 方式と数値的に完全に一致する
+ * （HU は毎ハンド両者同スタックのため、街の区切りで常に carry が両者同額になり、どちらの式で
+ * 計算しても同じ「そのハンドで到達しうる最大到達額」になる）。既存の呼び出し・
+ * `sizes.test.ts` は一切変更していない（数値まで往復確認済み）。
+ *
+ * SIT & GO 側は `packages/app/src/sng/betting.ts` の `toSizingState(hand, seat, stack)`
+ * （`PublicHand` + 席 + 残りスタック → `SizingState`）経由でこのファイルの `*Sizing` 関数を呼ぶ。
  */
 
-import { BB, legalActions, potOf, toCallOf, type HandState } from './rules';
+import { BB, potOf, stackOf, type HandState } from './rules';
 
 /** プリセット 1 個。`max` は値を持たない特別枠。 */
 export type SizeUnit = 'bb' | 'x' | 'pct';
@@ -88,13 +104,163 @@ export function presetLabel(p: SizePreset): { value: string; unit: string } {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 一般化（SizingState）: HU/SNG 共通のプリセット計算コア
+// ---------------------------------------------------------------------------
+
+/**
+ * プリセット計算に必要な数値だけの最小インターフェース。
+ * HU（`HandState`）・SNG（`PublicHand`）のどちらからも `*Sizing でない方の薄い変換関数で作る。
+ */
+export interface SizingState {
+  /** 0=preflop … 3=river。 */
+  readonly street: number;
+  /** 現在の BB（チップ）。SNG はレベルで変わる・HU は常に 100。 */
+  readonly bb: number;
+  /** このストリートのトップベット額（「そこまで」）。誰も張っていなければ 0。 */
+  readonly streetLastBetTo: number;
+  /** 直前のベット/レイズの上乗せ幅（最小レイズの基準）。 */
+  readonly lastBetSize: number;
+  /** 手番の席が、このストリートで既に出した額。 */
+  readonly actingStreetBet: number;
+  /** 手番の席の残りスタック（このストリートで既に出した額は含まない＝追加で出せる上限）。 */
+  readonly actingRemaining: number;
+  /** 現在の総ポット（このストリートの分を含む・全員ぶん）。 */
+  readonly pot: number;
+}
+
+interface SizingLegal {
+  readonly canBet: boolean;
+  readonly minBetTo: number;
+  readonly maxBetTo: number;
+}
+
+/** 手番の席が用意しなければならないコール額。 */
+function callOfSizing(s: SizingState): number {
+  return Math.max(0, s.streetLastBetTo - s.actingStreetBet);
+}
+
+/**
+ * ベット/レイズの合法域。`actingStreetBet + actingRemaining` が「このハンドでこの席が
+ * 到達しうる最大到達額」（オールインしたときの累計）になる。
+ */
+function legalOfSizing(s: SizingState): SizingLegal {
+  const totalReachable = s.actingStreetBet + s.actingRemaining;
+  const remaining = totalReachable - s.streetLastBetTo;
+  let minInc = s.lastBetSize > 0 ? Math.max(s.lastBetSize, s.bb) : s.bb;
+  if (minInc > remaining) minInc = remaining; // オールインは常に合法。
+  return {
+    canBet: remaining > 0,
+    minBetTo: s.streetLastBetTo + minInc,
+    maxBetTo: s.streetLastBetTo + remaining,
+  };
+}
+
 /** いまの局面がどのカテゴリか。 */
-export function categoryOf(s: HandState): SizeCategory {
+export function categoryOfSizing(s: SizingState): SizeCategory {
   const preflop = s.street === 0;
-  // プリフロップは BB(=100) が既にベット扱いなので、「まだ誰もレイズしていない」は == BB。
-  const facing = preflop ? s.streetLastBetTo > BB : s.streetLastBetTo > 0;
+  // プリフロップは BB が既にベット扱いなので、「まだ誰もレイズしていない」は == BB。
+  const facing = preflop ? s.streetLastBetTo > s.bb : s.streetLastBetTo > 0;
   if (preflop) return facing ? 'pfVsRaise' : 'pfOpen';
   return facing ? 'postVsBet' : 'postBet';
+}
+
+/**
+ * プリセットを「そのストリートの累計ベット額（チップ）」へ解決する。
+ * 合法範囲へのクランプまで済ませて返すので、そのまま送信額にできる。
+ *
+ * % の意味:
+ *   ベット時   … いまのポットに対する比率
+ *   レイズ時   … 「コールした後のポット」に対する上乗せ比率（100% = ポットレイズ）
+ */
+export function resolvePresetSizing(p: SizePreset, s: SizingState): number {
+  const pot = s.pot;
+  const call = callOfSizing(s);
+  const top = s.streetLastBetTo;
+
+  let raw: number;
+  switch (p.unit) {
+    case 'bb':
+      raw = p.value * s.bb;
+      break;
+    case 'x':
+      // 相手のベット額（そこまで）の倍率。まだ誰も張っていなければ BB 基準になる。
+      raw = p.value * (top > 0 ? top : s.bb);
+      break;
+    case 'pct':
+      raw = call > 0 ? top + ((pot + call) * p.value) / 100 : (pot * p.value) / 100;
+      break;
+  }
+  return clampBetToSizing(Math.round(raw), s);
+}
+
+/** オールイン（Max）。 */
+export function allInBetToSizing(s: SizingState): number {
+  return legalOfSizing(s).maxBetTo;
+}
+
+/** 合法なベット額（そこまで）へ丸める。 */
+export function clampBetToSizing(betTo: number, s: SizingState): number {
+  const legal = legalOfSizing(s);
+  if (!legal.canBet) return 0;
+  return Math.min(legal.maxBetTo, Math.max(legal.minBetTo, Math.round(betTo)));
+}
+
+/**
+ * スライダー/ステッパー用に「調整単位」の目盛りへ吸着させる。
+ * 目盛りから外れる下限・上限だけは、そのまま端の値を許す（そこに合わせられないと
+ * ミニマムレイズやオールインが選べなくなるため）。
+ */
+export function snapBetToSizing(betTo: number, s: SizingState, handleUnit: HandleUnit): number {
+  const legal = legalOfSizing(s);
+  if (!legal.canBet) return 0;
+  const step = Math.max(1, Math.round(handleUnit * s.bb));
+  const snapped = Math.round(betTo / step) * step;
+  if (snapped <= legal.minBetTo) return legal.minBetTo;
+  if (snapped >= legal.maxBetTo) return legal.maxBetTo;
+  return snapped;
+}
+
+/** ステッパーの 1 ステップ（up=+1 / down=-1）。 */
+export function stepBetToSizing(
+  betTo: number,
+  s: SizingState,
+  handleUnit: HandleUnit,
+  dir: 1 | -1,
+): number {
+  const legal = legalOfSizing(s);
+  if (!legal.canBet) return 0;
+  const step = Math.max(1, Math.round(handleUnit * s.bb));
+  // 端に張り付いているときは、まず目盛りへ乗せてから動かす。
+  const base = snapBetToSizing(betTo, s, handleUnit);
+  const next = base === betTo ? betTo + dir * step : Math.round(base / step) * step + dir * step;
+  return Math.min(legal.maxBetTo, Math.max(legal.minBetTo, next));
+}
+
+// ---------------------------------------------------------------------------
+// Slumbot HU 向け後方互換ラッパー（HandState → SizingState の薄い変換）
+// ---------------------------------------------------------------------------
+
+/**
+ * HU の `HandState` を `SizingState` へ変換する。`actingRemaining` は `stackOf`（rules.ts）
+ * を使う。HU は毎ハンド両者スタック 20000 で揃うため、`legalActions()` が使う
+ * `STACK − totalLastBetTo` 方式と本関数の値は常に数値一致する（sizes.test.ts で確認済み）。
+ */
+function fromHandState(s: HandState): SizingState {
+  return {
+    street: s.street,
+    bb: BB,
+    streetLastBetTo: s.streetLastBetTo,
+    lastBetSize: s.lastBetSize,
+    actingStreetBet: s.streetBet[s.toAct] ?? 0,
+    actingRemaining: stackOf(s, s.toAct),
+    pot: potOf(s),
+  };
+}
+
+/** いまの局面がどのカテゴリか。 */
+export function categoryOf(s: HandState): SizeCategory {
+  return categoryOfSizing(fromHandState(s));
 }
 
 /** そのカテゴリのプリセット一覧。 */
@@ -105,42 +271,19 @@ export function presetsFor(cfg: BetSizeConfig, cat: SizeCategory): readonly Size
 /**
  * プリセットを「そのストリートの累計ベット額（チップ）」へ解決する。
  * 合法範囲へのクランプまで済ませて返すので、そのまま b<N> にできる。
- *
- * % の意味:
- *   ベット時   … いまのポットに対する比率
- *   レイズ時   … 「コールした後のポット」に対する上乗せ比率（100% = ポットレイズ）
  */
 export function resolvePreset(p: SizePreset, s: HandState): number {
-  const pot = potOf(s);
-  const call = toCallOf(s);
-  const top = s.streetLastBetTo;
-
-  let raw: number;
-  switch (p.unit) {
-    case 'bb':
-      raw = p.value * BB;
-      break;
-    case 'x':
-      // 相手のベット額（そこまで）の倍率。プリフロップのリンプ相手には BB 基準になる。
-      raw = p.value * (top > 0 ? top : BB);
-      break;
-    case 'pct':
-      raw = call > 0 ? top + ((pot + call) * p.value) / 100 : (pot * p.value) / 100;
-      break;
-  }
-  return clampBetTo(Math.round(raw), s);
+  return resolvePresetSizing(p, fromHandState(s));
 }
 
 /** オールイン（Max）。 */
 export function allInBetTo(s: HandState): number {
-  return legalActions(s).maxBetTo;
+  return allInBetToSizing(fromHandState(s));
 }
 
 /** 合法なベット額（そこまで）へ丸める。 */
 export function clampBetTo(betTo: number, s: HandState): number {
-  const legal = legalActions(s);
-  if (!legal.canBet) return 0;
-  return Math.min(legal.maxBetTo, Math.max(legal.minBetTo, Math.round(betTo)));
+  return clampBetToSizing(betTo, fromHandState(s));
 }
 
 /**
@@ -149,13 +292,7 @@ export function clampBetTo(betTo: number, s: HandState): number {
  * ミニマムレイズやオールインが選べなくなるため）。
  */
 export function snapBetTo(betTo: number, s: HandState, handleUnit: HandleUnit): number {
-  const legal = legalActions(s);
-  if (!legal.canBet) return 0;
-  const step = Math.max(1, Math.round(handleUnit * BB));
-  const snapped = Math.round(betTo / step) * step;
-  if (snapped <= legal.minBetTo) return legal.minBetTo;
-  if (snapped >= legal.maxBetTo) return legal.maxBetTo;
-  return snapped;
+  return snapBetToSizing(betTo, fromHandState(s), handleUnit);
 }
 
 /** ステッパーの 1 ステップ（up=+1 / down=-1）。 */
@@ -165,13 +302,7 @@ export function stepBetTo(
   handleUnit: HandleUnit,
   dir: 1 | -1,
 ): number {
-  const legal = legalActions(s);
-  if (!legal.canBet) return 0;
-  const step = Math.max(1, Math.round(handleUnit * BB));
-  // 端に張り付いているときは、まず目盛りへ乗せてから動かす。
-  const base = snapBetTo(betTo, s, handleUnit);
-  const next = base === betTo ? betTo + dir * step : Math.round(base / step) * step + dir * step;
-  return Math.min(legal.maxBetTo, Math.max(legal.minBetTo, next));
+  return stepBetToSizing(betTo, fromHandState(s), handleUnit, dir);
 }
 
 // ---- 設定の編集（設定モーダルから使う純関数） ----

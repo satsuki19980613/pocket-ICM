@@ -35,7 +35,8 @@ function Stat(props: { label: string; value: string; unit?: string; sub?: string
 
 const toneOf = (v: number): 'neg' | 'pos' | null => (v < 0 ? 'neg' : v > 0 ? 'pos' : null);
 
-export function HuStatsView(): JSX.Element {
+export function HuStatsView(props: { onOpenHistory?: () => void } = {}): JSX.Element {
+  const { onOpenHistory } = props;
   const { hands, note } = useHuHands();
   const [period, setPeriod] = useState<Period>('all');
   const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({ net: true, ev: true, sd: true, nsd: true });
@@ -68,6 +69,11 @@ export function HuStatsView(): JSX.Element {
             総ハンド数 <b>{all.length.toLocaleString()}</b>
           </span>
         </div>
+        {onOpenHistory && (
+          <button type="button" className="btn ghost wide hs-history-btn" onClick={onOpenHistory}>
+            HAND HISTORY
+          </button>
+        )}
         <div className="hs-first">
           <span>First Play</span>
           <b>{first === null ? '–' : fmtDate(first)}</b>

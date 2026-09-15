@@ -1,7 +1,7 @@
 /**
- * Cloudflare Worker — 静的アセット配信 ＋ Slumbot API の中継。
+ * Cloudflare Worker — 静的アセット配信 ＋ Slumbot API の中継 ＋ SIT & GO（Durable Objects）。
  *
- * なぜ中継が要るか:
+ * なぜ中継が要るか（Slumbot）:
  *   Slumbot の API（https://slumbot.com/slumbot/api/*）は POST 本体には
  *   Access-Control-Allow-Origin を返すが、OPTIONS のプリフライトを Origin に関係なく
  *   401 で拒否する。Content-Type: application/json が必須なのでブラウザは必ず
@@ -10,14 +10,18 @@
  *
  * 課金について（SPEC §7「どのサービスにもカードを登録しない」）:
  *   静的アセットへのリクエストはこの Worker を起動しない（アセットが先に解決される）。
- *   起動するのは /api/slumbot/* だけなので、無料枠（10万リクエスト/日）を消費するのは
- *   対局中のアクション送信のみ。無料プランは上限超過で課金されず停止する。
+ *   起動するのは /api/slumbot/* と /api/sng/* だけ。無料枠の条件は DEPLOY.md「SIT & GO」節。
+ *
+ * SIT & GO（/api/sng/*）は Durable Objects の殻（worker/sng/*）に丸ごと委譲する。
+ * ルールの本体（エンジン）は packages/sng、DB は Supabase。docs/SNG_DESIGN.md 参照。
  */
 
-interface Env {
-  /** wrangler.jsonc の assets.binding。ビルド成果物（packages/app/dist）。 */
-  readonly ASSETS: { fetch(request: Request): Promise<Response> };
-}
+import { SNG_PREFIX } from '@oshihiki/sng';
+
+import { handleSng } from './sng/router';
+
+export type { Env } from './sng/env';
+import type { Env } from './sng/env';
 
 const UPSTREAM = 'https://slumbot.com/slumbot/api';
 const PREFIX = '/api/slumbot/';
@@ -77,6 +81,9 @@ async function proxy(request: Request, name: string): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith(SNG_PREFIX)) {
+      return handleSng(request, env);
+    }
     if (url.pathname.startsWith(PREFIX)) {
       const name = url.pathname.slice(PREFIX.length);
       if (!ALLOWED.has(name)) return json({ error_msg: 'not found' }, 404);
@@ -86,3 +93,7 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+// wrangler.jsonc の durable_objects.bindings（class_name）はこのモジュールのエクスポートを見る。
+export { SngLobby } from './sng/lobby';
+export { SngTable } from './sng/table';

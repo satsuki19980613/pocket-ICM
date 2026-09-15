@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/solver" },
     { "path": "./packages/harness" },
-    { "path": "./packages/ocr" }
+    { "path": "./packages/ocr" },
+    { "path": "./packages/sng" }
   ]
 }

@@ -1,0 +1,347 @@
+/**
+ * SIT & GO（対戦・ロビー・部屋）の見た目。docs/SNG_DESIGN.md §5（A3a 所有）。
+ *
+ * トークン（--yellow/--cyan/--surface/--line/--chamfer 等）は styles.css の :root を使う。
+ * カードの見た目（pt-card/pt-hand/pt-backs）・席の骨格（pt-felt/pt-seat/pt-plate/pt-pot/
+ * pt-bet/pt-turn）は既存の PokerTable.tsx / SlumbotTable.tsx と共通のクラスをそのまま使い、
+ * ここでは SIT & GO 固有の見た目（バッジ・吹き出し・ベットサイザー・アクションボタン・
+ * ロビー一覧・退室確認）だけを足す。320px 幅でも崩れないことを確認して書く。
+ */
+
+/* ---- 共通ラッパー ---- */
+.sg-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.sg-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  flex: 1;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.sg-connwarn {
+  margin: 0 0 var(--s2);
+  padding: 7px var(--s3);
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.4);
+  color: var(--red);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+/* ---- ロビー ---- */
+/* 「flowscreen 画面いっぱい」パターン（.sb-wrap と同じ・103px は .app の上下パディングと
+   ヘッダ実測ぶん）。これで .sg-list-panel の flex:1 が実際に効き、作成パネルが長くなっても
+   一覧が下端の帯に潰れない（min-height なので作成パネルがさらに長ければページ全体は伸びる）。 */
+.sg-lobby {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 103px);
+  min-height: calc(100dvh - 103px - var(--sat) - var(--sab));
+  gap: var(--s3);
+}
+.sg-create { flex: none; }
+/* 作成パネルを詰める（5段のまま・見出し/ラベル/セグの余白と segbtn の高さだけ縮める）。 */
+.sg-create .scr-h.sm { margin-bottom: var(--s2); }
+.sg-create .lbl { margin-bottom: 4px; }
+.sg-create .lbl:not(:first-child) { margin-top: var(--s2); }
+.sg-create > .seg > .segbtn { padding: 9px 0; font-size: 13.5px; }
+.sg-create .gmsel { gap: 3px; }
+.sg-create .gmsel-row .segbtn { padding: 7px 2px; line-height: 1.25; }
+.sg-mine-banner {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--s3);
+  padding: 10px;
+  background: rgba(252, 238, 10, 0.1);
+  border: 1px solid var(--yellow);
+  color: var(--yellow);
+  font-family: var(--disp);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sg-create .btn { margin-top: var(--s3); }
+
+.sg-list-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  /* 作成パネルがどれだけ長くても、一覧は最低でもビューポートの4割は確保する。 */
+  min-height: 40dvh;
+  margin-bottom: 0;
+}
+.sg-list-panel > .scr-h { flex: none; }
+/* 一覧はパネル内スクロール。高さは親（flex:1 の .sg-list-panel）から決まる。 */
+.sg-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sg-room-list { display: flex; flex-direction: column; gap: var(--s2); }
+.sg-room-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px var(--s3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+.sg-room-row:hover { border-color: var(--line-2); }
+.sg-room-host { font-family: var(--disp); font-size: 13.5px; font-weight: 700; }
+.sg-room-meta { font-family: var(--mono); font-size: 10.5px; color: var(--dim2); }
+
+/* ---- 待機中・結果の一覧 ---- */
+.sg-standings { display: flex; flex-direction: column; gap: var(--s1); margin: var(--s2) 0; }
+.sg-standings li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 7px var(--s2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.sg-standings li.me { border-color: var(--yellow); }
+.sg-place { flex: none; width: 34px; font-family: var(--mono); color: var(--dim2); }
+.sg-pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-pt { flex: none; font-family: var(--mono); font-weight: 700; color: var(--yellow); }
+.sg-pt.neg { color: var(--red); }
+.sg-result-panel { flex: none; }
+
+/* 待機画面: 部屋の条件（人数・スタック・構造・上昇間隔・ゲームモード）。 */
+.sg-room-cond {
+  margin: 0 0 var(--s2);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--dim2);
+}
+
+/* ---- 卓: バッジ・名前・状態タグ ---- */
+.sg-felt { min-height: 260px; }
+/* 楕円（.pt-felt）の外・卓の直上に置く独立した行。楕円の内側に絶対配置すると人数によっては
+   上の席のカード裏・バッジと重なる（さつき実機確認済みの罠）ため、常に卓の外に出す。 */
+.sg-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--dim2);
+  white-space: nowrap;
+}
+.sg-hand-no { color: var(--dim); }
+.sg-headline-dot { color: var(--dim2); }
+.sg-level { color: rgba(252, 238, 10, 0.75); }
+
+.sg-mid { gap: 4px; }
+.sg-board { display: flex; gap: 3px; margin-top: 2px; }
+.sg-slot {
+  width: 22px;
+  height: 31px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ショーダウン後〜次のハンドまで（settled）に出す結果の帯。ボードの下＝ .pt-pot の続き
+   （POT・ボードと同じ中央寄せの列に積むだけで、席数に関わらず卓の中央からずれない）。
+   自分が獲得=win（黄）／負け=lose（赤）／自分は関与せず勝者名を出す=other（地の色）。 */
+.sg-hres {
+  margin-top: 4px;
+  padding: 3px 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line-2);
+  font-family: var(--disp);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sg-hres-win { color: var(--yellow); border-color: rgba(252, 238, 10, 0.5); }
+.sg-hres-lose { color: var(--red); border-color: rgba(255, 59, 59, 0.45); }
+.sg-hres-push { color: var(--dim); }
+.sg-hres-other { color: var(--fg); }
+
+.sg-seat { z-index: 1; }
+.sg-seat.folded { opacity: 0.45; }
+.sg-cardsp { height: 30px; }
+.pt-card.sg-big { width: 30px; height: 42px; }
+.pt-card.sg-big .pt-rank { font-size: 15px; }
+.pt-card.sg-big .pt-suit { font-size: 12px; }
+
+.sg-plate { gap: 4px; padding: 2px 6px; }
+.sg-badge {
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+  color: #16150d;
+  flex: none;
+}
+.sg-badge.b-btn { background: var(--bu); }
+.sg-badge.b-sb { background: var(--sb); }
+.sg-badge.b-bb { background: var(--bb-c); }
+.sg-name {
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.sg-substack { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.sg-tag {
+  font-family: var(--mono);
+  font-size: 8px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.sg-tag.warn { background: rgba(255, 59, 59, 0.15); color: var(--red); }
+.sg-tag.out { background: var(--surface-3); color: var(--dim2); }
+.sg-turn { font-size: 8.5px; }
+.sg-bubble {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 2px 6px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  z-index: 2;
+}
+
+/* ---- ベットサイズ・アクション（Slumbot HU と同じ流儀。クラス名は sg- で独立） ---- */
+.sg-sizer { margin: var(--s3) 0; }
+.sg-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 5px;
+  margin-bottom: var(--s3);
+}
+.sg-preset {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  padding: 7px 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-family: var(--disp);
+  cursor: pointer;
+  transition: all 120ms var(--ease);
+}
+.sg-preset-v { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sg-preset-u { font-size: 9px; color: var(--dim2); }
+.sg-preset.on { background: rgba(58, 230, 255, 0.12); border-color: var(--cyan); color: var(--cyan); }
+.sg-preset.on .sg-preset-u { color: var(--cyan); }
+.sg-preset:disabled { opacity: 0.4; cursor: default; }
+
+.sg-slide { display: flex; align-items: center; gap: var(--s3); }
+.sg-range {
+  flex: 1;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.sg-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(58, 230, 255, 0.5);
+  cursor: pointer;
+}
+.sg-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: pointer;
+}
+.sg-range:disabled { opacity: 0.4; }
+.sg-stepper { flex: none; display: flex; align-items: center; gap: 2px; }
+.sg-step {
+  width: 32px;
+  height: 32px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sg-step:disabled { opacity: 0.35; cursor: default; }
+.sg-amount {
+  min-width: 58px;
+  text-align: center;
+  font-family: var(--disp);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sg-actions { display: flex; gap: var(--s2); }
+.sg-act {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 4px;
+  border: 1px solid;
+  clip-path: var(--chamfer);
+  font-family: var(--disp);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: filter 120ms var(--ease);
+}
+.sg-act:hover:not(:disabled) { filter: brightness(1.15); }
+.sg-act:disabled { opacity: 0.35; cursor: default; }
+.sg-act-sub { font-family: var(--mono); font-size: 10px; font-weight: 400; opacity: 0.85; }
+.sg-act.fold { background: rgba(255, 59, 59, 0.1); border-color: var(--red); color: var(--red); }
+.sg-act.check,
+.sg-act.call { background: rgba(58, 230, 255, 0.12); border-color: var(--cyan); color: var(--cyan); }
+.sg-act.raise { background: var(--yellow); border-color: var(--yellow); color: var(--yellow-ink); }
+
+/* ---- 退室確認 ---- */
+.sg-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s4);
+  background: rgba(0, 0, 0, 0.6);
+}
+.sg-confirm { max-width: 340px; }
+.sg-confirm p { margin: 0 0 var(--s3); font-size: 13px; line-height: 1.6; color: var(--fg); }

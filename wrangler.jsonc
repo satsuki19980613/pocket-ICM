@@ -7,14 +7,37 @@
   // 中継用の Worker スクリプト（worker/index.ts）を 1 本だけ足している。
   //
   // 静的アセットへのリクエストはアセット側で解決され Worker を起動しない。
-  // Worker が起動するのは /api/slumbot/* だけ＝無料枠（10万req/日）で足りる。
+  // Worker が起動するのは /api/slumbot/* と /api/sng/* だけ＝無料枠（10万req/日）で足りる。
   //
   // Workers Builds のデプロイコマンド `npx wrangler deploy` がこの設定を読む。
+  //
+  // SIT & GO（会員同士の対人トーナメント。docs/SNG_DESIGN.md）は Durable Objects で持つ:
+  //   SngLobby（部屋一覧・1人1部屋の単一インスタンス）と SngTable（部屋ごとの卓）。
+  // なぜ SQLite クラス（new_sqlite_classes）か:
+  //   Durable Objects には「クラシック（KV ベース）」と「SQLite バックエンド」の 2 種類があり、
+  //   **クラシックは Workers Paid プラン専用**。無料プランのままカードを登録せずに使えるのは
+  //   SQLite バックエンドのクラスだけ（このアプリは SPEC §7 でカード登録なし方針）。
+  //   新規クラスは "new_sqlite_classes" で登録する（"new_classes" だとクラシックになり弾かれる）。
+  // 無料枠の条件（Workers Free、2026-09 時点）: Durable Objects 自体は 10万リクエスト/日・
+  //   WebSocket は「受信メッセージ 20 件につき課金上の 1 リクエスト」換算・SQLite ストレージは
+  //   合計 13,000 GB-秒/日（一時停止中の卓が長時間 storage を保持してもごく僅か）。
+  //   超過すると Error 1027 で新規リクエストが止まるだけで、無料プランのまま自動課金はされない。
   "name": "pocket-icm",
   "compatibility_date": "2024-11-01",
   "main": "worker/index.ts",
   "assets": {
     "directory": "./packages/app/dist",
     "binding": "ASSETS"
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "SNG_LOBBY", "class_name": "SngLobby" },
+      { "name": "SNG_TABLE", "class_name": "SngTable" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SngLobby", "SngTable"] }
+  ]
+  // vars には何も置かない。Supabase の URL/鍵はすべてシークレット
+  // （ダッシュボードの Secret / ローカルは .dev.vars。DEPLOY.md「SIT & GO」節）。
 }

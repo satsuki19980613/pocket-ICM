@@ -5,6 +5,8 @@ import { initAppUpdate } from './pwa/appUpdate';
 import { versionFromBundleUrl } from './pwa/updatePolicy';
 import { installGlobalErrorReporting } from './supabase/clientErrors';
 import './styles.css';
+import './sng-play.css';
+import './sng-stats.css';
 
 // import.meta.url はこのファイルが入るエントリのバンドル（assets/index-<ハッシュ>.js）を指す。
 const version = versionFromBundleUrl(import.meta.url);

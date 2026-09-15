@@ -11,6 +11,14 @@
       "oshihiki-dist": "./dist/index.js",
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./evaluator": {
+      "types": "./src/evaluator.ts",
+      "default": "./src/evaluator.ts"
+    },
+    "./sidepot": {
+      "types": "./src/sidepot.ts",
+      "default": "./src/sidepot.ts"
     }
   },
   "dependencies": {

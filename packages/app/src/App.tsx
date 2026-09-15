@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState, GameMode } from '@oshihiki/core';
 import { GAME_MODES, gameModeLabel } from '@oshihiki/core';
@@ -25,8 +25,11 @@ import { Toast } from './components/Toast';
 // AOF ドリル（DrillView）はハブ上で Coming Soon 扱いのまま（実装はコード上温存）。
 import { TrainingHub } from './components/TrainingHub';
 import { SlumbotView } from './components/SlumbotView';
+import { SngLobby } from './components/SngLobby';
+import { SngRoom } from './components/SngRoom';
+import { StatsView } from './components/StatsView';
+import { SngHistoryView } from './components/SngHistoryView';
 import { HuHistoryView } from './components/HuHistoryView';
-import { HuStatsView } from './components/HuStatsView';
 import { RankingModal } from './components/RankingModal';
 import { Home, type FeedState } from './components/Home';
 import { Thread } from './components/Thread';
@@ -126,8 +129,11 @@ const TITLES: Record<Screen, string> = {
   history: '記録',
   training: 'Training',
   slumbot: 'Slumbot HU',
+  sng: 'SIT & GO',
+  sngroom: 'SIT & GO',
+  stats: 'Stats',
   huhistory: 'Hand History',
-  hustats: 'Stats',
+  snghistory: 'Hand History',
   settings: '設定',
   admin: 'クラブ管理',
   diag: '診断ログ',
@@ -168,8 +174,11 @@ function tabForScreen(s: Screen): TabKey | null {
       return 'icm';
     case 'training':
     case 'slumbot':
+    case 'sng':
+    case 'sngroom':
+    case 'stats':
     case 'huhistory':
-    case 'hustats':
+    case 'snghistory':
       return 'training';
     case 'history':
       return 'records';
@@ -474,6 +483,15 @@ export function App(): JSX.Element {
   // ランキング（Training 系画面のヘッダ右上 ▲）。画面遷移にすると対局中のハンドが
   // 消えるので、重なりとして開く（端末の戻るで閉じるのは backLayers が面倒を見る）。
   const [rankingOpen, setRankingOpen] = useState(false);
+  // SIT & GO: いま開いている部屋（ロビーで作成/選択した部屋・sngroom 画面が使う）。
+  const [sngRoomId, setSngRoomId] = useState<string | null>(null);
+  // 進行中（running/paused）の間だけ SngRoom が登録する「退室前に呼ぶガード」。
+  // ヘッダの ‹ は backFor('sngroom') 経由でこれを呼び、端末の戻る/Esc と同じ退室確認を通す。
+  // 待機中・終了後は null（従来どおり素通り）。
+  const sngLeaveGuardRef = useRef<(() => void) | null>(null);
+  const registerSngLeaveGuard = useCallback((guard: (() => void) | null) => {
+    sngLeaveGuardRef.current = guard;
+  }, []);
 
   /**
    * 記録タブの再取得（SPEC §9.4）。まずローカルキャッシュを描き、サーバ取得が済み次第
@@ -1150,9 +1168,22 @@ export function App(): JSX.Element {
       case 'diag':
         return () => setScreen('admin');
       case 'slumbot':
-      case 'huhistory':
-      case 'hustats':
+      case 'sng':
+      case 'stats':
         return () => setScreen('training');
+      case 'sngroom':
+        // 進行中はガードが登録されているので退室確認を通す（さつき実機確認済みの罠）。
+        // 待機中・終了後はガード未登録＝即座にロビーへ。
+        return () => {
+          if (sngLeaveGuardRef.current) {
+            sngLeaveGuardRef.current();
+          } else {
+            setScreen('sng');
+          }
+        };
+      case 'huhistory':
+      case 'snghistory':
+        return () => setScreen('stats');
       case 'thread':
         return () => setScreen('home');
       case 'userpub':
@@ -1445,14 +1476,38 @@ export function App(): JSX.Element {
       {screen === 'training' && (
         <TrainingHub
           onOpenSlumbot={() => setScreen('slumbot')}
-          onOpenHistory={() => setScreen('huhistory')}
-          onOpenStats={() => setScreen('hustats')}
+          onOpenSng={() => setScreen('sng')}
+          onOpenStats={() => setScreen('stats')}
         />
       )}
 
       {screen === 'slumbot' && <SlumbotView onExit={() => setScreen('training')} />}
+
+      {screen === 'sng' && (
+        <SngLobby
+          onOpenRoom={(roomId) => {
+            setSngRoomId(roomId);
+            setScreen('sngroom');
+          }}
+        />
+      )}
+      {screen === 'sngroom' && sngRoomId && (
+        <SngRoom
+          roomId={sngRoomId}
+          onExit={() => {
+            setSngRoomId(null);
+            setScreen('sng');
+          }}
+          onSwitchRoom={(roomId) => setSngRoomId(roomId)}
+          registerLeaveGuard={registerSngLeaveGuard}
+        />
+      )}
+
+      {screen === 'stats' && (
+        <StatsView onOpenHuHistory={() => setScreen('huhistory')} onOpenSngHistory={() => setScreen('snghistory')} />
+      )}
       {screen === 'huhistory' && <HuHistoryView />}
-      {screen === 'hustats' && <HuStatsView />}
+      {screen === 'snghistory' && <SngHistoryView />}
 
       {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 

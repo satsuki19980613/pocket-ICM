@@ -90,6 +90,9 @@ export default defineConfig({
         secure: true,
         rewrite: (path: string) => path.replace(/^\/api\/slumbot/, '/slumbot/api'),
       },
+      // SIT & GO（HTTP のロビー API・WebSocket の卓/ロビー）。本番は Cloudflare Worker が
+      // 同じパスで受ける（worker/index.ts, A2 所有）。開発時はローカルの wrangler dev へ中継する。
+      '/api/sng': { target: 'http://127.0.0.1:8788', ws: true, changeOrigin: true },
     },
   },
 });

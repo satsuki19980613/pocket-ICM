@@ -6,3 +6,4 @@ export * from './boardState.js';
 export * from './bbDisplay.js';
 export * from './solution.js';
 export * from './gameMode.js';
+export * from './blindStructure.js';

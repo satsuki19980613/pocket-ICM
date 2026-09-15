@@ -44,3 +44,6 @@ packages/*/.env.local
 supabase/.temp/
 # wrangler dev のローカル状態（workerd のキャッシュ等）。
 .wrangler/
+# SIT & GO の Worker シークレット（wrangler dev 用）。.dev.vars.example のみコミット。
+.dev.vars
+.tmp-e2e/

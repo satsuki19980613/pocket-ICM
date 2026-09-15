@@ -1,0 +1,13 @@
+# Cloudflare Worker のローカル開発用シークレット（`npx wrangler dev` が読む）。
+# このファイルをコピーして `.dev.vars`（gitignore 済み）を作り、値を埋める。
+# 本番はダッシュボードの Secret に登録する（DEPLOY.md「SIT & GO」節）。
+
+# Supabase プロジェクトの URL（例: https://xxxxxxxx.supabase.co）。
+SUPABASE_URL=
+
+# Supabase の anon（公開）key。SIT & GO の認証確認（/auth/v1/user・本人権限での profiles 読み取り）に使う。
+SUPABASE_ANON_KEY=
+
+# Supabase の service_role key。SIT & GO のハンド・試合結果を書き込むためだけに使う（認証には使わない）。
+# 絶対にコミットしない・フロントに渡さない。Supabase ダッシュボード → Project Settings → API → service_role。
+SUPABASE_SERVICE_ROLE_KEY=

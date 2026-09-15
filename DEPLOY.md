@@ -100,3 +100,79 @@ curl -X POST http://127.0.0.1:8788/api/slumbot/new_hand -H "Content-Type: applic
 ```
 開発サーバー（`npm run dev`）では Vite の `server.proxy` が同じ形で中継するので、
 `wrangler dev` を立てなくても対局できる。
+
+---
+
+## SIT & GO（Durable Objects）
+
+SIT & GO（`/api/sng/*`。会員同士の対人トーナメント。設計は `docs/SNG_DESIGN.md`）の審判役は
+Cloudflare **Durable Objects**（`SngLobby` 1 インスタンス＋部屋ごとの `SngTable`）に持たせている。
+ハンドの記録・試合結果は Worker（DO）が **Supabase に service role キーで書く**（アプリからは
+直接書けない）。
+
+### なぜ Durable Objects か
+
+対人トーナメントは「今どういう状態か」を**1 箇所で確定させる審判**が要る（合法手の検証・
+手番のタイムアウト・複数人が同時に操作したときの整合性）。Cloudflare KV や単純な API では
+これができない。Durable Objects は「1 つの ID につき 1 インスタンス」が保証されるので、
+部屋ごとに 1 つの `SngTable` を審判として使える。
+
+### 無料枠の条件（カードを登録しない方針のまま使う）
+
+- Durable Objects には「クラシック（KV ベース）」と「SQLite バックエンド」の 2 種類があり、
+  **クラシックは Workers Paid プラン専用**。`wrangler.jsonc` の `migrations` で
+  `new_sqlite_classes` を使っているのはこのため（`new_classes` だとクラシックになり弾かれる）。
+- 無料枠（Workers Free、2026-09 時点）: リクエストは **10 万回 / 日**、WebSocket は
+  「受信メッセージ 20 件につき課金上の 1 リクエスト」換算、SQLite ストレージは合計
+  **13,000 GB-秒 / 日**。
+- 超過すると **Error 1027** で新規リクエストが止まるだけで、無料プランのまま自動課金は
+  されない（請求は発生しない）。
+
+### シークレットの登録（さつきに依頼）
+
+Worker には Supabase の URL/鍵を**すべてシークレットとして**登録する（`wrangler.jsonc` の
+`vars` には何も置かない）。
+
+1. Cloudflare ダッシュボード → **Workers & Pages** → `pocket-icm` → **Settings** →
+   **Variables and Secrets** で、以下の 3 つを **Secret** として追加する:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`（Supabase ダッシュボード → **Project Settings** → **API** →
+     `service_role` からコピー。絶対にフロントには渡さない）
+2. `supabase/migrations/0011_sng.sql` を Supabase の **SQL Editor** で 1 回実行する
+   （`sng_games` / `sng_results` / `sng_hands` / `sng_hole_cards` を作る。冪等）。
+
+### ローカルでの確認
+
+```
+cp .dev.vars.example .dev.vars   # 値を埋める
+npm run build --workspace @oshihiki/app
+npx wrangler dev --port 8788
+```
+Vite 側の `/api/sng` プロキシ設定は画面担当（A3a）の `vite.config.ts` を参照。
+
+### 書き込み量の目安
+
+1 ハンド ≈ 250B（`sng_hands`）＋ 参加人数 × 80B（`sng_hole_cards`）。1 日 10 試合 × 100
+ハンドなら年 ≈ 270MB（Supabase 無料枠 500MB の半分程度）。`sng_games` / `sng_results` は
+試合ごとに 1 回・数百バイトなので無視できる量。CPU 時間（10ms/req の無料枠上限）はショーダウン
+評価が最大 6 人 × `eval7` で軽いはずだが、実測は A1 のエンジン実装後に `wrangler dev` で行い、
+ここに追記する。
+
+### ローカルの通し確認（実 Supabase・秘密なしで最後まで動かす）
+
+**秘密は一切要らない。** 実 Supabase プロジェクトにも繋がない。手順:
+
+1. `/auth/v1/user` と `/rest/v1/*` を受けるだけの小さな HTTP サーバーをポート **9911** で立てる
+   （`/auth/v1/user` は適当な userId を返すだけ、`/rest/v1/*` は 200 を返すだけでよい。
+   このモックサーバー自体はリポジトリに入れない・使い捨てでよい）。
+2. `npx wrangler dev --port 8788 --var SUPABASE_URL:http://127.0.0.1:9911 --var SUPABASE_ANON_KEY:x --var SUPABASE_SERVICE_ROLE_KEY:x`
+   で Worker を起動する（`vars` を CLI から渡しているだけなので `.dev.vars` も本物の鍵も不要）。
+3. WebSocket で `{t:'auth', token}` → `{t:'act', ...}` を流すだけのスクリプトを書いて、複数人
+   （2〜3 クライアント）が最後まで打てることと、DB 書き込みが `sng_hands`（ハンド数ぶん）／
+   `sng_hole_cards`／`sng_games`／`sng_results` に届くこと（モックサーバー側でリクエストを
+   ログすればわかる）を見る。
+
+**確認済みの事実（2026-09-15 のローカル通し）**: 3 人卓 3 ハンド、2 人卓（片方が無操作）で
+時間切れ→タイムバンク→自動処理→sitout、退室で残った 1 人の即勝利、作成者の重複作成が
+409、再接続で手札復元、がいずれも動作した。

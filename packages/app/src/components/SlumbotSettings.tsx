@@ -37,8 +37,12 @@ const REVEAL_LABEL: Record<number, string> = {
   1000: '1秒',
 };
 
-/** 1 カテゴリぶんの編集ブロック。 */
-function CategoryBlock(props: {
+/**
+ * 1 カテゴリぶんの編集ブロック。
+ * SIT & GO の設定モーダル（SngSettings.tsx）もベットサイズは同じ形（カテゴリ×プリセット）
+ * で編集するため export する（重複実装を避ける）。
+ */
+export function CategoryBlock(props: {
   cat: SizeCategory;
   config: BetSizeConfig;
   onChange: (next: BetSizeConfig) => void;

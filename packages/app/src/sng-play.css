@@ -1,15 +1,29 @@
 /**
  * SIT & GO（対戦・ロビー・部屋）の見た目。docs/SNG_DESIGN.md §5（A3a 所有）。
  *
- * トークン（--yellow/--cyan/--surface/--line/--chamfer 等）は styles.css の :root を使う。
- * カードの見た目（pt-card/pt-hand/pt-backs）・席の骨格（pt-felt/pt-seat/pt-plate/pt-pot/
- * pt-bet/pt-turn）は既存の PokerTable.tsx / SlumbotTable.tsx と共通のクラスをそのまま使い、
- * ここでは SIT & GO 固有の見た目（バッジ・吹き出し・ベットサイザー・アクションボタン・
- * ロビー一覧・退室確認）だけを足す。320px 幅でも崩れないことを確認して書く。
+ * さつき指示: 「デザインは Slumbot と同じデザインを採用」。対戦中の卓・HUD・ベットサイザー・
+ * アクションボタン・ハンド結果は、styles.css の「Slumbot HU」節にある `sb-*` クラス
+ * （卓のガラス面・プレート・プリセット・スライダー・ボタン・結果バナー）をそのまま使う
+ * （`SngTable.tsx`/`SngRoom.tsx` を参照）。ここに書くのは Slumbot に無い概念だけ:
+ *   - 2〜6 席ぶんの座席配置・プレイヤー名・BTN バッジ・状態タグ（切断中/SIT OUT/退室/脱落）
+ *   - 複数方向の吹き出し（上半分/下半分）とチップ（左右）
+ *   - ロビー一覧・待機中一覧・退室確認・最終結果（順位表）
+ * カードの見た目（pt-card/pt-hand/pt-backs）は SlumbotTable.tsx から Card/Hand/Backs を
+ * そのまま import して使う。重複定義を増やさないため、Slumbot と同じ値になるものは
+ * ここに書かない。320px 幅でも崩れないことを確認して書く。
  */
 
 /* ---- 共通ラッパー ---- */
 .sg-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* Slumbot の `.sb-wrap > .sb-sizer/.sb-actions/.sb-result { margin-top }` と同じ間隔を、
+   ラッパーのクラス名が違うだけの SIT & GO 側でも再現する（値そのものは複製せず、
+   ここでは間隔だけを追加で当てる。sb-hud 自身の margin-bottom は styles.css 側で
+   既に持っているので触らない）。 */
+.sg-wrap > .sb-sizer,
+.sg-wrap > .sb-actions,
+.sg-wrap > .sb-result {
+  margin-top: var(--s3);
+}
 .sg-loading {
   display: flex;
   flex-direction: column;
@@ -124,85 +138,71 @@
   color: var(--dim2);
 }
 
-/* ---- 卓: バッジ・名前・状態タグ ---- */
+/* ---- 卓: Slumbot HU の sb-felt/sb-seat/sb-plate/sb-bet/sb-bubble/sb-result を
+   そのまま使う（SngTable.tsx）。ここは 2〜6 人ぶんの配置と、Slumbot に無い要素だけ。 ---- */
 .sg-felt { min-height: 260px; }
-/* 楕円（.pt-felt）の外・卓の直上に置く独立した行。楕円の内側に絶対配置すると人数によっては
-   上の席のカード裏・バッジと重なる（さつき実機確認済みの罠）ため、常に卓の外に出す。 */
-.sg-headline {
+
+/* HUD 帯（.sb-hud）の中に置くハンド番号・レベル・ブラインド。Slumbot の HANDS/SESSION
+   のような短い数値と違って文言が長いので、その分だけ小さいテキストにする
+   （枠は sb-hud をそのまま使う）。 */
+.sg-hud-line {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: baseline;
-  justify-content: center;
   gap: 5px;
-  margin-bottom: 4px;
   font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: 0.08em;
   color: var(--dim2);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sg-hand-no { color: var(--dim); }
 .sg-headline-dot { color: var(--dim2); }
 .sg-level { color: rgba(252, 238, 10, 0.75); }
 
-.sg-mid { gap: 4px; }
-.sg-board { display: flex; gap: 3px; margin-top: 2px; }
-.sg-slot {
-  width: 22px;
-  height: 31px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--line-2);
-  background: rgba(0, 0, 0, 0.3);
+/* 「自分は関与せず勝者名を出す」ケース（SgHandResult, SngTable.tsx）。数値 1 つ用の
+   30px 表示のままだと名前の並びが 320px 幅で溢れるので、その場合だけ縮める。 */
+.sb-result-val.other {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.5;
 }
 
-/* ショーダウン後〜次のハンドまで（settled）に出す結果の帯。ボードの下＝ .pt-pot の続き
-   （POT・ボードと同じ中央寄せの列に積むだけで、席数に関わらず卓の中央からずれない）。
-   自分が獲得=win（黄）／負け=lose（赤）／自分は関与せず勝者名を出す=other（地の色）。 */
-.sg-hres {
-  margin-top: 4px;
-  padding: 3px 10px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid var(--line-2);
-  font-family: var(--disp);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-  max-width: 92%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sg-hres-win { color: var(--yellow); border-color: rgba(252, 238, 10, 0.5); }
-.sg-hres-lose { color: var(--red); border-color: rgba(255, 59, 59, 0.45); }
-.sg-hres-push { color: var(--dim); }
-.sg-hres-other { color: var(--fg); }
-
-.sg-seat { z-index: 1; }
 .sg-seat.folded { opacity: 0.45; }
 .sg-cardsp { height: 30px; }
-.pt-card.sg-big { width: 30px; height: 42px; }
-.pt-card.sg-big .pt-rank { font-size: 15px; }
-.pt-card.sg-big .pt-suit { font-size: 12px; }
 
-.sg-plate { gap: 4px; padding: 2px 6px; }
-.sg-badge {
-  font-family: var(--mono);
-  font-size: 8px;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 2px;
-  color: #16150d;
-  flex: none;
-}
-.sg-badge.b-btn { background: var(--bu); }
-.sg-badge.b-sb { background: var(--sb); }
-.sg-badge.b-bb { background: var(--bb-c); }
-.sg-name {
-  max-width: 64px;
+/* BTN バッジ。Slumbot は HU なので SB/BB の 2 色しか無い（styles.css）。 */
+.sb-pos.p-btn { background: var(--bu); }
+
+/* プレイヤー名。Slumbot は 2 人対戦で名前を出さないため無かった要素。
+   6〜8 文字程度に切り詰め、それ以上は … で省略する。 */
+.sb-name {
+  max-width: 40px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--mono);
   font-size: 10px;
+  color: var(--dim);
 }
+/* プレート自体の幅を絶対制限する。制限が無いと左右端の席のプレートが画面外へ
+   はみ出していた（375px で左右の名前が切れる、さつき実機確認済み）。中央寄せの
+   `flex-wrap` にしておくことで、名前が最大幅まで伸びる長い場合だけ自然に
+   「バッジ＋名前」の行と「スタック」の行の 2 段へ折り返る（320px 用の対策）。 */
+.sg-seat .sb-plate {
+  max-width: 108px;
+  gap: 4px;
+  padding: 4px 8px;
+  flex-wrap: wrap;
+  row-gap: 1px;
+}
+
+/* 状態タグ（切断中・SIT OUT・退室・脱落順位）。Slumbot に無い概念。 */
 .sg-substack { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
 .sg-tag {
   font-family: var(--mono);
@@ -213,124 +213,26 @@
 }
 .sg-tag.warn { background: rgba(255, 59, 59, 0.15); color: var(--red); }
 .sg-tag.out { background: var(--surface-3); color: var(--dim2); }
-.sg-turn { font-size: 8.5px; }
-.sg-bubble {
-  position: absolute;
-  top: calc(100% + 3px);
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  padding: 2px 6px;
-  background: var(--surface-3);
-  border: 1px solid var(--line-2);
-  color: var(--fg);
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.03em;
-  z-index: 2;
-}
 
-/* ---- ベットサイズ・アクション（Slumbot HU と同じ流儀。クラス名は sg- で独立） ---- */
-.sg-sizer { margin: var(--s3) 0; }
-.sg-presets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
-  gap: 5px;
-  margin-bottom: var(--s3);
-}
-.sg-preset {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 1px;
-  padding: 7px 5px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  color: var(--dim);
-  font-family: var(--disp);
-  cursor: pointer;
-  transition: all 120ms var(--ease);
-}
-.sg-preset-v { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.sg-preset-u { font-size: 9px; color: var(--dim2); }
-.sg-preset.on { background: rgba(58, 230, 255, 0.12); border-color: var(--cyan); color: var(--cyan); }
-.sg-preset.on .sg-preset-u { color: var(--cyan); }
-.sg-preset:disabled { opacity: 0.4; cursor: default; }
+/* 吹き出し・チップの向き。Slumbot は上=bot/下=hero固定で決め打ちだが（styles.css の
+   `.sb-seat.bot`/`.sb-seat.hero`）、2〜6 席を楕円に置く SIT & GO は席の位置（上半分/
+   下半分・左右）から卓の中心へ寄る向きを決める。チップは横に出す Slumbot の教訓を守り、
+   上下は吹き出しだけに使う（sng-play.css は styles.css の後に読み込まれるので、
+   同じ詳細度でもここが勝つ）。 */
+.sb-seat.dir-down .sb-bubble { top: calc(100% + 4px); bottom: auto; }
+.sb-seat.dir-up .sb-bubble { bottom: calc(100% + 4px); top: auto; }
+.sb-bet.mirror { left: auto; right: calc(100% + 8px); }
 
-.sg-slide { display: flex; align-items: center; gap: var(--s3); }
-.sg-range {
-  flex: 1;
-  min-width: 0;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line-2);
+/* 320〜400px 幅: プレート・名前・チップのオフセットをさらに詰める。隣の席の
+   プレートとチップが重なっていた不具合（320px で BTN 席のプレートと SB のチップが
+   重なる、さつき実機確認済み）への対策。`.sb-bet.mirror` より後ろに置くことで、
+   詳細度が同じ（クラス 2 つ）でもここが勝つ。 */
+@media (max-width: 400px) {
+  .sb-name { max-width: 28px; font-size: 9px; }
+  .sg-seat .sb-plate { max-width: 86px; gap: 3px; padding: 3px 6px; }
+  .sb-bet { left: calc(100% + 4px); }
+  .sb-bet.mirror { right: calc(100% + 4px); }
 }
-.sg-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 8px rgba(58, 230, 255, 0.5);
-  cursor: pointer;
-}
-.sg-range::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--cyan);
-  cursor: pointer;
-}
-.sg-range:disabled { opacity: 0.4; }
-.sg-stepper { flex: none; display: flex; align-items: center; gap: 2px; }
-.sg-step {
-  width: 32px;
-  height: 32px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  color: var(--fg);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-.sg-step:disabled { opacity: 0.35; cursor: default; }
-.sg-amount {
-  min-width: 58px;
-  text-align: center;
-  font-family: var(--disp);
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.sg-actions { display: flex; gap: var(--s2); }
-.sg-act {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 12px 4px;
-  border: 1px solid;
-  clip-path: var(--chamfer);
-  font-family: var(--disp);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition: filter 120ms var(--ease);
-}
-.sg-act:hover:not(:disabled) { filter: brightness(1.15); }
-.sg-act:disabled { opacity: 0.35; cursor: default; }
-.sg-act-sub { font-family: var(--mono); font-size: 10px; font-weight: 400; opacity: 0.85; }
-.sg-act.fold { background: rgba(255, 59, 59, 0.1); border-color: var(--red); color: var(--red); }
-.sg-act.check,
-.sg-act.call { background: rgba(58, 230, 255, 0.12); border-color: var(--cyan); color: var(--cyan); }
-.sg-act.raise { background: var(--yellow); border-color: var(--yellow); color: var(--yellow-ink); }
 
 /* ---- 退室確認 ---- */
 .sg-confirm-backdrop {

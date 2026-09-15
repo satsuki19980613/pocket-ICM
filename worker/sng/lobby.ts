@@ -28,6 +28,41 @@ interface LobbyStorage {
 
 const TAG = 'sng-lobby';
 
+// ---------------------------------------------------------------------------
+// 純関数（テスト対象）: userRoom マップの更新ロジック。
+//
+// 「1 人 1 部屋」は元々 `/internal/create`（部屋作成時）でしか userRoom に登録していなかった
+// ため、参加者（ホスト以外）が WS で直接別の部屋に join しても弾かれない穴があった
+// （2026-09-15 QA で発見）。`/internal/seat` を「join のたびに毎回」呼ぶことで、参加者も
+// 同じ台帳に載せる。
+// ---------------------------------------------------------------------------
+
+export type SeatResult = { readonly ok: true; readonly userRoom: Record<string, string> } | { readonly ok: false; readonly roomId: string };
+
+/** userId を roomId に登録する。別の部屋に既に登録済みなら拒否（その roomId を返す）。同じ部屋なら何もしない（冪等）。 */
+export function seatUser(userRoom: Readonly<Record<string, string>>, userId: string, roomId: string): SeatResult {
+  const existing = userRoom[userId];
+  if (existing !== undefined && existing !== roomId) {
+    return { ok: false, roomId: existing };
+  }
+  if (existing === roomId) {
+    return { ok: true, userRoom: userRoom as Record<string, string> };
+  }
+  return { ok: true, userRoom: { ...userRoom, [userId]: roomId } };
+}
+
+/**
+ * userId の登録を外す。`expectRoomId` を渡した場合、現在の登録がそれと一致するときだけ外す
+ * （既に別の部屋へ移っていたら何もしない＝安全側）。
+ */
+export function unseatUser(userRoom: Readonly<Record<string, string>>, userId: string, expectRoomId?: string): Record<string, string> {
+  if (!(userId in userRoom)) return userRoom as Record<string, string>;
+  if (expectRoomId !== undefined && userRoom[userId] !== expectRoomId) return userRoom as Record<string, string>;
+  const next = { ...userRoom };
+  delete next[userId];
+  return next;
+}
+
 export class SngLobby implements DurableObject {
   constructor(
     private readonly ctx: DurableObjectState,
@@ -93,6 +128,12 @@ export class SngLobby implements DurableObject {
       if (url.pathname === '/internal/release' && request.method === 'POST') {
         return this.handleRelease(await request.json());
       }
+      if (url.pathname === '/internal/seat' && request.method === 'POST') {
+        return this.handleSeat(await request.json());
+      }
+      if (url.pathname === '/internal/unseat' && request.method === 'POST') {
+        return this.handleUnseat(await request.json());
+      }
       if (url.pathname === '/internal/list' && request.method === 'GET') {
         const s = await this.load();
         const user = url.searchParams.get('user');
@@ -146,6 +187,51 @@ export class SngLobby implements DurableObject {
     }
     await this.save(s);
     await this.broadcast();
+    return Response.json({ ok: true });
+  }
+
+  /**
+   * Table DO が WS の join のたびに呼ぶ（ホストの再入室・参加者の新規着席のどちらも）。
+   * 別の部屋に既に登録されていれば 409 + その roomId（`already_seated`）。同じ部屋なら
+   * 何もしない（冪等）。これで「1人1部屋」が join 経路にも効くようになる
+   * （元は `/internal/create` の時しか登録しておらず、参加者の直接 WS join が素通りしていた）。
+   */
+  private async handleSeat(body: unknown): Promise<Response> {
+    const { roomId, userId } = body as { roomId: string; userId: string };
+    const s = await this.load();
+    const result = seatUser(s.userRoom, userId, roomId);
+    if (!result.ok) {
+      // 登録先が既に無い部屋（掃除漏れ）なら自己修復して通す。handleCreate と同じ安全網。
+      if (!s.rooms[result.roomId]) {
+        s.userRoom = { ...s.userRoom, [userId]: roomId };
+        await this.save(s);
+        await this.broadcast();
+        return Response.json({ ok: true });
+      }
+      return Response.json({ error: 'already_seated', roomId: result.roomId }, { status: 409 });
+    }
+    if (result.userRoom !== s.userRoom) {
+      s.userRoom = result.userRoom;
+      await this.save(s);
+      await this.broadcast();
+    }
+    return Response.json({ ok: true });
+  }
+
+  /**
+   * 待機中に参加者（ホスト以外）が leave して席が空いたときに Table DO が呼ぶ。
+   * ホストの leave（cancelled）や試合終了は `handleRelease` が部屋ごとまとめて片付けるので、
+   * ここでは 1 ユーザーぶんだけを対象にする。
+   */
+  private async handleUnseat(body: unknown): Promise<Response> {
+    const { userId, roomId } = body as { userId: string; roomId?: string };
+    const s = await this.load();
+    const next = unseatUser(s.userRoom, userId, roomId);
+    if (next !== s.userRoom) {
+      s.userRoom = next;
+      await this.save(s);
+      await this.broadcast();
+    }
     return Response.json({ ok: true });
   }
 

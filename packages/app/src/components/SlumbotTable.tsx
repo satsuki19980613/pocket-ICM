@@ -12,8 +12,11 @@ import type { HandView } from '../slumbot/hand';
 
 const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 
-/** "Ah" / "Td" のような表記を 1 枚のカードに描く。 */
-function Card(props: { code: string; big?: boolean }): JSX.Element | null {
+/**
+ * "Ah" / "Td" のような表記を 1 枚のカードに描く。
+ * SIT & GO の卓（SngTable.tsx）も同じ見た目を使うため export する（重複実装を避ける）。
+ */
+export function Card(props: { code: string; big?: boolean }): JSX.Element | null {
   const rank = props.code[0];
   const suit = props.code[1]?.toLowerCase();
   if (!rank || !suit || !SUIT_GLYPH[suit]) return null;
@@ -25,7 +28,7 @@ function Card(props: { code: string; big?: boolean }): JSX.Element | null {
   );
 }
 
-function Hand(props: { cards: readonly string[]; big?: boolean }): JSX.Element {
+export function Hand(props: { cards: readonly string[]; big?: boolean }): JSX.Element {
   return (
     <div className="pt-hand">
       {props.cards.map((c, i) => (
@@ -35,7 +38,7 @@ function Hand(props: { cards: readonly string[]; big?: boolean }): JSX.Element {
   );
 }
 
-function Backs(): JSX.Element {
+export function Backs(): JSX.Element {
   return (
     <div className="pt-backs">
       <span className="pt-back" />

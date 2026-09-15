@@ -114,6 +114,55 @@ describe('最小レイズと再開しないレイズ', () => {
   });
 });
 
+describe('streetBet は「実際に出した額」（fold/check で書き換わらない）', () => {
+  it('レイズに fold した席の streetBet は、そのストリートの最高額ではなく自分が実際に払った額のまま', () => {
+    // フロップ: seat0 が 200 まで call 済み、seat1 が 800 にレイズ。seat0 はここで fold。
+    const hand = baseHand({
+      street: 1,
+      board: ['2h', '7c', 'Jd'],
+      streetBet: [200, 800, 0],
+      streetLastBetTo: 800,
+      lastBetSize: 600,
+      startStacks: [20000, 20000, 20000],
+      commits: [200, 800, 0],
+      folded: [false, false, true], // seat2 はプリフロップで既にfold済みの想定
+      toAct: 0,
+      actions: [
+        { seat: 0, kind: 'call', betTo: 200, put: 200, auto: false, street: 1 },
+        { seat: 1, kind: 'raise', betTo: 800, put: 800, auto: false, street: 1 },
+      ],
+    });
+    const players = makePlayers([20000, 20000, 20000]);
+    const resolved = resolveAction(hand, 0, 'fold', undefined, 20000 - 200)!;
+    expect(resolved.kind).toBe('fold');
+    const applied = applyResolvedAction(hand, players, 0, resolved, false, 0);
+    // fold しただけで 800 を払ったことにしてはいけない。実際に出した 200 のまま。
+    expect(applied.hand.streetBet[0]).toBe(200);
+    expect(applied.hand.folded[0]).toBe(true);
+    // commits も put=0 なので変わらない。
+    expect(applied.hand.commits[0]).toBe(200);
+  });
+
+  it('check は streetBet を変えない（toCall=0 の場面なので元々 no-op だが明示的に確認）', () => {
+    const hand = baseHand({
+      street: 1,
+      board: ['2h', '7c', 'Jd'],
+      streetBet: [0, 0, 0],
+      streetLastBetTo: 0,
+      lastBetSize: 200,
+      startStacks: [20000, 20000, 20000],
+      commits: [0, 0, 0],
+      folded: [false, false, false],
+      toAct: 0,
+      actions: [],
+    });
+    const players = makePlayers([20000, 20000, 20000]);
+    const resolved = resolveAction(hand, 0, 'check', undefined, 20000)!;
+    const applied = applyResolvedAction(hand, players, 0, resolved, false, 0);
+    expect(applied.hand.streetBet[0]).toBe(0);
+  });
+});
+
 describe('サイドポット（3人オールイン）', () => {
   it('拠出額レイヤごとに勝者が分配され、Σwon=Σcommits', () => {
     const players = makePlayers([1000, 3000, 5000]);

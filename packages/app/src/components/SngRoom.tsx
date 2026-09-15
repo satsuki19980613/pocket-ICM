@@ -5,19 +5,28 @@
  * `@oshihiki/sng` の `engine.legalActions`（サーバーと同じ純関数）。ベットサイズの
  * プリセット計算は `sng/betting.ts`（`slumbot/sizes.ts` の一般化コアを共用）。
  *
+ * 見た目は Slumbot HU 対戦画面（`SlumbotView.tsx`）と同じ部品を使う（さつき指示:
+ * 「デザインは Slumbot と同じデザインを採用」）。HUD 行・ベットサイザー・アクション
+ * ボタンは `sb-*` クラスをそのまま流用し、SIT & GO 固有の要素だけ `sng-play.css` に足す。
+ * ♪（BGM）は Slumbot と同じ `useBgm`/曲一覧・同じ好み保存（`slumbot/prefs.ts`）を共用する
+ * （Training タブ全体で BGM の ON/OFF・選曲は 1 つでよいという判断）。⚙（設定）は
+ * ベットサイズ編集の中身（`CategoryBlock`）を Slumbot と共用しつつ、「ゲーム設定」タブは
+ * この部屋の条件を見せる専用の `SngSettings.tsx`。
+ *
  * 端末の戻る対策: 進行中（running/paused）に端末の戻る/Esc を押すと、まず退室確認を出す
  * （history.pushState は自分では触らない。App.tsx が「画面の深さ＋重なりの数」で履歴を
  * 一括管理しているので、重なりの登録簿 `backLayers`/`useBackLayer` に相乗りするだけでよい。
  * これなら navHistory.ts の深さ計算と衝突しない）。もう一度戻る/Esc を押すと確認を閉じる。
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatBbDisplay, gameModeSpec } from '@oshihiki/core';
 import { BETWEEN_HANDS_MS, engine, type ActionKind, type PublicTable, type SngConfig, type Speed } from '@oshihiki/sng';
 
 import { useBackLayer } from './BackLayer';
-import { SngTable } from './SngTable';
+import { SngSettings } from './SngSettings';
+import { computeResultBanner, SgHandResult, SngTable } from './SngTable';
 import { allInBetTo, categoryOf, clampBetTo, resolvePreset, snapBetTo, stepBetTo } from '../sng/betting';
 import { useTable } from '../sng/useTable';
 import { createStartLatch } from '../solveJob';
@@ -26,8 +35,12 @@ import {
   presetKey,
   presetLabel,
   presetsFor,
+  saveBetSizes,
   type BetSizeConfig,
 } from '../slumbot/sizes';
+import { loadPrefs, savePrefs, type GamePrefs } from '../slumbot/prefs';
+import { useBgm, type BgmFailure } from '../slumbot/bgm';
+import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
 
 // SngLobby.tsx の SPEED_LABEL と同じ表記（待機画面の条件表示にも使う・小さいので複製）。
 const SPEED_LABEL: Record<Speed, string> = { normal: '通常', slow: 'ゆっくり', veryslow: 'もっとゆっくり' };
@@ -69,7 +82,60 @@ export function SngRoom(props: {
   const [finishRevealed, setFinishRevealed] = useState(false);
   const storeRef = useRef<Storage | null>(null);
   if (storeRef.current === null) storeRef.current = safeStorage();
-  const [config] = useState<BetSizeConfig>(() => loadBetSizes(storeRef.current));
+  const store = storeRef.current;
+  const [config, setConfig] = useState<BetSizeConfig>(() => loadBetSizes(store));
+  const [prefs, setPrefs] = useState<GamePrefs>(() => loadPrefs(store));
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bgmNote, setBgmNote] = useState<string | null>(null);
+
+  const updateConfig = useCallback(
+    (next: BetSizeConfig) => {
+      setConfig(next);
+      // ベットサイズは Slumbot と共通のキーで保存する（さつき指示）。
+      saveBetSizes(store, next);
+    },
+    [store],
+  );
+  const updatePrefs = useCallback(
+    (next: GamePrefs) => {
+      setPrefs(next);
+      savePrefs(store, next);
+    },
+    [store],
+  );
+
+  // BGM は Slumbot と同じ音源・同じ好み保存を使う（Training タブで 1 つの設定でよい）。
+  const track = resolveTrack(BGM_TRACKS, prefs.bgmTrack);
+  const onBgmFail = useCallback(
+    (why: BgmFailure) => {
+      updatePrefs({ ...prefsRef.current, bgmOn: false });
+      setBgmNote(
+        why === 'missing'
+          ? '音源を再生できませんでした（ファイルが壊れている可能性があります）。'
+          : 'ブラウザに再生を止められました。もう一度 ♪ を押してください。',
+      );
+    },
+    [updatePrefs],
+  );
+  useBgm(track?.src ?? null, prefs.bgmOn, onBgmFail);
+  const toggleBgm = useCallback(() => {
+    setBgmNote(null);
+    updatePrefs({ ...prefsRef.current, bgmOn: !prefsRef.current.bgmOn });
+  }, [updatePrefs]);
+  const bgmButton = track ? (
+    <button
+      type="button"
+      className={`sb-gear sb-bgm${prefs.bgmOn ? ' on' : ''}`}
+      aria-pressed={prefs.bgmOn}
+      aria-label={prefs.bgmOn ? 'BGM を止める' : `BGM を鳴らす（${track.label}）`}
+      title={track.label}
+      onClick={toggleBgm}
+    >
+      ♪
+    </button>
+  ) : null;
 
   const hand = table?.hand ?? null;
   const mySeat = you?.seat ?? null;
@@ -147,8 +213,17 @@ export function SngRoom(props: {
 
   function act(kind: ActionKind, betToVal?: number): void {
     if (!hand || mySeat == null) return;
-    if (!latch.current.acquire()) return; // 1手番1回（サーバーも actSeq のズレで冗長送信を弾く）。
-    send({ t: 'act', handNo: hand.handNo, actSeq: hand.actSeq, kind, betTo: betToVal });
+    if (!latch.current.acquire()) return; // 同じ手番での連打（同一クリックの二重発火）だけを弾く。
+    try {
+      send({ t: 'act', handNo: hand.handNo, actSeq: hand.actSeq, kind, betTo: betToVal });
+    } finally {
+      // acquire() したまま release() を呼ばないと、次に actSeq/handNo が変わって effect が
+      // latch を作り直すまでラッチが永久にロックされたままになる。send が WS 未接続などで
+      // 実際にはサーバーへ届かず actSeq が進まないケースがあり、そのまま次の手番以降も
+      // ずっとボタンが反応しなくなる（さつき報告の「押しても act が送られない」の再現条件）。
+      // 二重送信そのものはサーバー側の actSeq チェックが弾くので、ここでは即座に解放してよい。
+      latch.current.release();
+    }
   }
 
   function leaveNow(): void {
@@ -262,23 +337,54 @@ export function SngRoom(props: {
   // finished（reveal 待ち）の間は手番も SIT OUT 復帰も無い（ハンドは終わっている）。
   const showActionArea = table.status === 'running' || table.status === 'paused';
   const mySitout = showActionArea && mySeat != null ? table.players[mySeat]?.status === 'sitout' : false;
+  // ショーダウン後〜次のハンドまで（最終ハンドの reveal 待ちも含む）は、Slumbot HU と同じく
+  // ベット操作の場所に結果バナーを出す（卓の中の小さな表示ではなく、卓の下の大きな帯）。
+  const resultBanner = hand ? computeResultBanner(table, hand, mySeat) : null;
+  const settled = hand?.phase === 'settled';
 
   return (
     <div className="sg-wrap">
+      <div className="sb-hud">
+        <span className="sg-hud-line">
+          {hand ? (
+            <>
+              <span className="sg-hand-no">#{hand.handNo}</span>
+              <span className="sg-headline-dot">・</span>
+              <span className="sg-level">
+                L{hand.level} {hand.sb}/{hand.bb}
+                {hand.ante > 0 ? ` (${hand.ante})` : ''}
+              </span>
+            </>
+          ) : (
+            <span className="sg-level">開始を待っています…</span>
+          )}
+        </span>
+        {bgmButton}
+        <button type="button" className="sb-gear" aria-label="設定" onClick={() => setSettingsOpen(true)}>
+          ⚙
+        </button>
+      </div>
+
+      {bgmNote && <p className="sb-bgm-note">{bgmNote}</p>}
       {!connected && showActionArea && <p className="sg-connwarn">サーバーとの接続が不安定です…</p>}
       {table.status === 'paused' && <p className="sg-connwarn">一時停止中（誰かの復帰を待っています）</p>}
 
       <SngTable table={table} you={you} heroCards={heroCards} now={now} />
 
-      {showActionArea && (mySitout ? (
-        <button type="button" className="btn wide" onClick={() => send({ t: 'sitin' })}>
-          SIT IN（復帰する）
-        </button>
+      {resultBanner && <SgHandResult banner={resultBanner} />}
+
+      {!settled && showActionArea && (mySitout ? (
+        <div className="sb-actions">
+          <button type="button" className="sb-act check" onClick={() => send({ t: 'sitin' })}>
+            SIT IN
+            <span className="sb-act-sub">復帰する</span>
+          </button>
+        </div>
       ) : (
         <>
           {legal?.betTo && hand && mySeat != null && (
-            <div className="sg-sizer">
-              <div className="sg-presets">
+            <div className="sb-sizer">
+              <div className="sb-presets">
                 {presets.map((p) => {
                   const l = presetLabel(p);
                   const key = presetKey(p);
@@ -287,35 +393,35 @@ export function SngRoom(props: {
                     <button
                       key={key}
                       type="button"
-                      className={`sg-preset${pick === key ? ' on' : ''}`}
+                      className={`sb-preset${pick === key ? ' on' : ''}`}
                       disabled={!canAct}
                       onClick={() => {
                         setBetTo(value);
                         setPick(key);
                       }}
                     >
-                      <span className="sg-preset-v">{l.value}</span>
-                      <span className="sg-preset-u">{l.unit}</span>
+                      <span className="sb-preset-v">{l.value}</span>
+                      <span className="sb-preset-u">{l.unit}</span>
                     </button>
                   );
                 })}
                 <button
                   type="button"
-                  className={`sg-preset max${pick === 'max' ? ' on' : ''}`}
+                  className={`sb-preset max${pick === 'max' ? ' on' : ''}`}
                   disabled={!canAct}
                   onClick={() => {
                     setBetTo(allInBetTo(hand, mySeat, stack));
                     setPick('max');
                   }}
                 >
-                  <span className="sg-preset-v">Max</span>
+                  <span className="sb-preset-v">Max</span>
                 </button>
               </div>
 
-              <div className="sg-slide">
+              <div className="sb-slide">
                 <input
                   type="range"
-                  className="sg-range"
+                  className="sb-range"
                   min={legal.betTo.min}
                   max={legal.betTo.max}
                   step={Math.max(1, Math.round(config.handleUnit * hand.bb))}
@@ -326,10 +432,10 @@ export function SngRoom(props: {
                     setPick(null);
                   }}
                 />
-                <div className="sg-stepper">
+                <div className="sb-stepper">
                   <button
                     type="button"
-                    className="sg-step"
+                    className="sb-step"
                     aria-label="減らす"
                     disabled={!canAct || betTo <= legal.betTo.min}
                     onClick={() => {
@@ -339,10 +445,13 @@ export function SngRoom(props: {
                   >
                     −
                   </button>
-                  <span className="sg-amount">{formatBbDisplay(betTo / hand.bb)}bb</span>
+                  <span className="sb-amount">
+                    {formatBbDisplay(betTo / hand.bb)}
+                    <span className="sb-amount-u">bb</span>
+                  </span>
                   <button
                     type="button"
-                    className="sg-step"
+                    className="sb-step"
                     aria-label="増やす"
                     disabled={!canAct || betTo >= legal.betTo.max}
                     onClick={() => {
@@ -357,32 +466,32 @@ export function SngRoom(props: {
             </div>
           )}
 
-          <div className="sg-actions">
+          <div className="sb-actions">
             {legal?.canFold && (
-              <button type="button" className="sg-act fold" disabled={!canAct} onClick={() => act('fold')}>
+              <button type="button" className="sb-act fold" disabled={!canAct} onClick={() => act('fold')}>
                 FOLD
               </button>
             )}
             {legal?.canCheck && (
-              <button type="button" className="sg-act check" disabled={!canAct} onClick={() => act('check')}>
+              <button type="button" className="sb-act check" disabled={!canAct} onClick={() => act('check')}>
                 CHECK
               </button>
             )}
             {legal?.callPut != null && (
-              <button type="button" className="sg-act call" disabled={!canAct} onClick={() => act('call')}>
+              <button type="button" className="sb-act call" disabled={!canAct} onClick={() => act('call')}>
                 CALL
-                <span className="sg-act-sub">{formatBbDisplay(legal.callPut / (hand?.bb ?? 200))}bb</span>
+                <span className="sb-act-sub">{formatBbDisplay(legal.callPut / (hand?.bb ?? 200))}bb</span>
               </button>
             )}
             {legal?.betTo && hand && mySeat != null && (
               <button
                 type="button"
-                className="sg-act raise"
+                className="sb-act raise"
                 disabled={!canAct}
                 onClick={() => act(legal.aggression === 'raise' ? 'raise' : 'bet', clampBetTo(betTo, hand, mySeat, stack))}
               >
                 {legal.aggression === 'raise' ? 'RAISE' : 'BET'}
-                <span className="sg-act-sub">{formatBbDisplay(clampBetTo(betTo, hand, mySeat, stack) / hand.bb)}bb</span>
+                <span className="sb-act-sub">{formatBbDisplay(clampBetTo(betTo, hand, mySeat, stack) / hand.bb)}bb</span>
               </button>
             )}
           </div>
@@ -403,6 +512,17 @@ export function SngRoom(props: {
             </div>
           </div>
         </div>
+      )}
+
+      {settingsOpen && (
+        <SngSettings
+          roomConfig={table.config}
+          config={config}
+          prefs={prefs}
+          onChangeConfig={updateConfig}
+          onChangePrefs={updatePrefs}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </div>
   );

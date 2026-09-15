@@ -295,7 +295,13 @@ export function applyResolvedAction(
   const allIn = hand.allIn.slice();
 
   commits[seat]! += resolved.put;
-  streetBet[seat] = resolved.betTo;
+  // streetBet は「この席がこのストリートで実際に出した額」。fold は出さずに降りるだけなので
+  // 上書きしない（resolved.betTo は記録用に streetLastBetTo を積んでいるだけ＝ActionRecord.betTo /
+  // 圧縮表現 v1 の decode との整合のためで、実際の拠出額ではない）。check も toCall===0 の場合だけ
+  // 合法なので resolved.betTo は元々 streetBet[seat] と同じ値（no-op）だが、意図を明確にするため
+  // 同様に除外する。2026-09-15 QA: フォールドした席の streetBet が「そのストリートの最高額」に
+  // 化けて画面に誤ったベット額が描かれるバグとして発見。
+  if (resolved.kind !== 'fold' && resolved.kind !== 'check') streetBet[seat] = resolved.betTo;
   if (resolved.kind === 'fold') folded[seat] = true;
   if (resolved.kind === 'allin') allIn[seat] = true;
 

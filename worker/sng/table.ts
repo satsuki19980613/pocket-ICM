@@ -10,7 +10,7 @@
  * `scheduleAlarm` がこの 3 つの最小値を毎回計算して 1 本の alarm に反映する。
  */
 import { encodeHand, engine, parseClientMsg } from '@oshihiki/sng';
-import type { EngineCommand, EngineEffect, Rng, ServerMsg, SngConfig, SngGameResult, SngHandRecord, TableState } from '@oshihiki/sng';
+import type { EngineCommand, EngineEffect, Rng, ServerMsg, SngConfig, SngGameResult, SngHandRecord, TableState, TableStatus } from '@oshihiki/sng';
 
 import * as db from './db';
 import type { Env } from './env';
@@ -24,6 +24,34 @@ const TAG = 'sng-table';
 const RETRY_INTERVAL_MS = 60_000;
 
 const rng: Rng = () => crypto.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
+
+/**
+ * その部屋がまだ「生きている」か（＝これから game_over が起こりうるか）。finished/cancelled は
+ * 既に起こった後で、二度と game_over（＝Lobby の一括解放）が発火しない。
+ */
+function isOpenStatus(status: TableStatus): boolean {
+  return status !== 'finished' && status !== 'cancelled';
+}
+
+/**
+ * `leave` コマンド適用後、Lobby の userRoom からその人を外すべきか（純関数・テスト対象）。
+ * finished/cancelled は handleEffects の game_over -> notifyLobbyRelease が部屋ごと片付けるので
+ * ここでは外さない（二重処理を避ける）。waiting/running/paused はどれも本人の目線では
+ * 「もうこの部屋には居ない」ので外す。
+ */
+export function shouldUnseatOnLeave(afterStatus: TableStatus): boolean {
+  return isOpenStatus(afterStatus);
+}
+
+/**
+ * WS の join で Lobby に「1人1部屋」の確認・登録（`/internal/seat`）をしてよいか（純関数・テスト対象）。
+ * 既に finished/cancelled な部屋（ストレージにはまだ残っている）に対してこれをやってしまうと、
+ * この部屋は二度と game_over を発火しない（発火済み）ため、登録した userId が永久に
+ * 「別の部屋に参加中」のまま解放されなくなる（2026-09-15 QA で自己発見・修正）。
+ */
+export function shouldSeatCheckOnJoin(currentStatus: TableStatus): boolean {
+  return isOpenStatus(currentStatus);
+}
 
 async function scheduleAlarm(ctx: DurableObjectState, state: TableState | null): Promise<void> {
   const candidates: number[] = [];
@@ -118,8 +146,31 @@ export class SngTable implements DurableObject {
     await this.persist(result.state);
     this.broadcastSnapshot(result.state);
     await this.handleEffects(result.effects, result.state);
+    // leave した本人は Lobby の台帳（userRoom）からも外す。sitout はここを通らないので対象外
+    // （sitin であとで戻れる可能性があるため、Lobby からは外さない）。
+    //   - waiting中: 席が空くだけ（部屋は残る）
+    //   - running/paused中: left になり本人は二度と戻れない（design §1）ので、試合が終わるまで
+    //     新しい部屋を作れない・参加できないままだと困る（2026-09-15 実機観察: leave 後もロビーの
+    //     「参加中の部屋へ戻る」バナーが試合終了まで出続けた）
+    //   - finished/cancelled になった（最後の1人勝ち・全員解散）場合は handleEffects の game_over
+    //     -> notifyLobbyRelease が部屋ごとまとめて（全参加者ぶん）片付けるので、二重に呼ばない。
+    if (cmd.t === 'leave' && shouldUnseatOnLeave(result.state.status)) {
+      await this.unseatFromLobby(cmd.userId, state.roomId);
+    }
     await scheduleAlarm(this.ctx, await this.loadState());
     return result.state;
+  }
+
+  private async unseatFromLobby(userId: string, roomId: string): Promise<void> {
+    try {
+      await this.lobbyStub().fetch('https://do/internal/unseat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId, roomId }),
+      });
+    } catch (err) {
+      console.error('sng: lobby unseat notify failed', err);
+    }
   }
 
   private async handleEffects(effects: readonly EngineEffect[], state: TableState): Promise<void> {
@@ -283,6 +334,35 @@ export class SngTable implements DurableObject {
         const next: ConnAttachment = { id: att.id, userId: auth.userId, name: auth.name, authed: true };
         ws.serializeAttachment(next);
         await clearAuthDeadline(this.ctx.storage, att.id);
+
+        // 「1人1部屋」は本来 Lobby が判定するが、これまで /internal/create（部屋作成時）でしか
+        // 台帳（userRoom）に登録しておらず、参加者が直接この WS に join する経路では
+        // 別の部屋に居ても素通りしていた（2026-09-15 QA で発見）。join のたびに毎回確認・登録する。
+        //
+        // 既に finished/cancelled な部屋（ストレージにはまだ残っている）へは、この後の
+        // runCommand が room_closed を返して弾くだけなので、ここで Lobby に登録してはいけない。
+        // 登録してしまうと、この部屋は二度と game_over を発火しない（既に発火済み）ため、
+        // その userId が永久に「別の部屋に参加中」扱いのまま解放されなくなる
+        // （最初の実装でこの穴を作ってしまい、QA 中に自己発見して修正）。
+        const preState = await this.loadState();
+        if (!preState) {
+          send(ws, { t: 'error', code: 'room_closed' } satisfies ServerMsg);
+          ws.close(4001, 'room_closed');
+          return;
+        }
+        if (shouldSeatCheckOnJoin(preState.status)) {
+          const seatRes = await this.lobbyStub().fetch('https://do/internal/seat', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ roomId: preState.roomId, userId: auth.userId }),
+          });
+          if (seatRes.status === 409) {
+            const errBody = (await seatRes.json().catch(() => ({}))) as { roomId?: string };
+            send(ws, { t: 'error', code: 'already_seated', roomId: errBody.roomId } satisfies ServerMsg);
+            ws.close(4001, 'already_seated');
+            return;
+          }
+        }
 
         const state = await this.runCommand(ws, { t: 'join', userId: auth.userId, name: auth.name });
         if (state) {

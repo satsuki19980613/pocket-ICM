@@ -366,12 +366,13 @@ OCRは必ずどこかで失敗する。「撮り直してください」で終�
   期間は 今週 / 今月 / 直近 100 / 500 / 1k / All。SVG 自前描画（依存ゼロ）。なぞると各ハンド時点の値を出す
 - **Hand History 画面**: 新しい順の一覧（時刻・ポジション・手札・ボード・±bb・SD/NSD）。タップで展開して
   ストリート別のアクション・相手の手札・オールイン EV との差
-- **エクスポート**: tenfour_watcher 形式（`ParsedHand` と同じ JSON・1 ハンド 1 ファイル・日付フォルダ）を
-  無圧縮 ZIP にまとめ、Web Share（端末）またはダウンロード（PC）。`data/tenfour_hands/` に展開して
-  `python -m src.db reindex` で取り込む。`hero_name` はアプリの表示名、相手は `Slumbot`、ポジションは
-  SB（ボタン）/ BB、金額はそのストリートの「〜まで」の bb、`result_won_bb` はコールされた分だけ。
-  既知の前提（tool 側）: `config.json` の `default_stack_bb: 100` で有効スタックが計算されるため 200bb の
-  ハンドは警告付き・HU では BB がイン・ポジション扱いになる
+- **tenfour_watcher との互換**: 記録は tenfour_watcher の `ParsedHand` と同じ JSON に変換できる
+  （`slumbot/tenfour.ts`。1 ハンド 1 ファイル・`data/tenfour_hands/` に置いて `python -m src.db reindex`）。
+  将来の GTO 解析で同じ器に載せるための定義で、**画面からの書き出し機能は持たない**。
+  `hero_name` はアプリの表示名、相手は `Slumbot`、ポジションは SB（ボタン）/ BB、金額はそのストリートの
+  「〜まで」の bb、`result_won_bb` はコールされた分だけ。既知の前提（tool 側）: `config.json` の
+  `default_stack_bb: 100` で有効スタックが計算されるため 200bb のハンドは警告付き・HU では BB が
+  イン・ポジション扱いになる
 - 導入前のハンド（通算成績にだけ入っているもの）は復元できない
 
 ### 7.5 用語

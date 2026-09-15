@@ -1,6 +1,10 @@
 /**
  * ハンド記録 → tenfour_watcher 形式（1 ハンド 1 JSON）への変換（SPEC §7.4.6）。
  *
+ * 画面からの書き出し機能は持たない（さつき判断 2026-09-15）。将来 GTO 解析に載せるときに
+ * 履歴を同じ形で取り出せるよう、**変換の定義だけ**をここに残す（tool の `reindex` で
+ * 5 ケース取り込めることは確認済み）。
+ *
  * 形は tenfour_watcher の `src/models.py`（ParsedHand）に合わせる。取り込みは
  * `data/tenfour_hands/` 配下に置いて `python -m src.db reindex`。必須は `hand_id` だけだが、
  * 派生列（局面・SPR）が同じ関数で出せるよう、players / actions / board / street_pots も

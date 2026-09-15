@@ -1,16 +1,13 @@
 /**
  * Training ▸ Hand History（Slumbot HU のハンド履歴, SPEC §7.4.6）。
  * 新しい順の一覧。タップで展開してストリート別のアクションと相手の手札を見る。
- * 「エクスポート」で tenfour_watcher 形式の ZIP を共有／ダウンロードする。
  */
 
 import { useMemo, useState } from 'react';
 
-import { exportHands, type ExportOutcome } from '../slumbot/export';
 import { walkActions, type ActionStep, type HuHandRecord } from '../slumbot/history';
 import { STREET_LABEL, bbLabel, signedBbLabel } from '../slumbot/rules';
 import { useHuHands } from '../slumbot/useHuHands';
-import { getMyProfile } from '../supabase/profile';
 
 const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 const PAGE = 50;
@@ -96,37 +93,12 @@ function Detail(props: { rec: HuHandRecord }): JSX.Element {
   );
 }
 
-const OUTCOME_NOTE: Record<ExportOutcome, string | null> = {
-  shared: '共有しました。',
-  downloaded: 'ZIP をダウンロードしました。',
-  empty: '書き出す履歴がありません。',
-  cancelled: null,
-};
-
 export function HuHistoryView(): JSX.Element {
   const { hands, note } = useHuHands();
   const [open, setOpen] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
   const desc = useMemo(() => (hands ? [...hands].reverse() : []), [hands]);
-
-  async function onExport(): Promise<void> {
-    if (!hands || busy) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const p = await getMyProfile();
-      const name = p.ok && p.data.display_name.trim() ? p.data.display_name.trim() : 'Hero';
-      const r = await exportHands(hands, name);
-      setMsg(OUTCOME_NOTE[r]);
-    } catch {
-      setMsg('書き出せませんでした。');
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (hands === null) {
     return (
@@ -146,14 +118,7 @@ export function HuHistoryView(): JSX.Element {
           <span className="hh-count">
             <b>{hands.length.toLocaleString()}</b> hands
           </span>
-          <button type="button" className="btn ghost sm" disabled={busy || hands.length === 0} onClick={() => void onExport()}>
-            {busy ? '書き出し中…' : 'エクスポート (ZIP)'}
-          </button>
         </div>
-        <p className="hh-hint">
-          tenfour_watcher 形式（1 ハンド 1 JSON）。展開して <code>data/tenfour_hands/</code> に置き、reindex で取り込めます。
-        </p>
-        {msg && <p className="hh-msg">{msg}</p>}
         {note && <p className="hh-msg">{note}</p>}
       </div>
 

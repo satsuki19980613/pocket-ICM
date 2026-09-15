@@ -3015,8 +3015,6 @@ button.cell { cursor: pointer; }
 .hh-top-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); }
 .hh-count { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; color: var(--dim); }
 .hh-count b { color: var(--fg); font-family: var(--disp); font-size: 18px; margin-right: 4px; font-variant-numeric: tabular-nums; }
-.hh-hint { margin: var(--s2) 0 0; font-size: 11px; line-height: 1.6; color: var(--dim2); }
-.hh-hint code { font-family: var(--mono); color: var(--dim); }
 .hh-top .hh-msg { margin: var(--s2) 0 0; }
 .hh-list { display: flex; flex-direction: column; gap: 6px; }
 .hh-item { background: var(--surface); border: 1px solid var(--line); }

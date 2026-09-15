@@ -150,7 +150,9 @@ export function buildRecord(view: HandView, playedAt: number, id: string): HuHan
     heroSeat: view.heroSeat,
     action: view.action,
     heroCards: [...view.holeCards],
-    botCards: showdown && view.botCards ? [...view.botCards] : null,
+    // Slumbot は降りて終わったハンドでも手札を開示してくる（tenfour も降りた人の手札を載せる）。
+    // 返ってきたものはそのまま残す。
+    botCards: view.botCards && view.botCards.length === 2 ? [...view.botCards] : null,
     board,
     winnings,
     showdown,

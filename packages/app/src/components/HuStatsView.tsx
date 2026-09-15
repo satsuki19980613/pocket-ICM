@@ -79,7 +79,7 @@ export function HuStatsView(): JSX.Element {
           <Stat label="Win Rate" value={rate(sum.winRate)} unit="bb/100" tone={toneOf(sum.winRate)} />
           <Stat
             label="SD / NSD"
-            value={`${signedBbLabel(sum.sd, 0)} / ${signedBbLabel(sum.nsd, 0)}`}
+            value={`${signedBbLabel(sum.sd, 1)} / ${signedBbLabel(sum.nsd, 1)}`}
             unit="bb"
           />
           <Stat label="収支 (EV)" value={signedBbLabel(sum.ev, 2)} unit="bb" tone={toneOf(sum.ev)} />

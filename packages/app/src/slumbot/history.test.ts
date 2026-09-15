@@ -126,10 +126,11 @@ describe('newHandId', () => {
 });
 
 describe('buildRecord', () => {
-  it('降りて終わったハンド: ボードを到達ストリートまでに切り詰め、相手の手札は持たない', () => {
+  it('降りて終わったハンド: ボードを到達ストリートまでに切り詰め、開示された相手の手札は残す', () => {
     const rec = buildRecord(viewOf('b200c/kb100f', 1), 1000, 'sb_abc123')!;
     expect(rec.board).toEqual(['2s', '7h', 'Tc']);
-    expect(rec.botCards).toBeNull();
+    expect(rec.botCards).toEqual(['Qh', 'Qc']);
+    expect(buildRecord(viewOf('b200c/kb100f', 1, { botCards: null }), 1000, 'sb_abc123')!.botCards).toBeNull();
     expect(rec.showdown).toBe(false);
     expect(rec.evWinnings).toBe(-300);
     expect(rec.synced).toBe(false);

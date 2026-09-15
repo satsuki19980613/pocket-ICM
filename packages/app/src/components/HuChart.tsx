@@ -149,10 +149,12 @@ export function HuChart(props: {
             {i + 1}
           </text>
         ))}
+        {/* 重なったときに主役（収支）が上に来るよう、描画は凡例の逆順（NSD → SD → 収支EV → 収支）。 */}
         {n > 0 &&
-          SERIES_META.filter((m) => visible[m.key]).map((m) => (
-            <path key={m.key} className={`hc-line s-${m.key}`} d={geo.path(series[m.key])} />
-          ))}
+          [...SERIES_META]
+            .reverse()
+            .filter((m) => visible[m.key])
+            .map((m) => <path key={m.key} className={`hc-line s-${m.key}`} d={geo.path(series[m.key])} />)}
         {n === 1 &&
           SERIES_META.filter((m) => visible[m.key]).map((m) => (
             <circle key={m.key} className={`hc-dot s-${m.key}`} cx={geo.x(0)} cy={geo.y(series[m.key][0] ?? 0)} r={3} />

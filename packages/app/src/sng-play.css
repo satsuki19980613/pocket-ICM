@@ -436,6 +436,8 @@
    DOM は `seat.avatar` が渡されたときだけ GlassTable.tsx が出す（`{seat.avatar && (...)}`）
    ので、この CSS を無条件にしても、アイコンが無い場面で何かが出ることはない。 */
 .sgt-av {
+  /* position:absolute のまま（アバター枠機能を足した際の実機の罠: position:relative に
+     変えると .sgt-plateline を基準にした絶対配置が崩れる）。 */
   display: flex;
   position: absolute;
   left: 0;
@@ -447,20 +449,45 @@
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  overflow: hidden;
   background: var(--surface-3);
-  border: 1px solid rgba(190, 232, 255, 0.5);
-  box-shadow: 0 0 8px rgba(58, 230, 255, 0.35), 0 1px 4px rgba(0, 0, 0, 0.5);
+  /* 枠線は avatarDeco.ts 由来の ::after（styles.css 側の共通ルール）が描く。旧来の固定
+     シアン枠・光彩は外し、影だけ残す（アバター枠機能で styles.css 側へ統合）。 */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   color: var(--yellow);
   font-family: var(--disp);
   font-size: 16px;
   font-weight: 700;
+  /* バッジが外へはみ出す必要があるので overflow:hidden はやめ、丸抜きは img 側で行う。 */
+  --ring-w: 2px;
+  --badge: 21px;
+}
+/* 罠: styles.css の `.ring-special { box-shadow: 0 0 10px var(--sp-glow) }` は詳細度が
+   `.sgt-av` の box-shadow と同じ（どちらもクラス1つ）ため、読み込み順で決まる。
+   sng-play.css は styles.css より後に読み込まれる（main.tsx）ので、席のアイコンでは
+   `.sgt-av` 側の影（1px 4px の下方ドロップシャドウ）が特別枠の光彩を上書きして消してしまう
+   （実機目視で発覚）。`.sgt-av.ring-special` は詳細度2でどちらより勝つので、ここで両方を
+   1つの box-shadow に合成して明示的に上書きする。 */
+/* styles.css の `.ring-special` は光彩の呼吸アニメ（ring-glow）を box-shadow 1本だけで
+   持たせているため、そのまま席にも継がせると下方ドロップシャドウ（0 1px 4px の影）が
+   アニメ中に消えてしまう。詳細度2の `.sgt-av.ring-special` で animation ごと専用の
+   keyframes（ring-glow-seat）に差し替え、ドロップシャドウを常に合成した状態で呼吸させる。 */
+@keyframes ring-glow-seat {
+  from { box-shadow: 0 0 4px var(--sp-glow), 0 1px 4px rgba(0, 0, 0, 0.5); }
+  to   { box-shadow: 0 0 8px var(--sp-glow), 0 1px 4px rgba(0, 0, 0, 0.5); }
+}
+.sgt-av.ring-special {
+  box-shadow: 0 0 6px var(--sp-glow), 0 1px 4px rgba(0, 0, 0, 0.5);
+  animation: ring-glow-seat 3.2s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sgt-av.ring-special { animation: none; box-shadow: 0 0 6px var(--sp-glow), 0 1px 4px rgba(0, 0, 0, 0.5); }
 }
 .sgt-av img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: 50%;
 }
 
 .sgt-plate {

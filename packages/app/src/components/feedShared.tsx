@@ -1,5 +1,6 @@
 import type { FeedAuthor } from '../supabase/feed';
 import { useStorageImage } from '../supabase/storageUrls';
+import { AvatarBadge, resolveAvatarDeco } from '../avatarDeco';
 
 /** ISO 時刻 → 相対表記（たった今 / N分 / N時間 / N日 / 月日）。純関数。 */
 export function relTime(iso: string, now: number = Date.now()): string {
@@ -71,17 +72,37 @@ export function CameraIcon(): JSX.Element {
   );
 }
 
-/** アバター（画像があれば画像、無ければ handle の頭文字）。画像は署名 URL で出す。 */
+/**
+ * アバター（画像があれば画像、無ければ handle の頭文字）。画像は署名 URL で出す。
+ * 枠の色＋バッジは `author` の frame_color/special_frame/badge（`avatarDeco.ts` 参照）から
+ * 解決する。フィード・スレッド・コメント・userpub すべてここを通る（唯一の実装）。
+ */
 export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX.Element {
   const initial = props.author.handle.trim().charAt(0).toUpperCase() || '?';
   const src = useStorageImage(props.author.avatar_url, 'avatars');
-  const inner = src ? <img src={src} alt="" /> : initial;
+  const deco = resolveAvatarDeco(props.author);
+  const inner = (
+    <>
+      {src ? <img src={src} alt="" /> : initial}
+      {deco.badge && <AvatarBadge />}
+    </>
+  );
   if (props.onClick) {
     return (
-      <button type="button" className="av av-btn" onClick={props.onClick} aria-label={`@${props.author.handle} の公開結果`}>
+      <button
+        type="button"
+        className={`av av-btn ${deco.ringClass}`}
+        style={deco.ringStyle}
+        onClick={props.onClick}
+        aria-label={`@${props.author.handle} の公開結果`}
+      >
         {inner}
       </button>
     );
   }
-  return <div className="av">{inner}</div>;
+  return (
+    <div className={`av ${deco.ringClass}`} style={deco.ringStyle}>
+      {inner}
+    </div>
+  );
 }

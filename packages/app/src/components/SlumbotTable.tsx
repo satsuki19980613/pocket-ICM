@@ -11,6 +11,7 @@
  */
 
 import { GlassTable, type FeltSeat, type PillTag } from './GlassTable';
+import type { AvatarDecoInput } from '../avatarDeco';
 import { bbLabel } from '../slumbot/rules';
 import type { LastAction } from '../slumbot/hand';
 import type { HandView } from '../slumbot/hand';
@@ -78,8 +79,10 @@ export function SlumbotTable(props: {
    * hero（自分）のアイコン。`getMyProfile()` は非同期なので、SlumbotView.tsx は届くまで
    * `{ src: null, initial: '?' }` 相当（枠と頭文字だけ）を渡し、届いたら差し替える。
    * 省略時は画像なし・initial '?' 扱い（枠の大きさは変わらないのでレイアウトは動かない）。
+   * `deco`（アバター枠＋バッジ。avatarDeco.ts）も同じく届くまで省略（未付与＝steel と同じ
+   * 見た目になるだけでレイアウトは動かない）。
    */
-  heroAvatar?: { readonly src: string | null; readonly initial: string };
+  heroAvatar?: { readonly src: string | null; readonly initial: string; readonly deco?: AvatarDecoInput | null };
 }): JSX.Element {
   const { view } = props;
   const { state } = view;

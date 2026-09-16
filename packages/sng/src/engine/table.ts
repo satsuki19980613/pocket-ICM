@@ -53,11 +53,17 @@ export function createTable(
   config: SngConfig,
   now: number,
   hostAvatarUrl: string | null = null,
+  hostFrameColor: string | null = null,
+  hostSpecialFrame: string | null = null,
+  hostBadge: string | null = null,
 ): TableState {
   const host: PlayerState = {
     userId: hostId,
     name: hostName,
     avatarUrl: hostAvatarUrl,
+    frameColor: hostFrameColor,
+    specialFrame: hostSpecialFrame,
+    badge: hostBadge,
     seat: 0,
     stack: config.startBb * BASE_BB,
     status: 'active',
@@ -268,7 +274,7 @@ function checkPauseOrDeal(state: TableState, now: number, rng: Rng): { state: Ta
 export function apply(state: TableState, cmd: EngineCommand, now: number, rng: Rng): EngineResult {
   switch (cmd.t) {
     case 'join':
-      return handleJoin(state, cmd.userId, cmd.name, now, rng, cmd.avatarUrl);
+      return handleJoin(state, cmd.userId, cmd.name, now, rng, cmd.avatarUrl, cmd.frameColor, cmd.specialFrame, cmd.badge);
     case 'leave':
       return handleLeave(state, cmd.userId, now, rng);
     case 'sitin':
@@ -291,6 +297,9 @@ function handleJoin(
   now: number,
   rng: Rng,
   avatarUrl: string | null = null,
+  frameColor: string | null = null,
+  specialFrame: string | null = null,
+  badge: string | null = null,
 ): EngineResult {
   if (state.status === 'finished' || state.status === 'cancelled') return err('room_closed');
 
@@ -298,9 +307,11 @@ function handleJoin(
 
   if (state.status === 'waiting') {
     if (existing) {
-      // 再入室のたびにアイコンも今の値へ揃える（設定画面で変えた後の再入室で古い画像の
-      // ままにならないように）。avatarUrl を渡さない呼び出し（テスト等）は null に丸まる。
-      const players = state.players.map((p) => (p.userId === userId ? { ...p, connected: true, avatarUrl } : p));
+      // 再入室のたびにアイコン・枠・バッジも今の値へ揃える（設定画面で変えた後の再入室で
+      // 古い見た目のままにならないように）。渡さない呼び出し（テスト等）は null に丸まる。
+      const players = state.players.map((p) =>
+        p.userId === userId ? { ...p, connected: true, avatarUrl, frameColor, specialFrame, badge } : p,
+      );
       return ok(bump({ ...state, players }));
     }
     if (state.players.length >= state.config.players) return err('room_full');
@@ -309,6 +320,9 @@ function handleJoin(
       userId,
       name,
       avatarUrl,
+      frameColor,
+      specialFrame,
+      badge,
       seat,
       stack: state.config.startBb * BASE_BB,
       status: 'active',

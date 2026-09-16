@@ -101,4 +101,22 @@ describe('normalizeState', () => {
     const normalized = normalizeState(oldState);
     expect(normalized.players.map((p) => p.avatarUrl)).toEqual([null, null]);
   });
+
+  // アバター枠＋バッジ（frameColor/specialFrame/badge）も avatarUrl と全く同じ理由・同じ形で
+  // 丸める（古い部屋の状態には存在せず undefined になりうる）。
+  it('frameColor/specialFrame/badge フィールドが無い古い部屋の状態でも落ちず、null に丸まる', () => {
+    const oldState = baseState([oldPlayer('u0')] as unknown as PlayerState[]);
+    const normalized = normalizeState(oldState);
+    expect(normalized.players[0]!.frameColor).toBeNull();
+    expect(normalized.players[0]!.specialFrame).toBeNull();
+    expect(normalized.players[0]!.badge).toBeNull();
+  });
+
+  it('frameColor/specialFrame/badge が既に入っているときはそのまま保つ', () => {
+    const players: PlayerState[] = [{ ...oldPlayer('u0'), frameColor: 'cyan', specialFrame: '#f5c542', badge: 'crab' }];
+    const normalized = normalizeState(baseState(players));
+    expect(normalized.players[0]!.frameColor).toBe('cyan');
+    expect(normalized.players[0]!.specialFrame).toBe('#f5c542');
+    expect(normalized.players[0]!.badge).toBe('crab');
+  });
 });

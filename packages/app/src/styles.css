@@ -453,18 +453,20 @@ select.inp { appearance: none; cursor: pointer; }
   border-bottom: 1px solid var(--line);
 }
 .avbig {
+  position: relative; /* 枠（::after）の基準。.sgt-av は元から absolute なので触らない。 */
   width: 88px;
   height: 88px;
   display: grid;
   place-items: center;
   background: var(--surface-3);
-  border: 1px solid var(--line-2);
   color: var(--yellow);
   font-family: var(--disp);
   font-size: 40px;
   font-weight: 700;
   border-radius: 50%;
-  overflow: hidden;
+  /* 枠の色つき::afterは常に描く（枠の色を選べるようにする前は 1px の固定枠線だったが、
+     アバター枠機能（avatarDeco.ts 参照）でそれに置き換えた）。バッジが外へはみ出す必要が
+     あるので overflow:hidden はやめ、丸抜きは img 側の border-radius で行う。 */
 }
 .avpick .lbl {
   margin-top: 12px;
@@ -474,8 +476,9 @@ select.inp { appearance: none; cursor: pointer; }
   text-transform: uppercase;
 }
 .avpick .lbl.dim { color: var(--dim2); }
-/* アイコン画像は円形の枠いっぱいに（切り出しは端末内で正方形にしてから上げている）。 */
-.avbig img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* アイコン画像は円形の枠いっぱいに（切り出しは端末内で正方形にしてから上げている）。
+   overflow:hidden をやめた分、丸抜きはここで担う（アバター枠機能。avatarDeco.ts 参照）。 */
+.avbig img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
 .avpick-actions { display: flex; align-items: center; gap: var(--s4); margin-top: 12px; }
 .avpick-err { margin: 10px 0 0; }
 /* アイコンの操作は文字ボタン。素のボタンのままだとダーク既定の灰色地に文字が沈んで読めない。
@@ -824,6 +827,7 @@ select.inp { appearance: none; cursor: pointer; }
 .post { padding: 15px 14px 15px 7px; border-bottom: 1px solid var(--line); display: flex; gap: 20px; }
 .post .col { flex: 1; min-width: 0; }
 .av {
+  position: relative; /* 枠（::after）の基準。.sgt-av は元から absolute なので触らない。 */
   width: 34px;
   height: 34px;
   flex: none;
@@ -835,7 +839,8 @@ select.inp { appearance: none; cursor: pointer; }
   font-size: 15px;
   background: linear-gradient(140deg, #8a6bd0, #d65b9e);
   border-radius: 50%;
-  overflow: hidden;
+  /* バッジが外へはみ出す必要があるので overflow:hidden はやめ、丸抜きは img 側で行う
+     （アバター枠機能。avatarDeco.ts 参照）。 */
 }
 .av.k { background: linear-gradient(140deg, #2bb6d6, #33e6ff); }
 .av.n { background: linear-gradient(140deg, #d6913f, #ff3b3b); }
@@ -1910,9 +1915,213 @@ button.cell { cursor: pointer; }
    ========================================================================= */
 
 /* アバター: 画像対応＋ボタン化（投稿者→公開結果一覧へ） */
-.av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
 .av-btn { border: 0; padding: 0; cursor: pointer; }
 .av-btn:hover { filter: brightness(1.1); }
+
+/* =========================================================================
+   アバター枠＋バッジ（avatarDeco.ts が唯一の意味づけ元。ここは CSS 表現のみ）。
+   2026-09-16 さつき承認のデザイン案の移植（案の中だけで使っていた !important は外し、
+   対象セレクタを実物の `.av`/`.avbig`/`.sgt-av` に合わせてある）。
+   ========================================================================= */
+
+/* 1) 枠は .av/.avbig/.sgt-av の内側に ::after で重ねる → アイコンの外寸は変わらない。 */
+.av, .avbig, .sgt-av {
+  --ring: #9aa08a;
+  --ring-w: 1.5px;
+  --badge: 16px;
+}
+.av::after, .avbig::after, .sgt-av::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ring);
+  /* 中央を丸く抜いてリングだけ残す（グラデーション枠も同じ仕組みで描ける）。 */
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w)), #000 calc(100% - var(--ring-w) + 0.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w)), #000 calc(100% - var(--ring-w) + 0.5px));
+  pointer-events: none;
+  /* z-index を明示しておく（特別枠の光の掃引 ::before を必ず上に、バッジを更に上に重ねるため）。 */
+  z-index: 0;
+}
+/* 表示箇所ごとの太さ・バッジ径。 */
+.rk-row .av { --ring-w: 1.5px; --badge: 14px; }
+.post .av, .thread-head .av, .cmt .av { --ring-w: 2px; --badge: 20px; }
+.avbig { --ring-w: 3px; --badge: 34px; }
+
+/* 2) 通常色（本人が設定から選べる）。マットな低彩度トーンに調整
+   （2026-09-16 版はネオンで浮いていたため、ダーク背景 #0c0d0a に馴染む落ち着いた色へ retune）。 */
+.ring-steel  { --ring: #8b8f86; }
+.ring-yellow { --ring: #c9a54e; }
+.ring-cyan   { --ring: #5f9ea0; }
+.ring-red    { --ring: #b8574a; }
+.ring-white  { --ring: #e4dfd2; }
+.ring-purple { --ring: #9285ad; }
+
+/* 3) 特別枠（管理者が付与した人だけ）。通常色と見分けがつくよう
+      ①0.5px 太い ②金属のような濃淡グラデーション ③外側に光彩 の3点で差をつける
+      （AI感の強いネオン・厚すぎるリングという指摘を受け、+1px→+0.5px・光彩も控えめに retune）。
+      --sp（基準色）/--sp-hi（明）/--sp-lo（暗）は avatarDeco.ts の specialVars() が
+      付与された色から算出して style へ入れる。 */
+.ring-special::after {
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+  background: conic-gradient(from 200deg, var(--sp), var(--sp-hi), var(--sp), var(--sp-lo), var(--sp), var(--sp-hi), var(--sp));
+}
+/* 3.5) 特別枠だけに走る「光の掃引」。金属に光が反射して一周するような細いハイライトを
+      ::before に重ねる（通常色との見分けを付けるため 2026-09-16 追加。マスクは ::after と
+      同じ太さ・同じリング位置に合わせ、z-index はリング(0)より上・バッジ(2)より下）。
+      2026-09-16 さつき実機チューニング: シャンパンゴールド等の明るいリング色でも
+      1.5〜3px の細いリング幅で光条が見えるよう、帯を広め（0.34turn）にして中心を
+      #fff の明るいコアにしている。 */
+.ring-special::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-w) - 0.5px), #000 calc(100% - var(--ring-w)));
+  background: conic-gradient(
+    from 0deg,
+    transparent 0turn,
+    transparent 0.62turn,
+    rgba(255, 255, 255, 0) 0.66turn,
+    rgba(255, 250, 235, 0.55) 0.76turn,
+    #fff 0.82turn,
+    rgba(255, 250, 235, 0.55) 0.88turn,
+    rgba(255, 255, 255, 0) 0.96turn,
+    transparent 1turn
+  );
+  animation: ring-sweep 3.2s linear infinite;
+  will-change: transform;
+}
+@keyframes ring-sweep { to { transform: rotate(360deg); } }
+/* 光彩も同じ周期でゆっくり呼吸させる（掃引と合わせて「金属が光を反射している」感を強める）。
+   基底の box-shadow（6px）は prefers-reduced-motion 時の静止値としてそのまま残す。 */
+.ring-special { box-shadow: 0 0 6px var(--sp-glow); animation: ring-glow 3.2s ease-in-out infinite alternate; }
+@keyframes ring-glow {
+  from { box-shadow: 0 0 4px var(--sp-glow); }
+  to   { box-shadow: 0 0 8px var(--sp-glow); }
+}
+/* プリズム（虹色がゆっくり回る）。静的な色を持たないので --sp 系は不要。
+   ネオンの原色レインボーは浮くため、彩度を落とした光物風の配色に retune。 */
+.ring-prism::after {
+  background: conic-gradient(#c79a92, #cdb88a, #9db59a, #8aaebb, #a095b8, #c79a92);
+  animation: ring-spin 6s linear infinite;
+}
+.ring-prism { --sp-glow: rgba(160, 150, 190, 0.28); }
+@keyframes ring-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ring-prism::after { animation: none; }
+  /* 掃引は静止だと帯が固定表示されて不自然なので非表示に、光彩は基底値（6px）で静止させる。 */
+  .ring-special::before { animation: none; opacity: 0; }
+  .ring-special { animation: none; box-shadow: 0 0 6px var(--sp-glow); }
+}
+
+/* 4) バッジ（左下）。外寸を固定した黒い丸の中にアプリ内蔵 SVG（badge-crab.svg）を置く。
+      絵文字を使わないのは端末ごとの字形差（iPhone/Android/PC で別の絵になる）を避けるため。 */
+.av-badge {
+  position: absolute;
+  left: calc(var(--badge) * -0.18);
+  bottom: calc(var(--badge) * -0.18);
+  z-index: 2;
+  width: var(--badge);
+  height: var(--badge);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #0c0d0a;
+  box-shadow: 0 0 0 1px var(--badge-edge, var(--ring)), 0 1px 3px rgba(0, 0, 0, 0.7);
+  pointer-events: none; /* クリックを奪わない。 */
+}
+.ring-special .av-badge, .ring-prism .av-badge { --badge-edge: var(--sp); }
+.ring-prism .av-badge { --badge-edge: #e4dfd2; }
+/* .av img（丸抜き・全面）の指定を打ち消して、黒丸の中に 80% で置く。 */
+.av .av-badge img, .avbig .av-badge img, .sgt-av .av-badge img {
+  width: 80%;
+  height: 80%;
+  border-radius: 0;
+  object-fit: contain;
+  display: block;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* 設定画面「枠の色」シート（Settings.tsx）。トークンは既存の readout/pad と同じもの。 */
+/* 左右の余白は .pad（padding: var(--s4) 14px）と同じ 14px にして、他の箱型パネル
+   （ユーザー名/パスワードの .readout 等）と縦の罫線位置を揃える。下も var(--s4) 空けて、
+   直後の「設定について」行（.h-row）が詰まって見えないようにする。 */
+.fr-sheet { margin: 12px 14px var(--s4); padding: 14px; background: var(--surface); border: 1px solid var(--line-2); }
+.fr-sheet .ttl { font-family: var(--disp); font-size: 13px; letter-spacing: 0.1em; color: var(--fg); margin-bottom: 10px; }
+.fr-sheet .sub { font-family: var(--mono); font-size: 10.5px; color: var(--dim2); letter-spacing: 0.08em; margin: 14px 0 8px; }
+.fr-sw { display: flex; flex-wrap: wrap; gap: 12px; }
+.fr-sw button {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: var(--surface-3);
+  --ring-w: 3px; /* サンプル準拠: 一覧の粒が小さい分、太さは固定値で見やすくする。 */
+}
+.fr-sw button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ring);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+.fr-sw button.on { outline: 2px solid var(--fg); outline-offset: 3px; }
+.fr-sw button.ring-special::after { background: conic-gradient(from 200deg, var(--sp), var(--sp-hi), var(--sp), var(--sp-lo), var(--sp), var(--sp-hi), var(--sp)); }
+.fr-sw button.ring-prism::after { background: conic-gradient(#c79a92, #cdb88a, #9db59a, #8aaebb, #a095b8, #c79a92); }
+/* スワッチにも光の掃引を出す（付与された本人が設定画面でも効果を確認できるように）。
+   マスクは .fr-sw button::after と同じ固定 3px（一覧の粒は --ring-w を触らないため）。
+   グラデーションは .ring-special::before と同じチューニング（広め帯＋#fff コア）。 */
+.fr-sw button.ring-special::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  background: conic-gradient(
+    from 0deg,
+    transparent 0turn,
+    transparent 0.62turn,
+    rgba(255, 255, 255, 0) 0.66turn,
+    rgba(255, 250, 235, 0.55) 0.76turn,
+    #fff 0.82turn,
+    rgba(255, 250, 235, 0.55) 0.88turn,
+    rgba(255, 255, 255, 0) 0.96turn,
+    transparent 1turn
+  );
+  animation: ring-sweep 3.2s linear infinite;
+  will-change: transform;
+}
+.fr-sw button.lock { opacity: 0.35; cursor: default; }
+/* 見本（lock）は選べないものなので動かさない＝静止。 */
+.fr-sw button.lock.ring-special { animation: none; box-shadow: 0 0 6px var(--sp-glow); }
+.fr-sw button.lock.ring-special::before { animation: none; opacity: 0; }
+.fr-sw button.lock span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
+.fr-sheet .names { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+/* テラコッタ（5文字）が 38px の列幅で折り返さないよう、詰めて1行に収める。 */
+.fr-sheet .names span {
+  width: 38px;
+  text-align: center;
+  font-size: 9.5px;
+  color: var(--dim2);
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+}
 
 /* 投稿者名（クリックで userpub へ） */
 .meta-author {

@@ -32,6 +32,7 @@ import { useBgm, type BgmFailure } from '../slumbot/bgm';
 import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
 import { createStartLatch } from '../solveJob';
 import { getMyProfile } from '../supabase/profile';
+import type { AvatarDecoInput } from '../avatarDeco';
 import { addPending, flushPending, readPending, writePending } from '../supabase/huStats';
 import { buildRecord, newHandId } from '../slumbot/history';
 import { withEv } from '../slumbot/allInEv';
@@ -88,9 +89,12 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
    * hero（自分）のアイコン。`getMyProfile()` は非同期なので、届くまでは画像なし・頭文字
    * だけの枠を出す（枠の大きさは最初から確定しているので、届いた瞬間にレイアウトが
    * 動くことはない）。プレートの名前は今までどおり「あなた」のまま変えない
-   * （SlumbotTable.tsx 参照）——アイコンだけ本人のものに差し替える。
+   * （SlumbotTable.tsx 参照）——アイコンとアバター枠＋バッジ（deco）だけ本人のものに差し替える。
    */
-  const [heroAvatar, setHeroAvatar] = useState<{ src: string | null; initial: string }>({ src: null, initial: '?' });
+  const [heroAvatar, setHeroAvatar] = useState<{ src: string | null; initial: string; deco?: AvatarDecoInput | null }>({
+    src: null,
+    initial: '?',
+  });
   /** BGM を鳴らせなかったときの一言（音源が無い・ブラウザに止められた）。 */
   const [bgmNote, setBgmNote] = useState<string | null>(null);
 
@@ -313,7 +317,11 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
     void getMyProfile().then((r) => {
       if (!alive || !r.ok) return;
       const initial = r.data.handle.trim().charAt(0).toUpperCase() || '?';
-      setHeroAvatar({ src: r.data.avatar_url, initial });
+      setHeroAvatar({
+        src: r.data.avatar_url,
+        initial,
+        deco: { frame_color: r.data.frame_color, special_frame: r.data.special_frame, badge: r.data.badge },
+      });
     });
     return () => {
       alive = false;

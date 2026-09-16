@@ -13,6 +13,7 @@ import { useBackLayer } from './BackLayer';
 import { signedBbLabel } from '../slumbot/rules';
 import { fetchRanking, flushPending, type RankRow } from '../supabase/huStats';
 import { useStorageImage } from '../supabase/storageUrls';
+import { AvatarBadge, resolveAvatarDeco } from '../avatarDeco';
 
 type State = 'loading' | 'ready' | 'error';
 
@@ -20,7 +21,17 @@ function Avatar(props: { row: RankRow }): JSX.Element {
   const initial = props.row.handle.trim().charAt(0).toUpperCase() || '?';
   // アイコンはこのアプリの Storage の参照だけを署名 URL にして出す（storageUrls.ts）。
   const src = useStorageImage(props.row.avatarUrl, 'avatars');
-  return <div className="av">{src ? <img src={src} alt="" /> : initial}</div>;
+  const deco = resolveAvatarDeco({
+    frame_color: props.row.frameColor,
+    special_frame: props.row.specialFrame,
+    badge: props.row.badge,
+  });
+  return (
+    <div className={`av ${deco.ringClass}`} style={deco.ringStyle}>
+      {src ? <img src={src} alt="" /> : initial}
+      {deco.badge && <AvatarBadge />}
+    </div>
+  );
 }
 
 function Body(props: { state: State; rows: RankRow[]; onReload: () => void }): JSX.Element {

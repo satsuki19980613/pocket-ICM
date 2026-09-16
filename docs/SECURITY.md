@@ -9,6 +9,8 @@
 | データ | 見られる人 | 書ける人 |
 |---|---|---|
 | プロフィール（ユーザー名・表示名・アイコン） | メンバー全員 | 本人（ユーザー名・管理者フラグは変えられない） |
+| アバターの枠の色（`frame_color`） | メンバー全員 | 本人（6色から選択。特別枠 `special` は管理者の付与が無いと選べない） |
+| 特別枠・バッジ（`special_frame` / `badge`） | メンバー全員 | 管理者のみ（SQL Editor での直接 update） |
 | 自分の計算記録 | 本人（公開したものはメンバー全員） | 本人 |
 | 投稿・コメント・♡・ランキング | メンバー全員 | 本人 |
 | スレッド画像・アイコンの画像ファイル | メンバー全員（期限付きの署名 URL でのみ） | 本人のフォルダだけ |
@@ -86,6 +88,18 @@
   1人1時間30件まで・90日より古い行は挿入のついでに消える。
 - 管理画面のプログラム（`adminScreens-*.js`）は PWA の precache から外しているので、管理者以外の端末には
   ダウンロードされない。
+
+### アバターの枠・バッジ（0012, 2026-09-16 追加）
+
+- `supabase/migrations/0012_avatar_frames.sql` を SQL Editor で1回実行する（冪等）。
+- `profiles.frame_color` は本人が6色（steel/yellow/cyan/red/white/purple）から自由に選べる。
+  `special` は特別枠が付与されている（`special_frame` が入っている）ときだけ選べる
+  （`protect_profile_privileged` トリガが、付与なしでの `special` 指定を元の色に戻す）。
+- `profiles.special_frame`（色指定の16進 or `prism`）・`profiles.badge`（今は `crab` のみ）は
+  管理者が SQL Editor で直接 update するだけ（付与 UI は今回作らない・付与手順は
+  0012 のファイル末尾コメント参照）。本人からは一切書き換えられない。
+- 特別枠を取り消す（`special_frame` を null に戻す）と、`frame_color` が `special` のままの人も
+  自動で `steel` に戻る（同じトリガが面倒を見る）。
 
 ## さつきさんがダッシュボードで行う操作（コードでは変えられない設定）
 

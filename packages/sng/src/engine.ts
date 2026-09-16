@@ -32,6 +32,10 @@ export type EngineCommand =
        * null 扱いになる。実際の呼び出し元 worker/sng/table.ts は毎回 auth.avatarUrl を渡す）。
        */
       readonly avatarUrl?: string | null;
+      /** アバター枠＋バッジ（PlayerState.frameColor/specialFrame/badge と同じ形）。省略可。 */
+      readonly frameColor?: string | null;
+      readonly specialFrame?: string | null;
+      readonly badge?: string | null;
     }
   | { readonly t: 'leave'; readonly userId: string }
   | { readonly t: 'sitin'; readonly userId: string }
@@ -70,7 +74,10 @@ export type EngineResult =
   | { readonly ok: false; readonly error: EngineError };
 
 export interface Engine {
-  /** 待機中の部屋を作る（作成者は着席済み）。hostAvatarUrl は省略可（省略時は null）。 */
+  /**
+   * 待機中の部屋を作る（作成者は着席済み）。hostAvatarUrl/hostFrameColor/hostSpecialFrame/
+   * hostBadge はどれも省略可（省略時は null）。
+   */
   createTable(
     roomId: string,
     hostId: string,
@@ -78,6 +85,9 @@ export interface Engine {
     config: SngConfig,
     now: number,
     hostAvatarUrl?: string | null,
+    hostFrameColor?: string | null,
+    hostSpecialFrame?: string | null,
+    hostBadge?: string | null,
   ): TableState;
   /** コマンドを適用する。状態が変わらない場合も ok:true で同じ state を返してよい。 */
   apply(state: TableState, cmd: EngineCommand, now: number, rng: Rng): EngineResult;

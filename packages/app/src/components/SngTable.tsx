@@ -25,6 +25,7 @@ import { formatBbDisplay } from '@oshihiki/core';
 
 import { GlassTable, type FeltSeat, type SeatTag } from './GlassTable';
 import { STREET_LABEL } from '../slumbot/rules';
+import type { AvatarDecoInput } from '../avatarDeco';
 
 /** 直前アクションのピルの色分け（Fold=青 / Check=グレー / Call=緑 / Bet・Raise=赤 / All-in=黄）。 */
 const ACTION_KIND_CLASS: Record<ActionKind, string> = {
@@ -66,11 +67,17 @@ function actionPillLabel(a: ActionRecord, bb: number): string {
  * 席の既定アイコン（画像があれば画像、無ければ名前の頭文字。`feedShared.tsx` の `Avatar` と
  * 同じ流儀）を組み立てる。`avatarUrl` は PlayerState 由来で、古い部屋の状態だと undefined に
  * なりうる（`PlayerState.avatarUrl` の型コメント参照）ので、ここで null に丸める。
+ * `deco`（frameColor/specialFrame/badge）も同じ理由（古い部屋の状態）で undefined になりうる
+ * ので省略可にしてあり、`GlassTable` 側の `resolveAvatarDeco` が steel・バッジ無しに丸める。
  * 純関数として切り出してあるのはテストのため（buildSeat 自体は table/hand/props に依存し
  * 単体では呼びにくい）。
  */
-export function seatAvatarOf(name: string, avatarUrl: string | null | undefined): NonNullable<FeltSeat['avatar']> {
-  return { src: avatarUrl ?? null, initial: name.trim().charAt(0).toUpperCase() || '?' };
+export function seatAvatarOf(
+  name: string,
+  avatarUrl: string | null | undefined,
+  deco?: AvatarDecoInput,
+): NonNullable<FeltSeat['avatar']> {
+  return { src: avatarUrl ?? null, initial: name.trim().charAt(0).toUpperCase() || '?', deco };
 }
 
 /** 収支の符号つき bb 表記（Slumbot HU の HandResult と同じ流儀・"−" は全角ハイフンでなく減算記号）。 */
@@ -228,8 +235,12 @@ export function SngTable(props: {
       betText: streetBet > 0 && !folded && !out ? `${formatBbDisplay(streetBet / bb)}bb` : null,
       tags,
       // 本人のアイコン（`profiles.avatar_url` 由来）。無ければ名前の頭文字に落とす
-      // （`feedShared.tsx` の `Avatar` と同じ流儀）。
-      avatar: seatAvatarOf(player.name, player.avatarUrl),
+      // （`feedShared.tsx` の `Avatar` と同じ流儀）。枠＋バッジも同じ PlayerState 由来。
+      avatar: seatAvatarOf(player.name, player.avatarUrl, {
+        frame_color: player.frameColor,
+        special_frame: player.specialFrame,
+        badge: player.badge,
+      }),
     };
   };
 

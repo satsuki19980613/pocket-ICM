@@ -34,14 +34,24 @@ function isOpenStatus(status: TableStatus): boolean {
 }
 
 /**
- * ストレージから読んだ状態の PlayerState を今の型に揃える。`avatarUrl` はこの機能追加より
- * 前に保存された部屋には存在しない（`ctx.storage.get<TableState>` は実体を検証せず型だけ
- * 被せて返すので、古いデータでは実行時に `undefined` になる）。進行中の部屋がデプロイの
- * 瞬間に壊れないよう、読み出し側でここだけ `undefined → null` に丸める（書き込み側は毎回
- * 今の型で書くので、この丸めは古いデータを引きずるための一回限りの変換）。
+ * ストレージから読んだ状態の PlayerState を今の型に揃える。`avatarUrl`／`frameColor`／
+ * `specialFrame`／`badge` はどれもこの機能追加より前に保存された部屋には存在しない
+ * （`ctx.storage.get<TableState>` は実体を検証せず型だけ被せて返すので、古いデータでは
+ * 実行時に `undefined` になる）。進行中の部屋がデプロイの瞬間に壊れないよう、読み出し側で
+ * ここだけ `undefined → null` に丸める（書き込み側は毎回今の型で書くので、この丸めは
+ * 古いデータを引きずるための一回限りの変換）。
  */
 export function normalizeState(state: TableState): TableState {
-  return { ...state, players: state.players.map((p) => ({ ...p, avatarUrl: p.avatarUrl ?? null })) };
+  return {
+    ...state,
+    players: state.players.map((p) => ({
+      ...p,
+      avatarUrl: p.avatarUrl ?? null,
+      frameColor: p.frameColor ?? null,
+      specialFrame: p.specialFrame ?? null,
+      badge: p.badge ?? null,
+    })),
+  };
 }
 
 /**
@@ -126,15 +136,28 @@ export class SngTable implements DurableObject {
   }
 
   private async handleInit(body: unknown): Promise<Response> {
-    const { roomId, hostId, hostName, hostAvatarUrl, config, now } = body as {
+    const { roomId, hostId, hostName, hostAvatarUrl, hostFrameColor, hostSpecialFrame, hostBadge, config, now } = body as {
       roomId: string;
       hostId: string;
       hostName: string;
       hostAvatarUrl?: string | null;
+      hostFrameColor?: string | null;
+      hostSpecialFrame?: string | null;
+      hostBadge?: string | null;
       config: SngConfig;
       now: number;
     };
-    const state = engine.createTable(roomId, hostId, hostName, config, now, hostAvatarUrl ?? null);
+    const state = engine.createTable(
+      roomId,
+      hostId,
+      hostName,
+      config,
+      now,
+      hostAvatarUrl ?? null,
+      hostFrameColor ?? null,
+      hostSpecialFrame ?? null,
+      hostBadge ?? null,
+    );
     await this.persist(state);
     await scheduleAlarm(this.ctx, state);
     return Response.json({ ok: true });
@@ -382,6 +405,9 @@ export class SngTable implements DurableObject {
           userId: auth.userId,
           name: auth.name,
           avatarUrl: auth.avatarUrl,
+          frameColor: auth.frameColor,
+          specialFrame: auth.specialFrame,
+          badge: auth.badge,
         });
         if (state) {
           const you = engine.you(state, auth.userId);

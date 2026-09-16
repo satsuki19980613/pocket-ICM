@@ -15,6 +15,7 @@
  */
 
 import { useStorageImage } from '../supabase/storageUrls';
+import { AvatarBadge, resolveAvatarDeco, type AvatarDecoInput } from '../avatarDeco';
 
 const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 
@@ -145,9 +146,12 @@ export interface FeltSeat {
    * `<img src>` に入れてしまう」経路を作らせないため（avatars バケットは非公開・
    * `storagePathFromRef` の検証を必ず通す。`supabase/storageUrls.ts` 冒頭コメント参照）。
    * `initial` は画像が無い/読み込み中のときのフォールバック文字（頭文字や記号 1 文字）。
+   * `deco` はアバター枠＋バッジ（`avatarDeco.ts` の `AvatarDecoInput`。DB の生の3列をそのまま
+   * 渡せる形）。省略時は `resolveAvatarDeco` が steel・バッジ無しに解決する（Slumbot の bot 席
+   * 'Slumbot' はここを渡さず既定のまま出す＝さつき指示どおり）。
    * 省略時（undefined/null）は何も描かない。
    */
-  readonly avatar?: { readonly src: string | null; readonly initial: string } | null;
+  readonly avatar?: { readonly src: string | null; readonly initial: string; readonly deco?: AvatarDecoInput | null } | null;
 }
 
 /**
@@ -201,11 +205,17 @@ function FeltSeatView(props: FeltSeatViewProps): JSX.Element {
           プレートの幅にそのまま shrink-wrap されるので、.sgt-plate 自身の width/height・
           見た目は 1px も変わらない。 */}
       <div className="sgt-plateline">
-        {seat.avatar && (
-          <span className="sgt-av" aria-hidden="true">
-            <SeatAvatar avatar={seat.avatar} />
-          </span>
-        )}
+        {seat.avatar && (() => {
+          // アバター枠＋バッジ（avatarDeco.ts）。deco 省略時は steel・バッジ無しに解決される
+          // （Slumbot の bot 席は deco を渡さないので既定のまま出る）。
+          const deco = resolveAvatarDeco(seat.avatar.deco);
+          return (
+            <span className={`sgt-av ${deco.ringClass}`} style={deco.ringStyle} aria-hidden="true">
+              <SeatAvatar avatar={seat.avatar} />
+              {deco.badge && <AvatarBadge />}
+            </span>
+          );
+        })()}
         <div className="sgt-plate">
           <span className="sgt-name" title={seat.name}>
             {seat.name}

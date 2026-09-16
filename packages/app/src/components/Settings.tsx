@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getMyProfile,
   updateDefaultPublic,
+  updateFrameColor,
   changePassword,
   type MyProfile,
 } from '../supabase/profile';
@@ -12,6 +13,116 @@ import { checkForUpdate, useAppUpdate, type UpdatePhase } from '../pwa/appUpdate
 import { useStorageImage } from '../supabase/storageUrls';
 import { InfoMark, InfoModal } from './InfoModal';
 import { useBackLayer } from './BackLayer';
+import {
+  AvatarBadge,
+  NORMAL_FRAME_COLORS,
+  resolveAvatarDeco,
+  specialVars,
+  type FrameColor,
+  type NormalFrameColor,
+} from '../avatarDeco';
+
+/** 通常6色の表示名（AI感の強いネオン配色という指摘を受けた retune で、色に合わせて改名）。 */
+function frameColorLabel(c: NormalFrameColor): string {
+  switch (c) {
+    case 'steel':
+      return 'スチール（既定）';
+    case 'yellow':
+      return 'マスタード';
+    case 'cyan':
+      return 'ティール';
+    case 'red':
+      return 'テラコッタ';
+    case 'white':
+      return 'アイボリー';
+    case 'purple':
+      return 'モーブ';
+  }
+}
+
+/** 未付与の人に見せる特別枠の見本（選べない・見た目だけ）。ゴールドは管理者付与の代表色
+ *（retune でシャンパンゴールド寄りの落ち着いた色に変更）。 */
+const LOCKED_SPECIAL = [
+  { key: 'gold', ringClass: 'ring-special', style: specialVars('#c8a45a'), label: 'ゴールド（見本・付与された人だけ選べます）' },
+  { key: 'prism', ringClass: 'ring-special ring-prism', style: undefined, label: 'プリズム（見本・付与された人だけ選べます）' },
+] as const;
+
+/**
+ * 設定画面「枠の色」（2026-09-16 さつき承認のデザイン案の section E 準拠）。通常6色は誰でも選べる。
+ * 特別枠は管理者付与（`special_frame`）が無いとロック表示のみで選べない。バッジのオン/オフ
+ * トグルは無い（付与されたら常に出す。さつき指示）。選択は即時反映（楽観更新→失敗なら戻す）。
+ */
+function FramePicker(props: { profile: MyProfile; onChanged: (patch: { frame_color: FrameColor }) => void }): JSX.Element {
+  const [busy, setBusy] = useState<FrameColor | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  // MyProfile.frame_color は DB 由来の string（防御的に広く持つ）。ここでは表示・送信用に
+  // FrameColor として扱う（未知の値が来ても resolveAvatarDeco 側が steel に丸めるので安全）。
+  const current = props.profile.frame_color as FrameColor;
+  const granted = props.profile.special_frame;
+  const grantedDeco = granted ? resolveAvatarDeco({ frame_color: 'special', special_frame: granted }) : null;
+
+  async function pick(value: FrameColor): Promise<void> {
+    if (busy || value === current) return;
+    setErr(null);
+    setBusy(value);
+    const prev = current;
+    props.onChanged({ frame_color: value }); // 楽観更新。
+    const r = await updateFrameColor(value);
+    if (!r.ok) {
+      props.onChanged({ frame_color: prev });
+      setErr(r.message);
+    }
+    setBusy(null);
+  }
+
+  return (
+    <div className="fr-sheet">
+      <div className="ttl">枠の色</div>
+      <div className="fr-sw">
+        {NORMAL_FRAME_COLORS.map((c) => {
+          const deco = resolveAvatarDeco({ frame_color: c });
+          return (
+            <button
+              key={c}
+              type="button"
+              className={`${deco.ringClass}${current === c ? ' on' : ''}`}
+              aria-label={frameColorLabel(c)}
+              aria-pressed={current === c}
+              disabled={busy != null}
+              onClick={() => void pick(c)}
+            />
+          );
+        })}
+      </div>
+      <div className="names">
+        {NORMAL_FRAME_COLORS.map((c) => (
+          <span key={c}>{frameColorLabel(c).replace('（既定）', '')}</span>
+        ))}
+      </div>
+      <div className="sub">SPECIAL ─ {granted ? '付与済み' : '付与された人だけ選べます'}</div>
+      <div className="fr-sw">
+        {granted && grantedDeco ? (
+          <button
+            type="button"
+            className={`${grantedDeco.ringClass}${current === 'special' ? ' on' : ''}`}
+            style={grantedDeco.ringStyle}
+            aria-label="付与された特別枠"
+            aria-pressed={current === 'special'}
+            disabled={busy != null}
+            onClick={() => void pick('special')}
+          />
+        ) : (
+          LOCKED_SPECIAL.map((l) => (
+            <button key={l.key} type="button" className={`${l.ringClass} lock`} style={l.style} aria-label={l.label} aria-pressed={false} disabled>
+              <span>🔒</span>
+            </button>
+          ))
+        )}
+      </div>
+      {err && <p className="auth-err avpick-err">{err}</p>}
+    </div>
+  );
+}
 
 /** 「アップデートを確認」ボタンの文言。 */
 function updateButtonLabel(phase: UpdatePhase): string {
@@ -198,12 +309,14 @@ export function Settings(props: {
 
   const initial = (profile?.handle ?? '·').trim().charAt(0).toUpperCase() || '·';
   const updNote = updateNote(upd.phase, props.updateBlocked);
+  const deco = resolveAvatarDeco(profile);
 
   return (
     <div className="settings">
       <div className="avpick">
-        <div className="avbig">
+        <div className={`avbig ${deco.ringClass}`} style={deco.ringStyle}>
           {avatarSrc ? <img src={avatarSrc} alt="" /> : initial}
+          {deco.badge && <AvatarBadge />}
         </div>
         <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => void onPickAvatar(e)} />
         <div className="avpick-actions">
@@ -218,6 +331,13 @@ export function Settings(props: {
         </div>
         {avatarErr && <p className="auth-err avpick-err">{avatarErr}</p>}
       </div>
+
+      {profile && (
+        <FramePicker
+          profile={profile}
+          onChanged={(patch) => setProfile((prev) => (prev ? { ...prev, ...patch } : prev))}
+        />
+      )}
 
       <div className="pad pt0 h-row">
         <InfoMark label="設定について" onClick={() => setShowInfo(true)} />

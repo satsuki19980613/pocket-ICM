@@ -116,7 +116,15 @@ describe('feedCardOf', () => {
 });
 
 describe('mapFeedRow', () => {
-  const author = { id: 'u1', handle: 'satsuki', display_name: 'Satsuki', avatar_url: null };
+  const author = {
+    id: 'u1',
+    handle: 'satsuki',
+    display_name: 'Satsuki',
+    avatar_url: null,
+    frame_color: 'steel',
+    special_frame: null,
+    badge: null,
+  };
   const result = makeResult('A8o', 'SB', 11, 1, 0.122, 78.9);
 
   it('著者・結果・件数・♡・本文（公開時の一言）を束ねる（結果投稿）', () => {
@@ -271,7 +279,15 @@ describe('mapFeedRow', () => {
         body: null, // rin は一言無しで公開
         image_url: null,
         updated_at: null,
-        author: { id: 'u-rin', handle: 'rin', display_name: 'Rin', avatar_url: null },
+        author: {
+          id: 'u-rin',
+          handle: 'rin',
+          display_name: 'Rin',
+          avatar_url: null,
+          frame_color: 'steel',
+          special_frame: null,
+          badge: null,
+        },
         result,
         comments: [{ count: 1 }], // satsuki の返信で +1（本文の中身はここには来ない）
         likes: [{ count: 0 }],

@@ -216,3 +216,56 @@ describe('レベル', () => {
     expect(engine.levelAt(config, startedAt, 3 * 60_000)).toBe(2);
   });
 });
+
+// アバター枠＋バッジ（frameColor/specialFrame/badge）の配線。worker/sng/table.ts が毎回
+// auth 由来の値を渡す想定で、avatarUrl と全く同じ扱い（省略時は null）にしてある。
+describe('createTable/join のアバター枠＋バッジ', () => {
+  it('createTable は hostFrameColor/hostSpecialFrame/hostBadge をそのまま host に載せる', () => {
+    const state = engine.createTable('sg_x', 'u0', 'Host', defaultConfig(), 0, null, 'cyan', null, 'crab');
+    expect(state.players[0]!.frameColor).toBe('cyan');
+    expect(state.players[0]!.specialFrame).toBeNull();
+    expect(state.players[0]!.badge).toBe('crab');
+  });
+
+  it('省略時はどれも null（テスト等・古い呼び出し元でも落ちない）', () => {
+    const state = engine.createTable('sg_x', 'u0', 'Host', defaultConfig(), 0);
+    expect(state.players[0]!.frameColor).toBeNull();
+    expect(state.players[0]!.specialFrame).toBeNull();
+    expect(state.players[0]!.badge).toBeNull();
+  });
+
+  it('join コマンドの frameColor/specialFrame/badge が新規プレイヤーへそのまま載る', () => {
+    const rng = makeRng(1);
+    const state = engine.createTable('sg_x', 'u0', 'Host', defaultConfig(), 0);
+    const r = engine.apply(
+      state,
+      { t: 'join', userId: 'u1', name: 'P1', frameColor: 'special', specialFrame: '#f5c542', badge: 'crab' },
+      0,
+      rng,
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const p1 = r.state.players.find((p) => p.userId === 'u1');
+      expect(p1?.frameColor).toBe('special');
+      expect(p1?.specialFrame).toBe('#f5c542');
+      expect(p1?.badge).toBe('crab');
+    }
+  });
+
+  it('waiting 中の再入室のたびに frameColor/specialFrame/badge も今の値へ揃える', () => {
+    const rng = makeRng(1);
+    let state = engine.createTable('sg_x', 'u0', 'Host', defaultConfig(), 0, null, 'steel');
+    const joined = engine.apply(state, { t: 'join', userId: 'u1', name: 'P1', frameColor: 'red' }, 0, rng);
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+    state = joined.state;
+    // u1 が枠を変えてから同じ部屋に再入室（waiting のまま）。
+    const rejoined = engine.apply(state, { t: 'join', userId: 'u1', name: 'P1', frameColor: 'yellow', badge: 'crab' }, 0, rng);
+    expect(rejoined.ok).toBe(true);
+    if (rejoined.ok) {
+      const p1 = rejoined.state.players.find((p) => p.userId === 'u1');
+      expect(p1?.frameColor).toBe('yellow');
+      expect(p1?.badge).toBe('crab');
+    }
+  });
+});

@@ -22,6 +22,10 @@ export interface FeedAuthor {
   handle: string;
   display_name: string;
   avatar_url: string | null;
+  /** アバター枠＋バッジ（avatarDeco.ts の AvatarDecoInput と同じ3列。§0012 で profiles に追加）。 */
+  frame_color: string;
+  special_frame: string | null;
+  badge: string | null;
 }
 
 export interface FeedResult {
@@ -247,7 +251,7 @@ export function mapFeedRow(row: RawThreadRow, likedThreads: Set<string>): FeedPo
 // mapFeedRow 側（kind==='result' && !result）で引き続き担保する。
 const THREAD_SELECT =
   'id, created_at, kind, body, image_url, updated_at,' +
-  ' author:profiles!threads_author_fkey(id, handle, display_name, avatar_url),' +
+  ' author:profiles!threads_author_fkey(id, handle, display_name, avatar_url, frame_color, special_frame, badge),' +
   ' result:results(id, owner, spot, solution, hero_action, ev_loss, created_at),' +
   ' comments(count), likes(count)';
 
@@ -310,7 +314,7 @@ export async function getThread(threadId: string): Promise<FnResult<ThreadDetail
     .from('threads')
     .select(
       'id, created_at, kind, body, image_url, updated_at,' +
-        ' author:profiles!threads_author_fkey(id, handle, display_name, avatar_url),' +
+        ' author:profiles!threads_author_fkey(id, handle, display_name, avatar_url, frame_color, special_frame, badge),' +
         ' result:results(id, owner, spot, solution, hero_action, ev_loss, created_at),' +
         ' likes(count)',
     )
@@ -325,7 +329,7 @@ export async function getThread(threadId: string): Promise<FnResult<ThreadDetail
     .from('comments')
     .select(
       'id, body, image_url, created_at, updated_at,' +
-        ' author:profiles!comments_author_fkey(id, handle, display_name, avatar_url)',
+        ' author:profiles!comments_author_fkey(id, handle, display_name, avatar_url, frame_color, special_frame, badge)',
     )
     .eq('thread_id', threadId)
     .order('created_at', { ascending: true });
@@ -462,7 +466,7 @@ export async function addComment(
     .insert({ thread_id: threadId, author: uid, body, image_url: imageUrl })
     .select(
       'id, body, image_url, created_at, updated_at,' +
-        ' author:profiles!comments_author_fkey(id, handle, display_name, avatar_url)',
+        ' author:profiles!comments_author_fkey(id, handle, display_name, avatar_url, frame_color, special_frame, badge)',
     )
     .single();
   if (error || !data) return fail('コメントを投稿できませんでした');

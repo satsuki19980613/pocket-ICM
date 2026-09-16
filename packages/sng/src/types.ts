@@ -82,6 +82,17 @@ export interface PlayerState {
    * （worker/sng/table.ts の `normalizeState`・SngTable.tsx/SlumbotTable.tsx の buildSeat 参照）。
    */
   readonly avatarUrl?: string | null;
+  /**
+   * アバター枠の色（profiles.frame_color。avatarDeco.ts の frame_color と同じ列挙）。
+   * `?` にしている理由は `avatarUrl` と同じ（アイコン枠機能より前に保存された部屋には
+   * 存在しない。`worker/sng/table.ts` の `normalizeState` が `undefined → null` に丸める）。
+   * 読み出し側（GlassTable.tsx の `resolveAvatarDeco`）は null/undefined を steel 扱いにする。
+   */
+  readonly frameColor?: string | null;
+  /** 特別枠（profiles.special_frame）。管理者付与が無ければ null。`avatarUrl` と同じ理由で `?`。 */
+  readonly specialFrame?: string | null;
+  /** バッジ（profiles.badge）。管理者付与が無ければ null。`avatarUrl` と同じ理由で `?`。 */
+  readonly badge?: string | null;
   readonly seat: number;
   readonly stack: number;
   readonly status: PlayerStatus;

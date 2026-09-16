@@ -146,6 +146,10 @@ export interface RankRow {
   readonly handle: string;
   readonly displayName: string;
   readonly avatarUrl: string | null;
+  /** アバター枠＋バッジ（avatarDeco.ts の AvatarDecoInput と同じ3列）。 */
+  readonly frameColor: string;
+  readonly specialFrame: string | null;
+  readonly badge: string | null;
   readonly hands: number;
   readonly netChips: number;
   /** 自分の行か（一覧で強調する）。 */
@@ -156,7 +160,14 @@ interface RankQueryRow {
   owner: string;
   hands: number;
   net_chips: number | string;
-  profiles: { handle: string; display_name: string; avatar_url: string | null } | null;
+  profiles: {
+    handle: string;
+    display_name: string;
+    avatar_url: string | null;
+    frame_color: string | null;
+    special_frame: string | null;
+    badge: string | null;
+  } | null;
 }
 
 /** ランキング（通算収支の降順）。同点はハンド数の多い順。 */
@@ -165,7 +176,7 @@ export async function fetchRanking(limit = 100): Promise<FnResult<RankRow[]>> {
   const uid = auth.user?.id ?? '';
   const { data, error } = await supabase
     .from('hu_stats')
-    .select('owner, hands, net_chips, profiles!inner(handle, display_name, avatar_url)')
+    .select('owner, hands, net_chips, profiles!inner(handle, display_name, avatar_url, frame_color, special_frame, badge)')
     .order('net_chips', { ascending: false })
     .order('hands', { ascending: false })
     .limit(limit);
@@ -179,6 +190,9 @@ export async function fetchRanking(limit = 100): Promise<FnResult<RankRow[]>> {
       handle: r.profiles?.handle ?? '',
       displayName: r.profiles?.display_name ?? '(不明)',
       avatarUrl: r.profiles?.avatar_url ?? null,
+      frameColor: r.profiles?.frame_color ?? 'steel',
+      specialFrame: r.profiles?.special_frame ?? null,
+      badge: r.profiles?.badge ?? null,
       hands: r.hands,
       netChips: Number(r.net_chips),
       isMe: r.owner === uid,

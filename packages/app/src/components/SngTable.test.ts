@@ -3,6 +3,8 @@
  * さつき指示（アカウントアイコンの配線）: 画像があれば画像、無ければ名前の頭文字にフォールバック
  * すること、および PlayerState.avatarUrl が無い（undefined＝古い部屋の状態）を読んでも
  * 落ちずに null へ丸まることを固定する。
+ * `deco`（アバター枠＋バッジ。avatarDeco.ts）は3引数目に渡すだけで、解決（resolveAvatarDeco）は
+ * GlassTable.tsx 側の責務。ここでは「渡した値がそのまま avatar.deco に載る」ことだけ確認する。
  */
 import { describe, it, expect } from 'vitest';
 
@@ -35,5 +37,15 @@ describe('seatAvatarOf', () => {
 
   it('先頭が小文字の名前は大文字化した頭文字になる', () => {
     expect(seatAvatarOf('kenta', null)).toEqual({ src: null, initial: 'K' });
+  });
+
+  it('deco を渡すとそのまま avatar.deco に載る（3引数目・省略可）', () => {
+    const deco = { frame_color: 'cyan', special_frame: null, badge: 'crab' };
+    expect(seatAvatarOf('Satsuki', null, deco)).toEqual({ src: null, initial: 'S', deco });
+  });
+
+  it('deco を渡さなければ avatar.deco は undefined のまま（古い部屋の状態と同じ扱い）', () => {
+    const av = seatAvatarOf('Satsuki', null);
+    expect(av.deco).toBeUndefined();
   });
 });

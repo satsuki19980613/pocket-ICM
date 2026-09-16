@@ -200,7 +200,7 @@
      実測ぶん。プリセットを横1行のスクロールにした（さつき指示 2026-09-16）ことで行数が
      増えなくなり、ストリートが変わっても卓の高さが動かない。余りは margin-bottom:auto が
      吸う（旧 `.sb-felt` と同じ考え方）。 */
-  height: clamp(330px, calc(100dvh - 335px - var(--sat) - var(--sab)), 560px);
+  height: clamp(300px, calc(100dvh - 338px - var(--sat) - var(--sab)), 560px);
   flex: none;
   margin-bottom: auto;
 }
@@ -418,22 +418,27 @@
   white-space: nowrap;
 }
 
-/* ピルはどの席でも「プレートの真上か真下」に、1 つの箱へ縦に積んで中央ぞろえで出す。
-   横に出すとボードや隣の席と重なる（T4 も左右の席のピルは横ではなく下に出している）。
-   上半分の席は下向き、下半分の席（hero を含む）は上向き。 */
+/* ピルは席の並びにそのまま流して「プレートの真下」に出す（T4 も上下左右どの席も
+   プレートの下にぶら下げている）。絶対配置で席の箱の上端／下端から測ると、札や
+   そのぶんの空きスペースの高さが混ざってプレートから離れて浮いて見える。
+   hero だけは画面の下端に貼り付いていて下に出す余地が無いので、札の上（＝ポット側）に出す。 */
 .sgt-pills {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
+  margin-top: 1px;
 }
-.sgt-seat.dir-down .sgt-pills { top: calc(100% + 4px); }
-.sgt-seat.dir-up .sgt-pills { bottom: calc(100% + 4px); }
-/* hero は下端に貼り付いているので、ピルはカードの上（＝ポット側）に出す。 */
-.sgt-seat.hero .sgt-pills { bottom: calc(100% + 4px); }
+.sgt-seat.hero .sgt-pills {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  margin-top: 0;
+  /* hero は札の上（＝ボード側）に出すので、縦に積むとボードへ届いてしまう。横並びにして
+     高さを半分にする（縦の余裕が無い端末でもボードと重ならない）。 */
+  flex-direction: row;
+}
 
 
 /* 320px 幅でも成立させる: プレートを詰め、左右の席は画面端ぎりぎりまで寄せる。 */
@@ -443,11 +448,44 @@
   .sgt-stack { font-size: 12px; }
   .sgt-seat.anchor-l { left: 4px; }
   .sgt-seat.anchor-r { right: 4px; }
-  /* 左右のピルとボードが触れるので、ボードを一回り小さくして間を空ける。 */
-  .sgt-slot { width: 28px; height: 40px; }
+  /* 左右のピルとボードが触れるので、ボードとプレートを一回り小さくして間を空ける。 */
+  .sgt-slot { width: 25px; height: 35px; }
   .sgt-felt { inset: 42px 17% 86px; }
+  .sgt-plate { min-width: 76px; max-width: 88px; }
   .sgt-act,
-  .sgt-bet { font-size: 10.5px; padding: 1px 6px; }
+  .sgt-bet { font-size: 10px; padding: 1px 5px; }
+}
+
+/* 縦の余裕が無い端末（iPhone SE など）は、卓の中央（ポット＋ボード）と札を一回り小さくして、
+   左右の席のプレートとぶつからない幅・高さに収める。 */
+@media (max-height: 720px) {
+  .sgt-felt { inset: 40px 16% 84px; }
+  /* 中央（ポット＋ボード）を少し上へ寄せ、hero の札とピルのぶんを下に空ける。 */
+  .sgt-mid { top: 46%; }
+  /* 縦に余裕が無い端末では、上端の席だけピルを横並びにして高さを半分にし、中央との間を空ける。
+     左右の席は縦積みのまま（横に並べると「All-in 8.7bb ＋ 8.7bb」のように長くなって、
+     今度はボードへ横から突っ込む）。 */
+  .sgt-seat.edge-top .sgt-pills { flex-direction: row; }
+  .sgt-slot { width: 26px; height: 37px; }
+  .sgt-pot { font-size: 18px; }
+  .sgt-mid { gap: 3px; }
+  .sgt-plate { max-width: 98px; }
+  .sgt-seat.hero .pt-card.sb-big { width: 32px; height: 45px; }
+  .sgt-seat.hero .pt-card.sb-big .pt-rank { font-size: 17px; }
+  .sgt-seat.hero .pt-card.sb-big .pt-suit { font-size: 13px; }
+}
+
+/* さらに縦が短い端末（640px 前後）。上の席・中央・hero の 3 段が縦に並びきらないので、
+   ストリート名（PREFLOP 等）を省いて中央を 1 行ぶん低くし、左右の席も上下へ寄せる。
+   ストリートはボードの枚数で分かるし、部屋のヘッダにハンド番号とレベルが出ている。
+   席の top は成分が inline style（% 座標）なので、ここだけ !important で上書きする。 */
+@media (max-height: 680px) {
+  .sgt-street { display: none; }
+  .sgt-mid { top: 46%; }
+  .sgt-seat.anchor-l.dir-down,
+  .sgt-seat.anchor-r.dir-down { top: 20% !important; }
+  .sgt-seat.anchor-l.dir-up,
+  .sgt-seat.anchor-r.dir-up { top: 80% !important; }
 }
 
 /* ---- ベットサイズのプリセットは横1行のスクロール（さつき指示 2026-09-16）----

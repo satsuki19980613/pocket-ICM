@@ -2,15 +2,15 @@
  * SIT & GO の成績集計（docs/SNG_DESIGN.md §5 STATS 画面）。
  * 入力は `endedAt` 昇順の試合結果（`historyStore.ts` の `SngResultLocal`）。すべて純関数。
  *
- * 期間の考え方（週/月/直近N）は Slumbot HU（`slumbot/stats.ts`）と同じにする。`Period` と
- * その日付計算はハンド固有の型に依存しない純関数なのでそのまま流用し、フィルタ本体だけ
+ * 期間の考え方（直近N）は Slumbot HU（`slumbot/stats.ts`）と同じにする。`Period` は
+ * ハンド固有の型に依存しない純粋な型なのでそのまま流用し、フィルタ本体だけ
  * SIT & GO の結果（1 件＝1 試合）向けに書く。
  */
 
-import { startOfMonth, startOfWeek, type Period, type Ratio } from '../slumbot/stats';
+import type { Period, Ratio } from '../slumbot/stats';
 import type { SngResultLocal } from './historyStore';
 
-export { PERIODS, startOfMonth, startOfWeek, type Period, type Ratio } from '../slumbot/stats';
+export { PERIODS, type Period, type Ratio } from '../slumbot/stats';
 
 /** 期間で絞る（入力は endedAt 昇順・出力も昇順）。 */
 export function filterByPeriod(
@@ -19,14 +19,6 @@ export function filterByPeriod(
   now: number = Date.now(),
 ): SngResultLocal[] {
   switch (period) {
-    case 'week': {
-      const from = startOfWeek(now);
-      return recs.filter((r) => r.endedAt >= from);
-    }
-    case 'month': {
-      const from = startOfMonth(now);
-      return recs.filter((r) => r.endedAt >= from);
-    }
     case 'last100':
       return recs.slice(-100);
     case 'last500':

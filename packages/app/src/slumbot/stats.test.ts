@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { HuHandRecord } from './history';
-import { cumulativeSeries, filterByPeriod, kLabel, pctLabel, startOfWeek, summarize } from './stats';
+import { cumulativeSeries, filterByPeriod, kLabel, pctLabel, summarize } from './stats';
 
 function rec(over: Partial<HuHandRecord>): HuHandRecord {
   return {
@@ -63,22 +63,6 @@ describe('summarize', () => {
 describe('filterByPeriod', () => {
   // 2026-09-15 (火) 15:20 ローカル
   const now = new Date(2026, 8, 15, 15, 20).getTime();
-  const recs = [
-    rec({ playedAt: new Date(2026, 7, 31).getTime() }),
-    rec({ playedAt: new Date(2026, 8, 1).getTime() }),
-    rec({ playedAt: new Date(2026, 8, 13, 23).getTime() }), // 日曜（先週）
-    rec({ playedAt: new Date(2026, 8, 14, 0, 0).getTime() }), // 月曜（今週の始まり）
-    rec({ playedAt: now }),
-  ];
-
-  it('今週は月曜 0:00 から', () => {
-    expect(new Date(startOfWeek(now)).getDay()).toBe(1);
-    expect(filterByPeriod(recs, 'week', now)).toHaveLength(2);
-  });
-
-  it('今月は 1 日から', () => {
-    expect(filterByPeriod(recs, 'month', now)).toHaveLength(4);
-  });
 
   it('直近 N は末尾から', () => {
     const many = Array.from({ length: 1200 }, (_, i) => rec({ playedAt: i }));

@@ -77,21 +77,6 @@ describe('cumulativePt', () => {
 describe('filterByPeriod', () => {
   // 2026-09-15 (火) 15:20 ローカル（slumbot/stats.test.ts と同じ基準日）。
   const now = new Date(2026, 8, 15, 15, 20).getTime();
-  const recs = [
-    res({ endedAt: new Date(2026, 7, 31).getTime() }),
-    res({ endedAt: new Date(2026, 8, 1).getTime() }),
-    res({ endedAt: new Date(2026, 8, 13, 23).getTime() }), // 日曜（先週）
-    res({ endedAt: new Date(2026, 8, 14, 0, 0).getTime() }), // 月曜（今週の始まり）
-    res({ endedAt: now }),
-  ];
-
-  it('今週は月曜 0:00 から', () => {
-    expect(filterByPeriod(recs, 'week', now)).toHaveLength(2);
-  });
-
-  it('今月は 1 日から', () => {
-    expect(filterByPeriod(recs, 'month', now)).toHaveLength(4);
-  });
 
   it('直近 N・all は末尾/全件', () => {
     const many = Array.from({ length: 150 }, (_, i) => res({ endedAt: i }));

@@ -45,14 +45,15 @@
 }
 
 /* ---- ロビー ---- */
-/* 「flowscreen 画面いっぱい」パターン（.sb-wrap と同じ・103px は .app の上下パディングと
-   ヘッダ実測ぶん）。これで .sg-list-panel の flex:1 が実際に効き、作成パネルが長くなっても
-   一覧が下端の帯に潰れない（min-height なので作成パネルがさらに長ければページ全体は伸びる）。 */
+/* 募集中パネルは中身ぴったりの高さにする（部屋が 0〜数件でも下半分が丸ごと空く不具合の
+   是正）。以前はここに「flowscreen 画面いっぱい」パターン（.sb-wrap と同じ）で
+   min-height を強制し、.sg-list-panel の flex:1 で一覧を画面下端まで伸ばしていたが、
+   部屋が少ないとその空白がそのまま残っていた。画面全体を覆う背景は .app 自身の
+   min-height:100dvh と固定レイヤー（.bgfield/.rain, position:fixed）が別に担っているので、
+   ここで高さを強制しなくても背景が途切れることはない（styles.css 参照）。 */
 .sg-lobby {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 103px);
-  min-height: calc(100dvh - 103px - var(--sat) - var(--sab));
   gap: var(--s3);
 }
 .sg-create { flex: none; }
@@ -81,20 +82,23 @@
 .sg-list-panel {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  /* 作成パネルがどれだけ長くても、一覧は最低でもビューポートの4割は確保する。 */
-  min-height: 40dvh;
+  flex: none;
   margin-bottom: 0;
 }
 .sg-list-panel > .scr-h { flex: none; }
-/* 一覧はパネル内スクロール。高さは親（flex:1 の .sg-list-panel）から決まる。 */
+/* 一覧は基本は中身ぴったり（flex:1 だが親 .sg-list-panel の高さが auto なので伸びない）。
+   ただし部屋が並びすぎた（10件以上など）ときに画面外まで延々と伸びないよう上限を付け、
+   そこから先はパネル内スクロールにする。dvh 非対応の古い端末向けに vh のフォールバックを
+   先に置く（.sg-lobby の旧 min-height と同じ書き方に倣う）。 */
 .sg-list-scroll {
   flex: 1;
   min-height: 0;
+  max-height: 50vh;
+  max-height: 50dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-.sg-room-list { display: flex; flex-direction: column; gap: var(--s2); }
+.sg-room-list { display: flex; flex-direction: column; gap: var(--s2); list-style: none; margin: 0; padding: 0; }
 .sg-room-row {
   width: 100%;
   display: flex;

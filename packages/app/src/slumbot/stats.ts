@@ -5,32 +5,14 @@
 
 import { preflopFacts, walkActions, type HuHandRecord } from './history';
 
-export type Period = 'week' | 'month' | 'last100' | 'last500' | 'last1k' | 'all';
+export type Period = 'last100' | 'last500' | 'last1k' | 'all';
 
 export const PERIODS: readonly { key: Period; label: string }[] = [
-  { key: 'week', label: '今週' },
-  { key: 'month', label: '今月' },
   { key: 'last100', label: '100' },
   { key: 'last500', label: '500' },
   { key: 'last1k', label: '1k' },
   { key: 'all', label: 'All' },
 ];
-
-/** 今週の始まり（月曜 0:00・端末のローカル時刻）。 */
-export function startOfWeek(now: number): number {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  const dow = (d.getDay() + 6) % 7; // 月曜=0
-  d.setDate(d.getDate() - dow);
-  return d.getTime();
-}
-
-export function startOfMonth(now: number): number {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(1);
-  return d.getTime();
-}
 
 /** 期間で絞る（入力は昇順・出力も昇順）。 */
 export function filterByPeriod(
@@ -39,14 +21,6 @@ export function filterByPeriod(
   now: number = Date.now(),
 ): HuHandRecord[] {
   switch (period) {
-    case 'week': {
-      const from = startOfWeek(now);
-      return recs.filter((r) => r.playedAt >= from);
-    }
-    case 'month': {
-      const from = startOfMonth(now);
-      return recs.filter((r) => r.playedAt >= from);
-    }
     case 'last100':
       return recs.slice(-100);
     case 'last500':

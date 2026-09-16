@@ -96,6 +96,9 @@ export interface SpotRecord {
   imageId?: string;
   /** OCR 読み取り記録（`ocr_reads.id`）。 */
   ocrReadId?: string;
+  /** ハンド履歴（SIT & GO）から投げた計算の出どころ。手入力・スクショなら未設定。
+   *  この端末のローカル専用（サーバの `results` には送らない）。 */
+  sngSource?: { readonly gameId: string; readonly handNo: number };
 }
 
 export interface BuildRecordInput {
@@ -154,6 +157,8 @@ export interface StartRecordInput {
   playersLeft: number;
   imageId?: string;
   ocrReadId?: string;
+  /** ハンド履歴（SIT & GO）から投げた計算の出どころ。手入力・スクショなら未設定。 */
+  sngSource?: { readonly gameId: string; readonly handNo: number };
   /** 省略時は createdAt から採番（テストでは固定可）。 */
   id?: string;
   /** 省略時 Date.now()。 */
@@ -187,6 +192,7 @@ export function startRecord(input: StartRecordInput): SpotRecord {
     pendingSync: false,
     imageId: input.imageId,
     ocrReadId: input.ocrReadId,
+    sngSource: input.sngSource,
   };
 }
 

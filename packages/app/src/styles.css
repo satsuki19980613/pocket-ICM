@@ -3017,14 +3017,17 @@ button.cell { cursor: pointer; }
 .hh-count b { color: var(--fg); font-family: var(--disp); font-size: 18px; margin-right: 4px; font-variant-numeric: tabular-nums; }
 .hh-top .hh-msg { margin: var(--s2) 0 0; }
 .hh-list { display: flex; flex-direction: column; gap: 6px; }
-.hh-item { background: var(--surface); border: 1px solid var(--line); }
+/* .hh-item は行タップ用の .hh-row と、SNG 専用の ICM ボタン（.hh-icm）を横に並べる箱。
+   ICM ボタンが無いときは .hh-row 単体で今まで通りの見た目になる。 */
+.hh-item { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line); }
 .hh-item:active { border-color: var(--line-2); }
 .hh-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px;
   background: none;
   border: 0;
@@ -3034,7 +3037,9 @@ button.cell { cursor: pointer; }
 }
 .hh-main { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
 .hh-time { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--dim2); white-space: nowrap; }
-.hh-cards { display: inline-flex; gap: 3px; }
+/* 狭い端末（320px）で右側に ICM ボタンが並ぶと札の列が入り切らないので、折り返せるようにする
+   （折り返さないと .hh-main からはみ出して収支の数字と重なる）。 */
+.hh-cards { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .hh-card {
   display: inline-flex;
   align-items: center;
@@ -3049,7 +3054,7 @@ button.cell { cursor: pointer; }
 .hh-cards.dim .hh-card { background: #d9d8cc; font-size: 11px; }
 /* 一覧の行で自分の手札とボードを見分けやすくする、ごく小さいラベル
    （行の高さはカード列より低いので高さは増えない）。 */
-.hh-board { display: inline-flex; align-items: center; gap: 4px; }
+.hh-board { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .hh-board-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; color: var(--dim2); }
 .hh-card.suit-s { color: #16150d; }
 .hh-card.suit-h { color: #d81f2f; }

@@ -100,8 +100,44 @@
 /* ポジションが分からない（'?'）ときのフォールバック。 */
 .sh-pos.p-unk { background: var(--line-2); color: var(--dim); }
 
+/* ---- Hand History: ICM Calc ボタン（一覧行の右端）----
+   `.hh-row` の兄弟として置く小型ボタン。対象ハンド（sngIcmSpot が ok を返す）だけに出る。
+   状態の書き分けは disabled と opacity だけで行い、新しい色は作らない
+   （アクセントは .btn.line / .btn.ghost と同じシアン系）。 */
+.hh-icm {
+  flex: none;
+  align-self: center;
+  margin-right: 10px;
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  background: var(--surface-2);
+  border: 1px solid rgba(58, 230, 255, 0.4);
+  cursor: pointer;
+}
+.hh-icm:hover:not(:disabled) { border-color: var(--cyan); background: rgba(58, 230, 255, 0.08); }
+.hh-icm:disabled { opacity: 0.45; cursor: default; }
+
+/* ---- Hand Detail Modal: ICM アクション（.hhd-body の末尾） ---- */
+.hhd-actions { padding-top: var(--s3); border-top: 1px dashed var(--line); }
+.hhd-icm:disabled { opacity: 0.45; cursor: default; }
+/* 対象外ハンドの理由（.hhd-result-line.sub と同じ控えめな見た目）。 */
+.hhd-icm-off {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+  color: var(--dim2);
+}
+
 /* ---- 320px でも溢れないよう、試合見出しとハンド行を詰める ---- */
 @media (max-width: 360px) {
   .sh-game-head { padding: 7px 8px; }
   .hh-who { width: 48px; }
+  .hh-icm { margin-right: 7px; padding: 0 6px; font-size: 9.5px; }
 }

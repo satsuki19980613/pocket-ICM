@@ -190,6 +190,20 @@ describe('startRecord', () => {
     expect(withoutRefs.imageId).toBeUndefined();
     expect(withoutRefs.ocrReadId).toBeUndefined();
   });
+
+  it('sngSource を渡せば引き継ぐ（省略時は undefined）', () => {
+    const withSource = startRecord({
+      clientId: 'c4',
+      state,
+      heroHand: 'AKs',
+      heroPos: 'BTN',
+      playersLeft: 5,
+      sngSource: { gameId: 'g1', handNo: 3 },
+    });
+    expect(withSource.sngSource).toEqual({ gameId: 'g1', handNo: 3 });
+    const withoutSource = startRecord({ clientId: 'c5', state, heroHand: 'AKs', heroPos: 'BTN', playersLeft: 5 });
+    expect(withoutSource.sngSource).toBeUndefined();
+  });
 });
 
 describe('finishRecord', () => {

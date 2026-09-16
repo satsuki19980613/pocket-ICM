@@ -135,8 +135,8 @@ function StreetBlock(props: { st: HandStreetView; board: readonly string[] }): J
   );
 }
 
-export function HandDetailModal(props: { view: HandDetailView; onClose: () => void }): JSX.Element {
-  const { view, onClose } = props;
+export function HandDetailModal(props: { view: HandDetailView; onClose: () => void; actions?: React.ReactNode }): JSX.Element {
+  const { view, onClose, actions } = props;
   // 端末の戻る／Esc で閉じる（InfoModal と同じ作法）。
   useBackLayer(onClose);
 
@@ -212,6 +212,8 @@ export function HandDetailModal(props: { view: HandDetailView; onClose: () => vo
               </p>
             ))}
           </div>
+
+          {actions && <div className="hhd-actions">{actions}</div>}
         </div>
       </div>
     </div>

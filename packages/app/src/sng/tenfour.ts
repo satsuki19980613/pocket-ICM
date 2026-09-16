@@ -93,14 +93,14 @@ function pairCards(pair: readonly [string, string] | undefined): TenfourCard[] {
 }
 
 /** そのハンドで生きている席（開始時スタックが 0 でない）を席番号の昇順で。 */
-function liveSeats(startStacks: readonly number[]): number[] {
+export function liveSeats(startStacks: readonly number[]): number[] {
   const out: number[] = [];
   for (let i = 0; i < startStacks.length; i += 1) if ((startStacks[i] ?? 0) > 0) out.push(i);
   return out;
 }
 
 /** bbSeat を末尾に回した生存席の並び（先頭が UTG 相当、末尾が BB）。 */
-function actingOrder(live: readonly number[], bbSeat: number): number[] {
+export function actingOrder(live: readonly number[], bbSeat: number): number[] {
   const k = live.indexOf(bbSeat);
   if (k < 0) return [...live];
   return [...live.slice(k + 1), ...live.slice(0, k + 1)];

@@ -19,7 +19,10 @@ import type { SngHandRecord } from '@oshihiki/sng';
 import { useMemo, useState } from 'react';
 
 import type { HandDetailView } from '../history/handView';
+import { sngIcmSpot } from '../history/icmSpot';
+import type { SngIcmSpotResult } from '../history/icmSpot';
 import { sngHandView } from '../history/sngHandView';
+import type { SngHistoryIcm } from '../icmQueue';
 import type { SngGameLocal, SngHandLocal, SngResultLocal } from '../sng/historyStore';
 import { chipsToBbSng, netOf, sngConfigSummary } from '../sng/tenfour';
 import { useSngHands } from '../sng/useSngHands';
@@ -106,8 +109,55 @@ function useGroups(
   }, [hands, results, games]);
 }
 
-function HandRow(props: { hand: SngHandLocal; game: SngGameLocal | null; onOpen: (view: HandDetailView) => void }): JSX.Element {
-  const { hand, game, onOpen } = props;
+/** モーダルに渡す情報（JSX ではなくデータだけを state に持つ）。 */
+interface OpenModalState {
+  readonly view: HandDetailView;
+  readonly gameId: string;
+  readonly handNo: number;
+  readonly spot: SngIcmSpotResult | null;
+}
+
+/** 一覧行の右端に出す ICM 計算ボタン（対象ハンドのみ）。 */
+function IcmRowButton(props: { icm: SngHistoryIcm; spot: SngIcmSpotResult; gameId: string; handNo: number }): JSX.Element | null {
+  const { icm, spot, gameId, handNo } = props;
+  if (!spot.ok) return null;
+  const status = icm.statusOf(gameId, handNo);
+  const label = status === 'none' ? 'ICM Calc' : status === 'queued' ? '待機中' : status === 'running' ? '計算中' : '結果';
+  const ariaLabel =
+    status === 'none'
+      ? `ICM を計算する（#${handNo}）`
+      : status === 'queued'
+        ? `ICM 計算の順番待ち（#${handNo}）`
+        : status === 'running'
+          ? `ICM 計算中（#${handNo}）`
+          : `ICM の結果を見る（#${handNo}）`;
+  return (
+    <button
+      type="button"
+      className="hh-icm"
+      disabled={status === 'queued' || status === 'running'}
+      aria-label={ariaLabel}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (status === 'none') {
+          icm.onQueue({ gameId, handNo, state: spot.state, heroHand: spot.heroHand, heroPos: spot.heroPos, playersLeft: spot.playersLeft });
+        } else if (status === 'done') {
+          icm.onOpenResult(gameId, handNo);
+        }
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function HandRow(props: {
+  hand: SngHandLocal;
+  game: SngGameLocal | null;
+  icm?: SngHistoryIcm;
+  onOpen: (modal: OpenModalState) => void;
+}): JSX.Element {
+  const { hand, game, icm, onOpen } = props;
   const rec = useMemo(() => decodeSafe(hand), [hand]);
   const mySeat = hand.mySeat;
   const eliminated = rec && mySeat !== null ? (rec.eliminated.find((e) => e.seat === mySeat) ?? null) : null;
@@ -122,6 +172,15 @@ function HandRow(props: { hand: SngHandLocal; game: SngGameLocal | null; onOpen:
       return null;
     }
   }, [rec, game, mySeat, hand.handNo, hand.level, hand.myCards]);
+  // ICM 計算の対象判定。壊れたデータで一覧全体を落とさないよう、view と同様に try/catch で包む。
+  const spot = useMemo(() => {
+    if (!rec) return null;
+    try {
+      return sngIcmSpot({ rec, game, mySeat, myCards: hand.myCards });
+    } catch {
+      return null;
+    }
+  }, [rec, game, mySeat, hand.myCards]);
 
   if (!rec) {
     return (
@@ -136,7 +195,11 @@ function HandRow(props: { hand: SngHandLocal; game: SngGameLocal | null; onOpen:
 
   return (
     <div className="hh-item">
-      <button type="button" className="hh-row" onClick={() => view && onOpen(view)}>
+      <button
+        type="button"
+        className="hh-row"
+        onClick={() => view && onOpen({ view, gameId: hand.gameId, handNo: hand.handNo, spot })}
+      >
         <span className="hh-main">
           <span className="hh-time">
             #{hand.handNo} L{hand.level}
@@ -162,14 +225,49 @@ function HandRow(props: { hand: SngHandLocal; game: SngGameLocal | null; onOpen:
           )}
         </span>
       </button>
+      {icm && spot && <IcmRowButton icm={icm} spot={spot} gameId={hand.gameId} handNo={hand.handNo} />}
     </div>
   );
 }
 
-export function SngHistoryView(): JSX.Element {
+/** モーダル下部の ICM アクション（対象外なら理由の一言だけ）。 */
+function IcmModalActions(props: { icm: SngHistoryIcm; spot: SngIcmSpotResult; gameId: string; handNo: number }): JSX.Element {
+  const { icm, spot, gameId, handNo } = props;
+  if (!spot.ok) {
+    return <p className="hhd-icm-off">ICM 計算の対象外: {spot.note}</p>;
+  }
+  const status = icm.statusOf(gameId, handNo);
+  const label =
+    status === 'none'
+      ? 'ICM を計算する'
+      : status === 'queued'
+        ? '計算キューに登録済み'
+        : status === 'running'
+          ? '計算中…'
+          : '計算結果を見る';
+  return (
+    <button
+      type="button"
+      className="btn line hhd-icm"
+      disabled={status === 'queued' || status === 'running'}
+      onClick={() => {
+        if (status === 'none') {
+          icm.onQueue({ gameId, handNo, state: spot.state, heroHand: spot.heroHand, heroPos: spot.heroPos, playersLeft: spot.playersLeft });
+        } else if (status === 'done') {
+          icm.onOpenResult(gameId, handNo);
+        }
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function SngHistoryView(props: { icm?: SngHistoryIcm }): JSX.Element {
+  const { icm } = props;
   const { hands, results, games, note } = useSngHands();
   const groups = useGroups(hands, results, games);
-  const [openView, setOpenView] = useState<HandDetailView | null>(null);
+  const [openModal, setOpenModal] = useState<OpenModalState | null>(null);
   const [limit, setLimit] = useState(PAGE);
 
   if (hands === null) {
@@ -225,7 +323,7 @@ export function SngHistoryView(): JSX.Element {
                 </div>
                 <div className="hh-list sh-hands">
                   {g.hands.map((h) => (
-                    <HandRow key={`${h.gameId}:${h.handNo}`} hand={h} game={g.game} onOpen={setOpenView} />
+                    <HandRow key={`${h.gameId}:${h.handNo}`} hand={h} game={g.game} icm={icm} onOpen={setOpenModal} />
                   ))}
                 </div>
               </div>
@@ -239,7 +337,17 @@ export function SngHistoryView(): JSX.Element {
         </div>
       )}
 
-      {openView && <HandDetailModal view={openView} onClose={() => setOpenView(null)} />}
+      {openModal && (
+        <HandDetailModal
+          view={openModal.view}
+          onClose={() => setOpenModal(null)}
+          actions={
+            icm && openModal.spot ? (
+              <IcmModalActions icm={icm} spot={openModal.spot} gameId={openModal.gameId} handNo={openModal.handNo} />
+            ) : undefined
+          }
+        />
+      )}
     </div>
   );
 }

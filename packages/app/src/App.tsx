@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { BoardState, GameMode } from '@oshihiki/core';
 import { GAME_MODES, gameModeLabel } from '@oshihiki/core';
@@ -29,6 +29,15 @@ import { SngLobby } from './components/SngLobby';
 import { SngRoom } from './components/SngRoom';
 import { StatsView } from './components/StatsView';
 import { SngHistoryView } from './components/SngHistoryView';
+import { icmSpotKey } from './history/icmSpot';
+import {
+  enqueueIcm,
+  hasIcmKey,
+  type IcmHandStatus,
+  type IcmQueueItem,
+  type IcmQueueRequest,
+  type SngHistoryIcm,
+} from './icmQueue';
 import { HuHistoryView } from './components/HuHistoryView';
 import { RankingModal } from './components/RankingModal';
 import { Home, type FeedState } from './components/Home';
@@ -457,6 +466,15 @@ export function App(): JSX.Element {
   // クリック入口から即座に二重起動を弾く。計算が終わる（成功/失敗どちらでも）まで保持し、
   // 必ず try/finally で解除する（解除漏れ＝永久に計算できなくなる最悪のバグ）。
   const startingRef = useRef(createStartLatch());
+  // ICM 計算の順番待ち（ハンド履歴から続けて投げられる。SolveJob の単一スロットは変えず、
+  // 走らせるのは1件のまま。メモリのみ・永続化しない, icmQueue.ts）。
+  const [icmQueue, setIcmQueue] = useState<IcmQueueItem[]>([]);
+  // いま実際に走っている（走らせ始めた）行列アイテムの key。running 表示の判定に使う。
+  const [icmRunningKey, setIcmRunningKey] = useState<string | null>(null);
+  // 行列の消化 effect の再入防止（同じ変化で同じ先頭を2回投げない）。startingRef と役割が違う:
+  // こちらは effect 自身の多重実行を防ぎ、startingRef は solve()/onRetryRecord() を含めた
+  // 「同時に計算を開始してよいのは1箇所だけ」という全体のラッチ。
+  const icmDraining = useRef(false);
   // 完了/失敗トースト（同時に1つ）。
   const [toast, setToast] = useState<ToastState | null>(null);
   // 再送（resyncPending）の多重起動ガード。refreshRecords から呼ぶため再入しうる。
@@ -516,7 +534,11 @@ export function App(): JSX.Element {
       const byClient = new Map(local.map((r) => [r.clientId, r]));
       const merged = remote.data.map((r) => {
         const l = byClient.get(r.clientId);
-        return l && l.status === 'done' && r.status !== 'done' ? { ...l, serverId: r.serverId } : r;
+        const base = l && l.status === 'done' && r.status !== 'done' ? { ...l, serverId: r.serverId } : r;
+        // sngSource は端末ローカル専用（サーバの results には送っていない）ので、サーバ由来の
+        // 行（base===r のとき）に付け直す。これをしないとアプリを開き直した直後に
+        // 「計算済み」の印（ハンド履歴の ICM ボタン）が消えてしまう。
+        return l?.sngSource && !base.sngSource ? { ...base, sngSource: l.sngSource } : base;
       });
       setRecords([...pendingOnly, ...merged]);
       // サーバに届いていない記録があれば、この機会（＝オンラインが確認できた今）に再送する。
@@ -1031,51 +1053,50 @@ export function App(): JSX.Element {
   }
 
   /**
-   * 「この内容で計算する」（SPEC §5.7）。solving 画面は廃止。記録を1件作って記録タブへ
-   * 遷移し、計算は Worker でバックグラウンド継続する（ジョブは App のトップレベル state
-   * のため、画面遷移で消えない）。
+   * 「記録作成 → サーバ行作成 → put → refresh → setSolveJob → runSolve 起動」という、
+   * 計算を実際に開始する後半をまとめたもの（元は `solve()` の後半）。手入力/スクショ経由の
+   * `solve()` と、ハンド履歴の計算キュー（後述の drain effect）の両方から呼ぶ。
+   *
+   * ラッチ（`startingRef`）の取得・解放はここでは行わない。呼び出し側が `acquire()` してから
+   * 呼び、`extra.onSettled` で解放する（二重取得・解放漏れを避けるため）。ここは
+   * **`extra.onSettled` を必ず1回だけ呼ぶ**ことだけを保証する: 正常系では `runSolve` の
+   * `finally` から呼び、`runSolve` に辿り着く前に失敗したときはこの関数自身の `finally` から
+   * 呼ぶ（`handedOff` で二重呼び出しを防ぐ）。呼び出し側はこの1回の呼び出しを受けて
+   * ラッチを解放するだけでよい。
+   *
+   * `navigate: true`（手入力/スクショ経由）のときだけ記録タブへ遷移する。キュー経由
+   * （`navigate: false`）は利用者がハンド履歴を見続けられるよう画面を切り替えない。
    */
-  async function solve(): Promise<void> {
-    if (!state) return;
-    if (!canStartSolve(solveJob)) return; // 同時1件の制約（IcmInput 側でも弾くが二重防御）。
-    if (!startingRef.current.acquire()) return; // 連打対策の同期ラッチ（Task2）。取れなければ即終了。
-    let started = false; // true になったら runSolve 側の finally が解除を引き継ぐ。
+  async function beginSolve(
+    finalState: BoardState,
+    extra: {
+      imageId?: string;
+      ocrReadId?: string;
+      /** ハンド履歴（SIT & GO）の計算キューから来たときだけ設定する。 */
+      sngSource?: { gameId: string; handNo: number };
+      navigate: boolean;
+      onSettled?: () => void;
+    },
+  ): Promise<void> {
+    let handedOff = false; // true になったら runSolve 側の finally が onSettled を引き継ぐ。
     try {
-      // 念のための防御（入口で弾いているが、7人以上が届いても求解しない）。
-      if (state.playersLeft > MAX_PLAYERS) {
-        setErrFromPhoto(false);
-        setIssues([OVER_SCOPE_MSG]);
-        setScreen('error');
-        return;
-      }
-
-      const finalState = state;
       const clientId = crypto.randomUUID();
-      const imageId = pendingImageId;
-      const ocrReadId = pendingOcrReadId;
-      const originalState = ocrOriginalState;
-      clearOcrPending(); // 一発勝負（このスポット限り）。次のスポットへ持ち越さない。
-
-      // OCR 由来なら、利用者が確認画面で直した差分を正解ラベルとして残す（§12.1）。
-      if (ocrReadId && originalState) {
-        void attachFinalState(ocrReadId, finalState, diffStates(originalState, finalState)).catch(() => undefined);
-      }
-
       const localRec = startRecord({
         clientId,
         state: finalState,
         heroHand: finalState.heroHand,
         heroPos: finalState.heroPos,
         playersLeft: finalState.playersLeft,
-        imageId,
-        ocrReadId,
+        imageId: extra.imageId,
+        ocrReadId: extra.ocrReadId,
+        sngSource: extra.sngSource,
       });
 
       const created = await createSolvingRecord({
         clientId,
         spot: finalState,
-        imageId,
-        ocrReadId,
+        imageId: extra.imageId,
+        ocrReadId: extra.ocrReadId,
         heroHand: finalState.heroHand,
         heroPos: finalState.heroPos,
         playersLeft: finalState.playersLeft,
@@ -1092,14 +1113,131 @@ export function App(): JSX.Element {
       await refreshRecords();
 
       setSolveJob(startJob(rec.id));
-      setScreen('history'); // solving 画面は廃止。記録タブへ遷移し先頭に「計算中」を出す。
+      if (extra.navigate) setScreen('history'); // solving 画面は廃止。記録タブへ遷移し先頭に「計算中」を出す。
+
+      handedOff = true;
+      void runSolve(rec, finalState, serverId).finally(() => extra.onSettled?.());
+    } finally {
+      if (!handedOff) extra.onSettled?.(); // runSolve に辿り着けなかった（例外）ときはここで通知する。
+    }
+  }
+
+  /**
+   * 「この内容で計算する」（SPEC §5.7）。solving 画面は廃止。記録を1件作って記録タブへ
+   * 遷移し、計算は Worker でバックグラウンド継続する（ジョブは App のトップレベル state
+   * のため、画面遷移で消えない）。
+   */
+  async function solve(): Promise<void> {
+    if (!state) return;
+    if (!canStartSolve(solveJob)) return; // 同時1件の制約（IcmInput 側でも弾くが二重防御）。
+    if (!startingRef.current.acquire()) return; // 連打対策の同期ラッチ（Task2）。取れなければ即終了。
+    let started = false; // true になったら beginSolve(runSolve) 側の finally が解除を引き継ぐ。
+    try {
+      // 念のための防御（入口で弾いているが、7人以上が届いても求解しない）。
+      if (state.playersLeft > MAX_PLAYERS) {
+        setErrFromPhoto(false);
+        setIssues([OVER_SCOPE_MSG]);
+        setScreen('error');
+        return;
+      }
+
+      const finalState = state;
+      const imageId = pendingImageId;
+      const ocrReadId = pendingOcrReadId;
+      const originalState = ocrOriginalState;
+      clearOcrPending(); // 一発勝負（このスポット限り）。次のスポットへ持ち越さない。
+
+      // OCR 由来なら、利用者が確認画面で直した差分を正解ラベルとして残す（§12.1）。
+      if (ocrReadId && originalState) {
+        void attachFinalState(ocrReadId, finalState, diffStates(originalState, finalState)).catch(() => undefined);
+      }
 
       started = true;
-      void runSolve(rec, finalState, serverId).finally(() => startingRef.current.release());
+      await beginSolve(finalState, {
+        imageId,
+        ocrReadId,
+        navigate: true,
+        onSettled: () => startingRef.current.release(),
+      });
     } finally {
       if (!started) startingRef.current.release(); // 早期 return・例外時はここで解除する。
     }
   }
+
+  /**
+   * ハンド履歴の計算キューの消化。走っている間（`solveJob.status==='running'`）は触らず、
+   * 空いたら先頭を1件だけ投げる。`solve()`/`onRetryRecord()` と同じ `startingRef` を使うことで
+   * 「同時に計算を開始してよいのは1箇所だけ」という全体の制約に相乗りする（取れなければ
+   * 何もしない＝次の state 変化で再挑戦する）。`icmDraining` は同じ変化での effect 自身の
+   * 再入（同じ先頭を2回投げる）を防ぐための同期フラグ。
+   *
+   * 依存に `icmRunningKey` を必ず含めること。`solveJob` は `runSolve` の中で done に変わるが、
+   * その時点ではまだ計算後の後始末（サーバへの `completeRecord`）が走っていて
+   * `icmDraining` は true のままなので、`solveJob` の変化で起きた回は何もせずに戻る。
+   * 後始末が終わって `onSettled` が `icmDraining` を倒したことを effect に伝える合図が
+   * `icmRunningKey` → null の変化で、これが依存に無いと**2件目以降が動き出さない**。
+   */
+  useEffect(() => {
+    if (!canStartSolve(solveJob)) return; // 走っている間は触らない。
+    if (icmDraining.current) return; // 同じ変化での二重起動を防ぐ。
+    const head = icmQueue[0];
+    if (!head) return;
+    if (!startingRef.current.acquire()) return; // 二重起動防止。取れなければ次の変化で再挑戦。
+    icmDraining.current = true;
+    setIcmQueue((q) => q.filter((x) => x.key !== head.key));
+    setIcmRunningKey(head.key);
+    void beginSolve(head.state, {
+      sngSource: { gameId: head.gameId, handNo: head.handNo },
+      navigate: false, // キューから投げた計算では画面を勝手に切り替えない。
+      onSettled: () => {
+        icmDraining.current = false;
+        startingRef.current.release();
+        setIcmRunningKey(null);
+      },
+    });
+  }, [icmQueue, solveJob, icmRunningKey]);
+
+  /** ハンド履歴の ICM ボタン（`SngHistoryView`）→ 計算キューへ登録する。 */
+  function onIcmQueue(req: IcmQueueRequest): void {
+    const r = enqueueIcm(icmQueue, req);
+    setIcmQueue(r.queue);
+    if (r.full) {
+      showToast('計算キューがいっぱいです（20件まで）', 'err', () => undefined);
+    } else if (r.added) {
+      showToast(`計算キューに登録しました（待ち ${r.queue.length} 件）`, 'done', () => undefined);
+    }
+    // 重複登録（既に行列にいる）はトーストを出さない（ボタンが既に「待機中」表示のため）。
+  }
+
+  /**
+   * `SngHistoryView` に渡す ICM 計算の窓口（`icmQueue.ts` の `SngHistoryIcm`）。状態は
+   * running（いま計算中） > queued（行列待ち） > done（`records` に完了記録あり） > none
+   * の優先で決める。`failed` は `none` 扱い（もう一度押せるように、SPEC どおり）。
+   */
+  const icm: SngHistoryIcm = useMemo(
+    () => ({
+      statusOf: (gameId, handNo): IcmHandStatus => {
+        const key = icmSpotKey(gameId, handNo);
+        if (icmRunningKey === key) return 'running';
+        if (hasIcmKey(icmQueue, key)) return 'queued';
+        const done = records.some(
+          (r) => r.status === 'done' && r.sngSource?.gameId === gameId && r.sngSource.handNo === handNo,
+        );
+        return done ? 'done' : 'none';
+      },
+      onQueue: onIcmQueue,
+      onOpenResult: (gameId, handNo) => {
+        const rec = records.find(
+          (r) => r.status === 'done' && r.sngSource?.gameId === gameId && r.sngSource.handNo === handNo,
+        );
+        if (rec) openRecord(rec);
+      },
+    }),
+    // onIcmQueue/openRecord は関数宣言（レンダーのたびに再生成される）で意図的に依存に入れない。
+    // 両方とも state を直接読む（クロージャで固定しない）ので、含めなくても常に最新を見る。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [icmQueue, icmRunningKey, records],
+  );
 
   /** 記録タブの「再計算」（失敗/中断した記録を解き直す, SPEC §5.4）。 */
   async function onRetryRecord(rec: SpotRecord): Promise<void> {
@@ -1507,7 +1645,7 @@ export function App(): JSX.Element {
         <StatsView onOpenHuHistory={() => setScreen('huhistory')} onOpenSngHistory={() => setScreen('snghistory')} />
       )}
       {screen === 'huhistory' && <HuHistoryView />}
-      {screen === 'snghistory' && <SngHistoryView />}
+      {screen === 'snghistory' && <SngHistoryView icm={icm} />}
 
       {rankingOpen && <RankingModal onClose={() => setRankingOpen(false)} />}
 

@@ -107,7 +107,6 @@ export function sngHandView(args: SngHandViewArgs): HandDetailView | null {
   }
 
   const showdown = Object.keys(rec.shown).length > 0;
-  const winnerSeats = order.filter((seat) => (rec.won[seat] ?? 0) > 0);
 
   // 実際に奪い合われた額（コールされなかった上乗せは元の持ち主に戻るので数えない）。
   // `won` の合計は使わない＝ won はチップ保存則（Σwon=Σcommits）で上乗せぶんも勝者の
@@ -118,20 +117,18 @@ export function sngHandView(args: SngHandViewArgs): HandDetailView | null {
   const excessSeat = excess.seat >= 0 ? (order[excess.seat] ?? -1) : -1;
   const finalPotBb = chipsToBbSng(contestedPotChips(committedBySeat), rec.bb);
 
-  // 獲得（wonBb）も同じ考え方で揃える: 上乗せの持ち主が勝者に含まれていれば、その席の
-  // won からだけ上乗せぶんを引いてから合計する（画面で「獲得 70bb／POT 40bb」のような
-  // 食い違いが出ないように）。通常の 1 人勝ちのハンドではこれは finalPotBb と一致する。
+  // 「獲得」も同じ考え方で揃える: コールされなかった上乗せは**戻ってきただけ**で勝ち取った
+  // 額ではないので、その席の won からは引く（画面で「獲得 70bb／POT 40bb」のような食い違いが
+  // 出ないように）。勝者の顔ぶれもこの引いたあとの額で決める＝上乗せが戻っただけの席を
+  // 勝者として名前を並べない（オールインにコールされ、余りが返っただけの相手が「獲得」に
+  // 並んでしまうため）。通常の 1 人勝ちのハンドでは合計は finalPotBb と一致する。
+  const wonOf = (seat: number): number => {
+    const raw = rec.won[seat] ?? 0;
+    return seat === excessSeat ? Math.max(0, raw - excess.amount) : raw;
+  };
+  const winnerSeats = order.filter((seat) => wonOf(seat) > 0);
   const wonBb =
-    winnerSeats.length > 0
-      ? chipsToBbSng(
-          winnerSeats.reduce((a, seat) => {
-            const raw = rec.won[seat] ?? 0;
-            const adjusted = seat === excessSeat ? Math.max(0, raw - excess.amount) : raw;
-            return a + adjusted;
-          }, 0),
-          rec.bb,
-        )
-      : null;
+    winnerSeats.length > 0 ? chipsToBbSng(winnerSeats.reduce((a, seat) => a + wonOf(seat), 0), rec.bb) : null;
   const notes = rec.eliminated.map((e) => `${nameOf(e.seat)} 脱落（${e.place}位）`);
 
   const result: HandResultView = {

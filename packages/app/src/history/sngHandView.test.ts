@@ -230,6 +230,36 @@ describe('sngHandView', () => {
     expect(v.result.finalPotBb).toBeLessThan(3.5); // 拠出合計（700 チップ）より小さい。
   });
 
+  it('コールされなかった上乗せが戻っただけの席は「獲得」に並べない', () => {
+    // BTN が 2000 オールイン、SB(YOU) が持ちぶん 1200 で全額コール、BB は降りる。
+    // BTN の 800 は誰にもコールされず戻る＝ settleUncontested と同じ書き方だと
+    // won=[800, 2600, 0]（Σwon=Σcommits=3400）になるが、BTN は勝ったのではなく
+    // 余りが返っただけ。勝者は YOU 1 人で、獲得は 2600 チップ＝13bb。
+    const rec: SngHandRecord = {
+      gameId: 'sg_test0007',
+      handNo: 11,
+      playedAt: played,
+      level: 1,
+      sb: 100,
+      bb: 200,
+      ante: 0,
+      btn: 0,
+      sbSeat: 1,
+      bbSeat: 2,
+      startStacks: [2000, 1200, 2000],
+      shown: {},
+      board: [],
+      actions: [act(0, 'allin', 2000, 2000, 0), act(1, 'allin', 1200, 1100, 0), act(2, 'fold', 200, 0, 0)],
+      won: [800, 2600, 0],
+      eliminated: [],
+    };
+    const v = sngHandView({ rec, game: null, mySeat: 1, handNo: 11, level: 1 })!;
+
+    expect(v.result.winners).toEqual(['YOU']); // BTN を並べない。
+    expect(v.result.wonBb).toBe(13);
+    expect(v.result.finalPotBb).toBe(13);
+  });
+
   it('リバーのベットが降ろして終わったハンド（won の合計を使わないので、未コールの上乗せぶんで finalPotBb は膨らまない）', () => {
     // BTN はプリフロップで即 fold。SB がコールしてチェックダウンし、リバーで BB が
     // 大きくベットして SB が降りる＝勝者は BB 1 人。各席の拠出は BTN=0・

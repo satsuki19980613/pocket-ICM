@@ -142,9 +142,10 @@
   color: var(--dim2);
 }
 
-/* ---- 卓: Slumbot HU の sb-felt/sb-seat/sb-plate/sb-bet/sb-bubble/sb-result を
-   そのまま使う（SngTable.tsx）。ここは 2〜6 人ぶんの配置と、Slumbot に無い要素だけ。 ---- */
-.sg-felt { min-height: 260px; }
+/* ---- 卓: Ten-Four を参考にした視認性重視のレイアウト（SngTable.tsx）。
+   ガラス質感・配色は Slumbot HU の .sb-felt（styles.css）と同じ値を流用するが、
+   プレートを主役にした縦長カプセルの卓・要素が重ならない配置にするため DOM/クラスは
+   独立させている（.sgt-*）。.sb-* 側（SlumbotTable.tsx）には一切触れない。 ---- */
 
 /* HUD 帯（.sb-hud）の中に置くハンド番号・レベル・ブラインド。Slumbot の HANDS/SESSION
    のような短い数値と違って文言が長いので、その分だけ小さいテキストにする
@@ -177,37 +178,8 @@
   line-height: 1.5;
 }
 
-.sg-seat.folded { opacity: 0.45; }
-.sg-cardsp { height: 30px; }
-
-/* BTN バッジ。Slumbot は HU なので SB/BB の 2 色しか無い（styles.css）。 */
-.sb-pos.p-btn { background: var(--bu); }
-
-/* プレイヤー名。Slumbot は 2 人対戦で名前を出さないため無かった要素。
-   6〜8 文字程度に切り詰め、それ以上は … で省略する。 */
-.sb-name {
-  max-width: 40px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--dim);
-}
-/* プレート自体の幅を絶対制限する。制限が無いと左右端の席のプレートが画面外へ
-   はみ出していた（375px で左右の名前が切れる、さつき実機確認済み）。中央寄せの
-   `flex-wrap` にしておくことで、名前が最大幅まで伸びる長い場合だけ自然に
-   「バッジ＋名前」の行と「スタック」の行の 2 段へ折り返る（320px 用の対策）。 */
-.sg-seat .sb-plate {
-  max-width: 108px;
-  gap: 4px;
-  padding: 4px 8px;
-  flex-wrap: wrap;
-  row-gap: 1px;
-}
-
-/* 状態タグ（切断中・SIT OUT・退室・脱落順位）。Slumbot に無い概念。 */
-.sg-substack { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+/* 状態タグ（切断中・SIT OUT・退室・脱落順位）。SngRoom.tsx の待機中一覧（`.sg-tag`
+   単体）とも共有するのでここに置く。 */
 .sg-tag {
   font-family: var(--mono);
   font-size: 8px;
@@ -218,25 +190,285 @@
 .sg-tag.warn { background: rgba(255, 59, 59, 0.15); color: var(--red); }
 .sg-tag.out { background: var(--surface-3); color: var(--dim2); }
 
-/* 吹き出し・チップの向き。Slumbot は上=bot/下=hero固定で決め打ちだが（styles.css の
-   `.sb-seat.bot`/`.sb-seat.hero`）、2〜6 席を楕円に置く SIT & GO は席の位置（上半分/
-   下半分・左右）から卓の中心へ寄る向きを決める。チップは横に出す Slumbot の教訓を守り、
-   上下は吹き出しだけに使う（sng-play.css は styles.css の後に読み込まれるので、
-   同じ詳細度でもここが勝つ）。 */
-.sb-seat.dir-down .sb-bubble { top: calc(100% + 4px); bottom: auto; }
-.sb-seat.dir-up .sb-bubble { bottom: calc(100% + 4px); top: auto; }
-.sb-bet.mirror { left: auto; right: calc(100% + 8px); }
-
-/* 320〜400px 幅: プレート・名前・チップのオフセットをさらに詰める。隣の席の
-   プレートとチップが重なっていた不具合（320px で BTN 席のプレートと SB のチップが
-   重なる、さつき実機確認済み）への対策。`.sb-bet.mirror` より後ろに置くことで、
-   詳細度が同じ（クラス 2 つ）でもここが勝つ。 */
-@media (max-width: 400px) {
-  .sb-name { max-width: 28px; font-size: 9px; }
-  .sg-seat .sb-plate { max-width: 86px; gap: 3px; padding: 3px 6px; }
-  .sb-bet { left: calc(100% + 4px); }
-  .sb-bet.mirror { right: calc(100% + 4px); }
+/* ---- 卓の器。SngRoom.tsx 下側の操作系（ベットサイザー・アクションボタン）が押し出され
+   ないよう、Slumbot HU の .sb-felt と同じ考え方でビューポートだけから高さを決める。 ---- */
+.sgt {
+  position: relative;
+  width: 100%;
+  /* `.app` は flex ではない（＝親から高さは降りてこない）ので、卓の高さはここで決めるしかない。
+     引く 335px は「アプリの上下余白＋ヘッダ＋HUD＋プリセット1行＋スライダー＋ボタン」の
+     実測ぶん。プリセットを横1行のスクロールにした（さつき指示 2026-09-16）ことで行数が
+     増えなくなり、ストリートが変わっても卓の高さが動かない。余りは margin-bottom:auto が
+     吸う（旧 `.sb-felt` と同じ考え方）。 */
+  height: clamp(330px, calc(100dvh - 335px - var(--sat) - var(--sab)), 560px);
+  flex: none;
+  margin-bottom: auto;
 }
+
+/* ガラス卓本体（縦長カプセル）。背景・枠・影・backdrop-filter は .sb-felt の値を
+   そのままコピーして質感を揃える（さつき指示: 配色・質感は今のまま）。 */
+.sgt-felt {
+  position: absolute;
+  /* 上下は端の席（カード＋プレート＋タイマー）のぶんを空ける。左右はプレートが卓の縁に
+     少し重なる前提で狭める＝ボード 5 枚（166px）が入る幅は残す。 */
+  inset: 46px 14% 92px;
+  border-radius: 50%;
+  border: 1px solid rgba(190, 232, 255, 0.5);
+  background:
+    linear-gradient(176deg, rgba(255, 255, 255, 0.1), transparent 30%),
+    radial-gradient(48% 38% at 50% 42%, rgba(58, 230, 255, 0.17), transparent 72%),
+    radial-gradient(
+      118% 94% at 50% 34%,
+      rgba(46, 128, 196, 0.22) 0%,
+      rgba(22, 70, 134, 0.24) 42%,
+      rgba(10, 32, 74, 0.3) 76%,
+      rgba(6, 18, 44, 0.36) 100%
+    );
+  backdrop-filter: blur(5px) saturate(1.3);
+  -webkit-backdrop-filter: blur(5px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 0 46px rgba(58, 230, 255, 0.1),
+    inset 0 -18px 40px rgba(0, 0, 0, 0.22),
+    0 0 30px rgba(58, 230, 255, 0.24),
+    0 0 0 6px rgba(10, 16, 24, 0.75),
+    0 0 0 7px var(--trim-soft, rgba(150, 210, 255, 0.42)),
+    0 12px 34px rgba(0, 0, 0, 0.55);
+}
+/* 内側の同心リング。.sb-felt::before と同じ考え方（縮小コピー）で縁と曲率を必ず合わせる。 */
+.sgt-felt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform: scale(0.86);
+  border: 1px solid rgba(190, 232, 255, 0.2);
+  box-shadow: inset 0 0 40px rgba(3, 12, 30, 0.32), 0 0 14px rgba(58, 230, 255, 0.1);
+  pointer-events: none;
+}
+/* ガラスを斜めに走る反射だけ。 */
+.sgt-felt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(114deg, transparent 24%, rgba(255, 255, 255, 0.06) 40%, transparent 52%);
+}
+
+/* 卓の中央（ポット・ボード・ストリート）。.sgt を基準に常に中央固定。 */
+.sgt-mid {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.sgt-street { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: rgba(252, 238, 10, 0.72); }
+.sgt-potline { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+.sgt-pot-lbl { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--trim, var(--dim2)); }
+.sgt-pot {
+  font-family: var(--mono);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(58, 230, 255, 0.6), 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+.sgt-spr { font-family: var(--mono); font-size: 11px; color: var(--dim2); }
+.sgt-board { display: flex; gap: 4px; }
+.sgt-slot {
+  width: 32px;
+  height: 45px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(190, 232, 255, 0.4);
+  background: rgba(4, 14, 32, 0.42);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* ---- 席。プレートが主役（1行目=名前、2行目=ポジション+スタック）。 ---- */
+.sgt-seat {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+/* アンカー規則（はみ出し対策・今回の肝）: 左右端の席は中央寄せにせず画面端へ固定する。
+   中央寄せにすると 320px 幅でプレートが画面外へはみ出す（さつき実機確認済みの教訓）。 */
+.sgt-seat.anchor-c { transform: translate(-50%, -50%); }
+/* 上端・下端の席は % で中心を置かず、卓の上下に貼り付ける（はみ出し防止）。 */
+.sgt-seat.edge-top { top: 0; transform: translateX(-50%); }
+.sgt-seat.edge-bottom { bottom: 0; top: auto; transform: translateX(-50%); }
+.sgt-seat.edge-top.anchor-l,
+.sgt-seat.edge-bottom.anchor-l { transform: none; }
+.sgt-seat.edge-top.anchor-r,
+.sgt-seat.edge-bottom.anchor-r { transform: none; }
+.sgt-seat.anchor-l { left: 8px; transform: translateY(-50%); }
+.sgt-seat.anchor-r { right: 8px; left: auto; transform: translateY(-50%); }
+
+.sgt-cards { display: flex; align-items: center; justify-content: center; }
+.sgt-cardsp { height: 30px; }
+
+.sgt-plate {
+  min-width: 96px;
+  max-width: 118px;
+  padding: 4px 8px;
+  background: rgba(4, 10, 22, 0.9);
+  border: 1px solid rgba(190, 232, 255, 0.34);
+  clip-path: var(--chamfer);
+  text-align: center;
+}
+.sgt-name {
+  display: block;
+  font-family: var(--disp);
+  /* 名前は「誰か」が分かれば十分。数字（スタック）より一段小さくする（さつき指示）。 */
+  font-size: 11.5px;
+  color: var(--dim);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sgt-sub { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 2px; }
+.sgt-pos {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #16150d;
+}
+/* BTN/SB/BB の 3 色。styles.css の posbadge/.sh-pos 系と同じ変数を参照する。 */
+.sgt-pos.p-btn { background: var(--bu); }
+.sgt-pos.p-sb { background: var(--sb); }
+.sgt-pos.p-bb { background: var(--bb-c); }
+.sgt-stack { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* hero・手番の光り方は Slumbot HU の .sb-seat と同じ流儀（styles.css の turnpulse を流用）。 */
+.sgt-seat.hero .sgt-plate { border-color: var(--yellow); box-shadow: 0 0 10px rgba(252, 238, 10, 0.25); }
+.sgt-seat.acting .sgt-plate {
+  border-color: var(--cyan);
+  box-shadow: 0 0 14px rgba(58, 230, 255, 0.45);
+  animation: turnpulse 1.4s ease-in-out infinite;
+}
+
+/* 残り時間バー（acting のときだけ。吹き出しでボードに被せない）。 */
+.sgt-timer {
+  margin-top: 3px;
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background: var(--surface-3);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.sgt-timer i { position: absolute; inset: 0 auto 0 0; background: var(--cyan); opacity: 0.55; }
+.sgt-timer b {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.sgt-tags { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+
+/* 降りた席は「プレートと札」だけ薄くする。アクションのピル（Fold 等）は場を読む材料なので
+   薄くしない（席ごと opacity を落とすとピルまで読めなくなる）。脱落席は席ごと落とす。 */
+.sgt-seat.folded .sgt-plate,
+.sgt-seat.folded .sgt-cards { opacity: 0.45; }
+.sgt-seat.out { opacity: 0.42; }
+
+/* 直前のアクション（そのストリートで各席が最後に取ったアクション）。色付きのピル。 */
+.sgt-act {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.sgt-act.k-fold { color: #9ec1ff; background: rgba(60, 110, 210, 0.22); border: 1px solid rgba(60, 110, 210, 0.5); }
+.sgt-act.k-check { color: var(--dim); background: var(--surface-3); border: 1px solid var(--line-2); }
+.sgt-act.k-call { color: #5fe39a; background: rgba(60, 200, 130, 0.16); border: 1px solid rgba(95, 227, 154, 0.5); }
+.sgt-act.k-bet,
+.sgt-act.k-raise { color: var(--red); background: rgba(255, 59, 59, 0.14); border: 1px solid rgba(255, 59, 59, 0.5); }
+.sgt-act.k-allin { color: var(--yellow-ink); background: var(--yellow); }
+
+/* そのストリートに出した額（無彩色）。アクションのピルと同じ箱に積む。 */
+.sgt-bet {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(190, 232, 255, 0.3);
+  border-radius: 11px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* ピルはどの席でも「プレートの真上か真下」に、1 つの箱へ縦に積んで中央ぞろえで出す。
+   横に出すとボードや隣の席と重なる（T4 も左右の席のピルは横ではなく下に出している）。
+   上半分の席は下向き、下半分の席（hero を含む）は上向き。 */
+.sgt-pills {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.sgt-seat.dir-down .sgt-pills { top: calc(100% + 4px); }
+.sgt-seat.dir-up .sgt-pills { bottom: calc(100% + 4px); }
+/* hero は下端に貼り付いているので、ピルはカードの上（＝ポット側）に出す。 */
+.sgt-seat.hero .sgt-pills { bottom: calc(100% + 4px); }
+
+
+/* 320px 幅でも成立させる: プレートを詰め、左右の席は画面端ぎりぎりまで寄せる。 */
+@media (max-width: 360px) {
+  .sgt-plate { min-width: 82px; max-width: 102px; }
+  .sgt-name { font-size: 11px; }
+  .sgt-stack { font-size: 12px; }
+  .sgt-seat.anchor-l { left: 4px; }
+  .sgt-seat.anchor-r { right: 4px; }
+  /* 左右のピルとボードが触れるので、ボードを一回り小さくして間を空ける。 */
+  .sgt-slot { width: 28px; height: 40px; }
+  .sgt-felt { inset: 42px 17% 86px; }
+  .sgt-act,
+  .sgt-bet { font-size: 10.5px; padding: 1px 6px; }
+}
+
+/* ---- ベットサイズのプリセットは横1行のスクロール（さつき指示 2026-09-16）----
+   縦に折り返すと操作系が最大3行ぶん（約100px）伸び、そのぶん卓が小さくなって見づらかった。
+   1行に固定すればストリートでプリセットの数が変わっても操作系の高さが動かず、卓の大きさも
+   一定になる。Slumbot HU 側は別画面なのでここでは触らない（`.sg-wrap` に限定する）。 */
+.sg-wrap .sb-presets {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-snap-type: x proximity;
+  /* 右端をうっすら消して「まだ続く」と分かるようにする。 */
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+}
+.sg-wrap .sb-presets::-webkit-scrollbar { display: none; }
+.sg-wrap .sb-preset { flex: 0 0 auto; min-width: 54px; scroll-snap-align: start; }
 
 /* ---- 退室確認 ---- */
 .sg-confirm-backdrop {

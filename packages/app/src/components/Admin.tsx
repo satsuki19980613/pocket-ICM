@@ -16,6 +16,7 @@ import {
   formatBytes,
   type StorageSummary,
 } from '../admin/format';
+import { insertSngSamples, removeSngSamples } from '../sng/sampleHands';
 
 /**
  * 管理画面（M7・さつき専用, is_admin のみ）。登録状況／上限編集／招待キーの
@@ -39,6 +40,10 @@ export function Admin(props: { onBack: () => void; onOpenDiagnostics: () => void
   const [newCode, setNewCode] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleMsg, setSampleMsg] = useState<string | null>(null);
+  const [sampleErr, setSampleErr] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
     const [ov, inv, imgs] = await Promise.all([getAdminOverview(), listInvites(), listImageStats()]);
@@ -113,6 +118,34 @@ export function Admin(props: { onBack: () => void; onOpenDiagnostics: () => void
       setCopied(true);
     } catch {
       /* クリップボード不可の環境では手動コピー。 */
+    }
+  }
+
+  async function onInsertSamples(): Promise<void> {
+    setSampleErr(null);
+    setSampleMsg(null);
+    setSampleBusy(true);
+    try {
+      const r = await insertSngSamples();
+      setSampleMsg(`${r.hands}件入れました（うち${r.eligible}件が ICM 計算の対象）。ハンド履歴を開いて確認してください。`);
+    } catch (e) {
+      setSampleErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSampleBusy(false);
+    }
+  }
+
+  async function onRemoveSamples(): Promise<void> {
+    setSampleErr(null);
+    setSampleMsg(null);
+    setSampleBusy(true);
+    try {
+      await removeSngSamples();
+      setSampleMsg('消しました。');
+    } catch (e) {
+      setSampleErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSampleBusy(false);
     }
   }
 
@@ -242,6 +275,24 @@ export function Admin(props: { onBack: () => void; onOpenDiagnostics: () => void
             )}
           </>
         )}
+      </div>
+
+      <div className="pad pt0">
+        <h2 className="scr-h sm">動作確認用のサンプル</h2>
+        <p className="note">
+          ICM Calc ボタンの確認用に、ハンド履歴へサンプルを6件入れます。この端末にだけ入り、サーバには送りません。
+          成績（Stats）には出ません（試合の見出しは「進行中 / 未確定」になります）。
+        </p>
+        {sampleErr && <p className="auth-err">{sampleErr}</p>}
+        <div className="del-row">
+          <button type="button" className="btn line" disabled={sampleBusy} onClick={() => void onInsertSamples()}>
+            サンプルのハンド履歴を入れる
+          </button>
+          <button type="button" className="btn ghost" disabled={sampleBusy} onClick={() => void onRemoveSamples()}>
+            サンプルを消す
+          </button>
+        </div>
+        {sampleMsg && <p className="note">{sampleMsg}</p>}
       </div>
 
       <div className="pad pt0">

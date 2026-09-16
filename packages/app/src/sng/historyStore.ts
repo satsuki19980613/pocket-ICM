@@ -276,3 +276,24 @@ export async function clear(): Promise<void> {
     tx(GAMES_STORE, 'readwrite', (os) => reqToPromise(os.clear())),
   ]);
 }
+
+/**
+ * ある試合の試合レコードと、そのゲームのハンドだけを消す（動作確認用サンプルの削除など）。
+ * `results` ストアは触らない（サンプルはそもそも成績を入れない前提。`sng/sampleHands.ts`）。
+ * `hands` のキーは `handKey(gameId, handNo)`（`${gameId}:0000` 形式）なので、
+ * `gameId` の前方一致レンジで拾う。
+ */
+export async function deleteGameAndHands(gameId: string): Promise<void> {
+  const range = IDBKeyRange.bound(`${gameId}:`, `${gameId}:￿`);
+  await Promise.all([
+    tx(GAMES_STORE, 'readwrite', async (os) => {
+      os.delete(gameId);
+      await waitDone(os);
+    }),
+    tx(HANDS_STORE, 'readwrite', async (os) => {
+      const keys = (await reqToPromise(os.getAllKeys(range))) as IDBValidKey[];
+      for (const k of keys) os.delete(k);
+      await waitDone(os);
+    }),
+  ]);
+}

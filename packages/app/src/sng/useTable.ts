@@ -7,7 +7,7 @@
  * 古い接続を閉じて新しく繋ぎ直す。
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ClientMsg, ErrorCode, PublicTable, You } from '@oshihiki/sng';
 
@@ -71,6 +71,13 @@ export function useTable(roomId: string | null): UseTableResult {
     };
   }, [roomId]);
 
+  // `send` / `serverNow` は毎回作り直さない。中で見ているのは ref なので中身は常に最新だが、
+  // 関数の同一性が毎レンダー変わると、これを依存に入れた effect が毎レンダー動いてしまう
+  // （`SngRoom` の残り秒数タイマーが該当。setNow → 再レンダー → 依存が変わる → effect が
+  // また走る、で React の更新回数上限に当たっていた）。
+  const send = useCallback((msg: ClientMsg) => clientRef.current?.send(msg), []);
+  const serverNow = useCallback(() => clientRef.current?.now() ?? Date.now(), []);
+
   return {
     table,
     you,
@@ -78,7 +85,7 @@ export function useTable(roomId: string | null): UseTableResult {
     error,
     closed,
     connected,
-    send: (msg) => clientRef.current?.send(msg),
-    serverNow: () => clientRef.current?.now() ?? Date.now(),
+    send,
+    serverNow,
   };
 }

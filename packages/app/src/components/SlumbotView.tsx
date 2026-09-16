@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { GlassTable } from './GlassTable';
 import { HandResult, SlumbotTable } from './SlumbotTable';
 import { SlumbotSettings } from './SlumbotSettings';
 import { act, newHand, type SlumbotResponse } from '../slumbot/api';
@@ -344,13 +345,24 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
           <span className="sb-gear-sp" />
         </div>
         {bgmNote && <p className="sb-bgm-note">{bgmNote}</p>}
-        <div className="sb-felt sb-dealing">
-          <div className="sb-deal">
-            <div className="spinner" />
-            <p>{view ? '次のハンドを配っています…' : 'Slumbot に接続中…'}</p>
-            {!view && <p className="sub">ヘッズアップ 200bb・SB 0.5bb / BB 1bb</p>}
-          </div>
-        </div>
+        {/* 卓の枠（.sgt-felt）はそのまま出し、中身だけ覆う。狙いは「配っている間も
+            レイアウト（卓の高さ・位置）が動かない」こと——終わったハンドの卓をそのまま
+            残すと、無効化されたボタンと一緒に一瞬だけ映る。overlay を渡すと GlassTable
+            は座席も中央（ポット・ボード）も描かないので、ここは空の局面を渡してよい。 */}
+        <GlassTable
+          seats={[]}
+          street={null}
+          potText=""
+          sprText={null}
+          board={[]}
+          overlay={
+            <div className="sb-deal">
+              <div className="spinner" />
+              <p>{view ? '次のハンドを配っています…' : 'Slumbot に接続中…'}</p>
+              {!view && <p className="sub">ヘッズアップ 200bb・SB 0.5bb / BB 1bb</p>}
+            </div>
+          }
+        />
       </div>
     );
   }

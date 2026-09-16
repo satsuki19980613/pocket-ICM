@@ -129,7 +129,8 @@ sng_hole_cards (game_id text, hand_no int, owner uuid, cards text(4), created_at
 
 - ハブのメニューは **Slumbot HU / SIT & GO / STATS**（AOF ドリルは Coming Soon のまま）。
   「あなたの通算」パネルは消す。`hustats` 画面は廃止して `stats` に統合。
-- 卓は 2〜6 席を楕円に配置、自分は常に下。カードの見た目は `SlumbotTable` と同じクラス（`pt-card` 等）。
+- 卓は 2〜6 席を楕円に配置、自分は常に下。卓そのもの（座席配置・プレート・ピル・ボード・
+  カードの `pt-card` 等）は Slumbot HU と共有の `components/GlassTable.tsx` を使う。
 - ベット操作は Slumbot と同じプリセット＋スライダー＋ステッパー。`slumbot/sizes.ts` を
   「最小限の数値だけ受ける形」に一般化して共用する。
 - スタック・ベット・ポットの表示は現在レベルの BB 換算を `formatBbDisplay`（core）で。

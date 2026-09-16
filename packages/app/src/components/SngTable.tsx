@@ -1,18 +1,15 @@
 /**
  * SIT & GO の卓（2〜6 席）。docs/SNG_DESIGN.md §5（A3a 所有）。
  *
- * レイアウトは Ten-Four（実在のポーカーアプリ）の卓を参考にした視認性重視の構成
- * （さつき指示: 名前・スタックを大きく明るく／プレートやチップが重ならない／席の
- * プレートが主役）。配色・質感（暗いサイバー調のガラス卓・シアン/イエローの
- * アクセント・面取り clip-path・Rajdhani/Share Tech Mono）は Slumbot HU（`SlumbotTable.tsx`）
- * と同じ CSS 変数を使うが、DOM とクラス名（`sgt-*`）は独立させている。Slumbot HU 側の
- * `.sb-*`（同じ HandView を描く別画面）に影響しないようにするためで、`SlumbotTable.tsx`
- * 自体は変更しない。カード（`Card`/`Hand`/`Backs`）だけは重複実装を避けるため
- * `SlumbotTable.tsx` から import して使う。
+ * 卓そのものの描画（座席配置・プレート・ピル・ボード）は `GlassTable.tsx` に切り出した
+ * （Slumbot HU 側の卓が旧デザインのまま取り残されていたのを、この卓のデザインへ揃えるため。
+ * さつき指示: 見た目は 1px も変えない）。このファイルは `PublicTable`/`PublicHand`/`You` を
+ * `GlassTable` の view-model（`FeltSeat[]`）へ変換して渡すだけの薄いアダプタで、
+ * ハンド結果バナー（`computeResultBanner`/`SgHandResult`）は SIT & GO 固有のロジック
+ * （SngRoom.tsx が卓の下に置く）なのでこのファイルに残す。
  *
- * 席の配置は 2〜6 人ぶんを `SLOTS`（% 座標）で縦長カプセルの卓の外周に置き、極端な
- * 左右の席（`x` が 0/100 に近いもの）は中央寄せにすると 320px 幅でプレートが画面外へ
- * はみ出すため、左右の画面端に固定で寄せる（`sng-play.css` の `.sgt-seat.anchor-l/-r`）。
+ * 配色・質感（暗いサイバー調のガラス卓・シアン/イエローのアクセント・面取り clip-path・
+ * Rajdhani/Share Tech Mono）は Slumbot HU と共通の CSS 変数・クラス（`sgt-*`）を使う。
  */
 
 import {
@@ -26,53 +23,8 @@ import {
 } from '@oshihiki/sng';
 import { formatBbDisplay } from '@oshihiki/core';
 
-import { Backs, Card, Hand } from './SlumbotTable';
+import { GlassTable, type FeltSeat, type SeatTag } from './GlassTable';
 import { STREET_LABEL } from '../slumbot/rules';
-
-/**
- * 人数別の席スロット（コンテナ % 座標, [x,y]）。先頭=手前(下)中央, 以降は時計回り。
- * 卓が縦長カプセルになったため（Ten-Four 準拠）、上下に長く・左右は端へ寄せる座標にしている。
- */
-const SLOTS: Record<number, readonly (readonly [number, number])[]> = {
-  2: [
-    [50, 93],
-    [50, 9],
-  ],
-  3: [
-    [50, 93],
-    [8, 26],
-    [92, 26],
-  ],
-  4: [
-    [50, 93],
-    [8, 74],
-    [50, 9],
-    [92, 74],
-  ],
-  5: [
-    [50, 93],
-    [8, 74],
-    [22, 12],
-    [78, 12],
-    [92, 74],
-  ],
-  6: [
-    [50, 93],
-    [8, 74],
-    [8, 26],
-    [50, 9],
-    [92, 26],
-    [92, 74],
-  ],
-};
-
-/** 席のアンカー（左右端は中央寄せにせず画面端へ固定する。sng-play.css 側の同名クラス参照）。 */
-type Anchor = 'anchor-l' | 'anchor-c' | 'anchor-r';
-function anchorFor(x: number): Anchor {
-  if (x <= 20) return 'anchor-l';
-  if (x >= 80) return 'anchor-r';
-  return 'anchor-c';
-}
 
 /** 直前アクションのピルの色分け（Fold=青 / Check=グレー / Call=緑 / Bet・Raise=赤 / All-in=黄）。 */
 const ACTION_KIND_CLASS: Record<ActionKind, string> = {
@@ -171,108 +123,10 @@ export function SgHandResult(props: { banner: ResultBanner }): JSX.Element {
   );
 }
 
-interface ActionPill {
-  readonly cls: string;
-  readonly label: string;
-}
-
-interface SeatSlotProps {
-  readonly seat: number;
-  readonly x: number;
-  readonly y: number;
-  readonly player: PlayerState | undefined;
-  readonly isHero: boolean;
-  readonly hand: PublicHand | null;
-  readonly heroCards: readonly [string, string] | null;
-  readonly badge: 'BTN' | 'SB' | 'BB' | null;
-  readonly isActing: boolean;
-  readonly remainSec: number | null;
-  readonly remainPct: number | null;
-  /** そのストリートでこの席が最後に取ったアクション（acting 中・settled 後は親が null にする）。 */
-  readonly pill: ActionPill | null;
-}
-
-function SeatSlot(props: SeatSlotProps): JSX.Element | null {
-  const { player, hand, seat } = props;
-  if (!player) return null;
-  const out = player.status === 'out';
-  const folded = hand?.folded[seat] === true;
-  const shown = hand?.shown[seat];
-  const showCards = props.isHero ? props.heroCards : (shown ?? null);
-  const showBacks = !showCards && !folded && !out && hand != null;
-  const bb = hand?.bb ?? 200;
-
-  // ハンド中はスタックが動かない見た目にならないよう、開始スタックから拠出額を引いた
-  // 「残りスタック」を出す（エンジンは commits を別持ちにしていて player.stack はハンド
-  // 終了まで変えない設計のため・packages/sng/src/engine/hand.ts 冒頭コメント）。
-  // 精算後（settled）は獲得分を足して、勝った席が「0bb」に見えないようにする。
-  const remaining = hand
-    ? Math.max(0, (hand.startStacks[seat] ?? player.stack) - hand.commits[seat]! + (hand.won?.[seat] ?? 0))
-    : player.stack;
-  const streetBet = hand?.streetBet[seat] ?? 0;
-
-  const anchor = anchorFor(props.x);
-  // ピル（アクション/ベット）を出す向きは卓の中心へ寄る方向を座席の位置から決める
-  // （上半分は下向き＝席の下、下半分は上向き＝席の上）。anchor-l/anchor-r の席は左右の
-  // 向きだけで決まるため dir クラスの CSS 側では参照しない（sng-play.css 参照）。
-  const dir = props.y < 50 ? 'dir-down' : 'dir-up';
-  // 上端・下端の席は「％で中心を置く」と、カード＋プレート＋タイマーの高さぶん卓の外へ
-  // はみ出す（縦に余裕が無い端末ほど顕著）。端の席だけは % を使わず CSS 側で上下端に
-  // 貼り付ける（`.sgt-seat.edge-top` / `.edge-bottom`）。
-  const edge = props.y <= 12 ? ' edge-top' : props.y >= 88 ? ' edge-bottom' : '';
-  const style =
-    edge !== '' ? (anchor === 'anchor-c' ? { left: `${props.x}%` } : {}) : anchor === 'anchor-c' ? { top: `${props.y}%`, left: `${props.x}%` } : { top: `${props.y}%` };
-
-  const tags: JSX.Element[] = [];
-  if (!player.connected) tags.push(<span key="warn-conn" className="sgt-tag warn">切断中</span>);
-  if (player.status === 'sitout') tags.push(<span key="warn-sitout" className="sgt-tag warn">SIT OUT</span>);
-  if (player.status === 'left') tags.push(<span key="warn-left" className="sgt-tag warn">退室</span>);
-  if (out) tags.push(<span key="out" className="sgt-tag out">{player.place ? `${player.place}位` : 'OUT'}</span>);
-
-  return (
-    <div
-      className={`sgt-seat ${anchor} ${dir}${edge}${props.isHero ? ' hero' : ' bot'}${props.isActing ? ' acting' : ''}${folded || out ? ' folded' : ''}${out ? ' out' : ''}`}
-      style={style}
-    >
-      <div className="sgt-cards">
-        {showCards ? <Hand cards={showCards} big={props.isHero} /> : !out && (showBacks ? <Backs /> : <div className="sgt-cardsp" />)}
-      </div>
-      <div className="sgt-plate">
-        <span className="sgt-name" title={player.name}>
-          {player.name}
-        </span>
-        <span className="sgt-sub">
-          {props.badge && <span className={`sgt-pos p-${props.badge.toLowerCase()}`}>{props.badge}</span>}
-          <span className="sgt-stack">{formatBbDisplay(remaining / bb)}bb</span>
-        </span>
-      </div>
-      {props.isActing && props.remainSec != null && (
-        <div className="sgt-timer">
-          <i style={{ width: `${props.remainPct ?? 0}%` }} />
-          <b>{props.remainSec}</b>
-        </div>
-      )}
-      {tags.length > 0 && <div className="sgt-tags">{tags}</div>}
-      {/* アクションのピルと出したチップは 1 つの箱に積む（個別に絶対配置すると、片方が
-          無いときに隙間が空き、隣の席のピルと近づいて読みづらくなる）。
-          フォールド/脱落した席のチップは出さない（そのストリートに出した額はポットへ流れた
-          扱いで、「降りた席にチップが残っている」ように見せない）。エンジン側の fold 時
-          streetBet 上書きは 2026-09-15 の QA で直っているが、表示の方針として残す。 */}
-      {(props.pill || (streetBet > 0 && !folded && !out)) && (
-        <div className="sgt-pills">
-          {props.pill && <span className={`sgt-act ${props.pill.cls}`}>{props.pill.label}</span>}
-          {streetBet > 0 && !folded && !out && <span className="sgt-bet">{formatBbDisplay(streetBet / bb)}bb</span>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function SngTable(props: { table: PublicTable; you: You; heroCards: readonly [string, string] | null; now: number }): JSX.Element {
   const { table, you } = props;
   const hand = table.hand;
   const n = table.players.length;
-  const slots = SLOTS[n] ?? SLOTS[6]!;
   const mySeat = you.seat ?? 0;
 
   const bb = hand?.bb ?? 200;
@@ -308,53 +162,72 @@ export function SngTable(props: { table: PublicTable; you: You; heroCards: reado
     return null;
   };
 
-  return (
-    <div className="sgt">
-      <div className="sgt-felt" />
-      <div className="sgt-mid">
-        {hand && <span className="sgt-street">{STREET_LABEL[hand.street] ?? 'PREFLOP'}</span>}
-        <div className="sgt-potline">
-          <span className="sgt-pot-lbl">POT</span>
-          <b className="sgt-pot">{formatBbDisplay(pot / bb)}bb</b>
-          {pot > 0 && hand?.phase !== 'settled' && (
-            <span className="sgt-spr">SPR {spr < 100 ? spr.toFixed(1) : Math.round(spr)}</span>
-          )}
-        </div>
-        <div className="sgt-board">
-          {[0, 1, 2, 3, 4].map((i) => {
-            const c = hand?.board[i];
-            return c ? <Card key={`${c}-${i}`} code={c} /> : <span key={i} className="sgt-slot" />;
-          })}
-        </div>
-      </div>
+  /** 1 席ぶんの PublicTable/PublicHand を GlassTable の view-model（FeltSeat）へ変換する。 */
+  const buildSeat = (seat: number, player: PlayerState): FeltSeat => {
+    const out = player.status === 'out';
+    const folded = hand?.folded[seat] === true;
+    const shown = hand?.shown[seat];
+    const isHero = seat === mySeat;
+    const showCards = isHero ? props.heroCards : (shown ?? null);
+    const showBacks = !showCards && !folded && !out && hand != null;
 
-      {table.players.map((p, seat) => {
-        const [x, y] = slots[(seat - mySeat + n) % n] ?? slots[0]!;
-        const isActing = hand != null && hand.toAct === seat && hand.phase === 'betting';
-        // acting 中はタイマーを見せる方が読みやすいのでピルを出さない。settled（精算後）も
-        // 結果バナーと混ざるため出さない。
-        const lastAction = !isActing && hand?.phase !== 'settled' ? lastActionsByStreet.get(seat) ?? null : null;
-        const pill: ActionPill | null = lastAction
-          ? { cls: ACTION_KIND_CLASS[lastAction.kind], label: actionPillLabel(lastAction, bb) }
-          : null;
-        return (
-          <SeatSlot
-            key={p.userId}
-            seat={seat}
-            x={x}
-            y={y}
-            player={p}
-            isHero={seat === mySeat}
-            hand={hand}
-            heroCards={props.heroCards}
-            badge={badgeFor(seat)}
-            isActing={isActing}
-            remainSec={isActing ? remainSec : null}
-            remainPct={isActing ? remainPct : null}
-            pill={pill}
-          />
-        );
-      })}
-    </div>
+    // ハンド中はスタックが動かない見た目にならないよう、開始スタックから拠出額を引いた
+    // 「残りスタック」を出す（エンジンは commits を別持ちにしていて player.stack はハンド
+    // 終了まで変えない設計のため・packages/sng/src/engine/hand.ts 冒頭コメント）。
+    // 精算後（settled）は獲得分を足して、勝った席が「0bb」に見えないようにする。
+    const remaining = hand
+      ? Math.max(0, (hand.startStacks[seat] ?? player.stack) - hand.commits[seat]! + (hand.won?.[seat] ?? 0))
+      : player.stack;
+    const streetBet = hand?.streetBet[seat] ?? 0;
+
+    const isActing = hand != null && hand.toAct === seat && hand.phase === 'betting';
+    // acting 中はタイマーを見せる方が読みやすいのでピルを出さない。settled（精算後）も
+    // 結果バナーと混ざるため出さない。
+    const lastAction = !isActing && hand?.phase !== 'settled' ? lastActionsByStreet.get(seat) ?? null : null;
+    const pill = lastAction ? { cls: ACTION_KIND_CLASS[lastAction.kind], label: actionPillLabel(lastAction, bb) } : null;
+
+    const tags: SeatTag[] = [];
+    if (!player.connected) tags.push({ key: 'warn-conn', cls: 'warn', text: '切断中' });
+    if (player.status === 'sitout') tags.push({ key: 'warn-sitout', cls: 'warn', text: 'SIT OUT' });
+    if (player.status === 'left') tags.push({ key: 'warn-left', cls: 'warn', text: '退室' });
+    if (out) tags.push({ key: 'out', cls: 'out', text: player.place ? `${player.place}位` : 'OUT' });
+
+    return {
+      key: player.userId,
+      name: player.name,
+      stackText: `${formatBbDisplay(remaining / bb)}bb`,
+      badge: badgeFor(seat),
+      cards: showCards,
+      backs: showBacks,
+      hero: isHero,
+      acting: isActing,
+      folded,
+      out,
+      timer: isActing && remainSec != null ? { sec: remainSec, pct: remainPct ?? 0 } : null,
+      waiting: false,
+      pill,
+      // フォールド/脱落した席のチップは出さない（そのストリートに出した額はポットへ流れた
+      // 扱いで、「降りた席にチップが残っている」ように見せない）。エンジン側の fold 時
+      // streetBet 上書きは 2026-09-15 の QA で直っているが、表示の方針として残す。
+      betText: streetBet > 0 && !folded && !out ? `${formatBbDisplay(streetBet / bb)}bb` : null,
+      tags,
+    };
+  };
+
+  // 先頭 = hero（手前・下）、以降は時計回りに座席番号を辿る（GlassTable の SLOTS がその
+  // 前提で組まれている）。table.players は実座席番号でインデックスされている。
+  const seats: FeltSeat[] = Array.from({ length: n }, (_, i) => {
+    const seat = (mySeat + i) % n;
+    return buildSeat(seat, table.players[seat]!);
+  });
+
+  return (
+    <GlassTable
+      seats={seats}
+      street={hand ? STREET_LABEL[hand.street] ?? 'PREFLOP' : null}
+      potText={`${formatBbDisplay(pot / bb)}bb`}
+      sprText={pot > 0 && hand?.phase !== 'settled' ? `SPR ${spr < 100 ? spr.toFixed(1) : Math.round(spr)}` : null}
+      board={hand?.board ?? []}
+    />
   );
 }

@@ -1,14 +1,23 @@
 /**
  * SIT & GO（対戦・ロビー・部屋）の見た目。docs/SNG_DESIGN.md §5（A3a 所有）。
  *
- * さつき指示: 「デザインは Slumbot と同じデザインを採用」。対戦中の卓・HUD・ベットサイザー・
+ * さつき指示: 「デザインは Slumbot と同じデザインを採用」。HUD 行・ベットサイザー・
  * アクションボタン・ハンド結果は、styles.css の「Slumbot HU」節にある `sb-*` クラス
- * （卓のガラス面・プレート・プリセット・スライダー・ボタン・結果バナー）をそのまま使う
- * （`SngTable.tsx`/`SngRoom.tsx` を参照）。ここに書くのは Slumbot に無い概念だけ:
- *   - 2〜6 席ぶんの座席配置・プレイヤー名・BTN バッジ・状態タグ（切断中/SIT OUT/退室/脱落）
- *   - 複数方向の吹き出し（上半分/下半分）とチップ（左右）
+ * （プリセット・スライダー・ボタン・結果バナー）をそのまま使う（`SngTable.tsx`/
+ * `SngRoom.tsx` を参照）。
+ *
+ * 卓そのもの（`sgt-*` 系・ガラス面・プレート・ピル・ボード）は元々ここに S&G 専用として
+ * 実装していたが、Slumbot HU 側の卓が旧デザイン（`.sb-felt`/`.sb-seat`/丸い吹き出し）の
+ * まま取り残されていたのを揃えるにあたり、`components/GlassTable.tsx` へ両画面共有の
+ * 実装として切り出した。つまり **この節の関係は当初と逆転していて**、`sgt-*` は
+ * もう「S&G 専用」ではなく「S&G と Slumbot HU が共有する卓」を指す。ここに残っている
+ * `sgt-*` のスタイルは GlassTable.tsx が出す DOM に対するもので、両画面に効く。
+ * 逆に、下の「操作系の小型化」節（`.sg-wrap` 限定だったもの）は今回 `.sg-wrap` の
+ * 限定を外して両画面で効くようにした（対戦画面は Slumbot も卓と同じ画面に同居する
+ * ようになったため）。ここに書くのは Slumbot に無い概念だけ:
+ *   - 2〜6 席ぶんの座席配置（3 人以上）・BTN バッジ・状態タグ（切断中/SIT OUT/退室/脱落）
  *   - ロビー一覧・待機中一覧・退室確認・最終結果（順位表）
- * カードの見た目（pt-card/pt-hand/pt-backs）は SlumbotTable.tsx から Card/Hand/Backs を
+ * カードの見た目（pt-card/pt-hand/pt-backs）は GlassTable.tsx から Card/Hand/Backs を
  * そのまま import して使う。重複定義を増やさないため、Slumbot と同じ値になるものは
  * ここに書かない。320px 幅でも崩れないことを確認して書く。
  */
@@ -142,10 +151,11 @@
   color: var(--dim2);
 }
 
-/* ---- 卓: Ten-Four を参考にした視認性重視のレイアウト（SngTable.tsx）。
-   ガラス質感・配色は Slumbot HU の .sb-felt（styles.css）と同じ値を流用するが、
-   プレートを主役にした縦長カプセルの卓・要素が重ならない配置にするため DOM/クラスは
-   独立させている（.sgt-*）。.sb-* 側（SlumbotTable.tsx）には一切触れない。 ---- */
+/* ---- 卓: Ten-Four を参考にした視認性重視のレイアウト。
+   実装は components/GlassTable.tsx（元は SngTable.tsx にあった）で、SIT & GO・
+   Slumbot HU 両方の対戦画面がここを描く。ガラス質感・配色はそれまでの Slumbot HU
+   旧実装（.sb-felt）と同じ値を踏襲しているが、プレートを主役にした縦長カプセルの
+   卓・要素が重ならない配置にするため DOM/クラスは独立させてある（.sgt-*）。 ---- */
 
 /* HUD 帯（.sb-hud）の中に置くハンド番号・レベル・ブラインド。Slumbot の HANDS/SESSION
    のような短い数値と違って文言が長いので、その分だけ小さいテキストにする
@@ -207,6 +217,24 @@
   margin-bottom: auto;
 }
 
+/* Slumbot HU だけ卓の下の予算を広げる。SIT & GO は精算後（settled）でも `.sb-actions` の
+   代わりに結果バナー 1 つを出すだけ（ゲームが自動で次のハンドへ進むため、ボタンが要らない）
+   なのに対し、Slumbot HU はハンド終了後に `.sb-result`＋`.btnrow`（終了/次のハンドの 2
+   ボタン）を出す必要があり、これが `.sb-sizer`＋`.sb-actions` より縦に大きい。上の 262px は
+   S&G の worst case（ベット操作中）だけを見て決めた値なので、そのまま Slumbot HU の
+   ハンド終了直後に当てはめると画面からボタンがはみ出し、実機（375×812 相当で確認）で
+   スクロールが発生した（約 60px 分）。卓の高さは phase に関わらず一定でなければならない
+   （ストリート・phase で卓が動くのを防ぐのがそもそもの目的）ので、Slumbot HU の worst case
+   （結果バナー＋btnrow）に合わせて一律に広げる。
+   下限を 270px にしてあるのは、縦 568px 級（iPhone SE 第1世代）でショーダウンを出したときに
+   卓が下限で突っ張って、結果バナー＋ボタンぶんだけ画面からはみ出すのを最小限にするため。
+   この画面サイズでは旧実装（`.sb-felt` の下限 270px）でも同じだけスクロールしていたので、
+   ここは「据え置き」であって悪化ではない。S&G は精算後もボタンを出さないぶん余裕があり、
+   下限 300px のままでよい（上の `.sgt`）。 */
+.sb-wrap .sgt {
+  height: clamp(270px, calc(100dvh - 330px - var(--sat) - var(--sab)), 560px);
+}
+
 /* ガラス卓本体（縦長カプセル）。背景・枠・影・backdrop-filter は .sb-felt の値を
    そのままコピーして質感を揃える（さつき指示: 配色・質感は今のまま）。 */
 .sgt-felt {
@@ -256,6 +284,22 @@
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(114deg, transparent 24%, rgba(255, 255, 255, 0.06) 40%, transparent 52%);
+}
+
+/* 卓を覆う層（Slumbot HU の「次のハンドを配っています…」用）。GlassTable の overlay
+   prop が渡されたときだけ出る。覆いを出している間は GlassTable 側が座席も中央
+   （ポット・ボード）も描かないので、下に隠す物はそもそも無い。
+   卓の枠（.sgt-felt）自体は隠さない＝配っている間もレイアウトが動かない。
+   暗幕は敷かない: .sgt は楕円の卓より大きい長方形なので、ここを塗ると卓の外側まで
+   四角く暗くなって「卓の上に板を載せた」ように見える（実機で確認）。隠す物はそもそも
+   無いので、中身を中央に置くだけでよい。 */
+.sgt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 卓の中央（ポット・ボード・ストリート）。.sgt を基準に常に中央固定。 */
@@ -388,6 +432,43 @@
   color: var(--cyan);
 }
 
+/* 相手の応答待ち（Slumbot HU の bot 席だけ）。.sgt-timer と同じ箱・同じ見た目
+   （暗い溝＋面取り --chamfer-xs＋小さいシアンの等幅文字）にして、タイマーとの
+   置き場所・存在感を揃える。バーが無い代わりに文字自体を明滅させて「進行中」を示す。
+   下限を 0.55 までに留めるのは、S&G のタイマー（常時はっきり読める数字）と存在感を
+   揃えるため——0 近くまで落とすと卓の上で 1 秒おきに消えたように見え、何を待っている
+   のか読み取れない（実機で確認）。 */
+.sgt-wait {
+  margin-top: 3px;
+  position: relative;
+  width: 100%;
+  height: 11px;
+  background: rgba(4, 10, 22, 0.85);
+  border: 1px solid var(--line);
+  clip-path: var(--chamfer-xs);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sgt-wait b {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  animation: sgt-wait-blink 1.4s ease-in-out infinite;
+}
+@keyframes sgt-wait-blink {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .sgt-tags { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
 
 /* 降りた席は「プレートと札」だけ薄くする。アクションのピル（Fold 等）は場を読む材料なので
@@ -508,8 +589,11 @@
 /* ---- ベットサイズのプリセットは横1行のスクロール（さつき指示 2026-09-16）----
    縦に折り返すと操作系が最大3行ぶん（約100px）伸び、そのぶん卓が小さくなって見づらかった。
    1行に固定すればストリートでプリセットの数が変わっても操作系の高さが動かず、卓の大きさも
-   一定になる。Slumbot HU 側は別画面なのでここでは触らない（`.sg-wrap` に限定する）。 */
-.sg-wrap .sb-presets {
+   一定になる。以前は SIT & GO 専用として `.sg-wrap` に限定していたが、Slumbot HU の対戦画面も
+   同じ卓デザイン（GlassTable）に揃えたことで操作系の詰め方も両画面で統一する意味が出たため、
+   `.sg-wrap` の限定を外して `.sb-preset` 自体に当てる（sng-play.css は main.tsx で styles.css
+   より後に読まれるので、同じ specificity でも後勝ちで styles.css 側の素の値を上書きできる）。 */
+.sb-presets {
   display: flex;
   flex-wrap: nowrap;
   gap: 5px;
@@ -522,42 +606,49 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
 }
-.sg-wrap .sb-presets::-webkit-scrollbar { display: none; }
+.sb-presets::-webkit-scrollbar { display: none; }
 
 /* ---- 操作系（プリセット・スライダー・アクション）を一回り小さくする（さつき指示 2026-09-16）----
-   Slumbot HU（`.sb-*` の素の値）は PC でも触る単独画面なので大きめのままでよいが、SIT & GO は
-   卓と同じ画面に同居していて、操作系が厚いぶんだけ卓が小さくなる。ここは `.sg-wrap` 配下だけを
-   詰めて、押せる大きさ（実測でどれも 24px 以上）は保ったまま卓に高さを返す。
-   併せて角を面取り（`--chamfer-sm`）にしてアプリ全体の形と揃える。 */
-.sg-wrap .sb-sizer { margin-bottom: var(--s2); }
-.sg-wrap .sb-presets { margin-bottom: var(--s2); }
-.sg-wrap .sb-preset {
+   当初は「Slumbot HU（`.sb-*` の素の値）は PC でも触る単独画面なので大きめのままでよいが、
+   SIT & GO は卓と同じ画面に同居していて操作系が厚いぶんだけ卓が小さくなる」という理由で
+   `.sg-wrap` 配下だけに限定していたが、Slumbot HU 側の対戦画面も今回この卓（GlassTable）を
+   使うようになり同じ制約を抱えることになったため、`.sg-wrap` の限定を外して両画面に効かせる。
+   押せる大きさ（実測でどれも 24px 以上）は保ったまま卓に高さを返す・角を面取り
+   （`--chamfer-sm`）にしてアプリ全体の形と揃える、という狙いは変わらない。 */
+.sb-sizer { margin-bottom: var(--s2); }
+.sb-presets { margin-bottom: var(--s2); }
+.sb-preset {
   flex: 0 0 auto;
   min-width: 46px;
   padding: 5px 7px;
   clip-path: var(--chamfer-sm);
   scroll-snap-align: start;
 }
-.sg-wrap .sb-preset-v { font-size: 12px; }
-.sg-wrap .sb-preset-u { font-size: 8.5px; }
+.sb-preset-v { font-size: 12px; }
+.sb-preset-u { font-size: 8.5px; }
 
-.sg-wrap .sb-slide { gap: var(--s2); }
-.sg-wrap .sb-range { height: 3px; border-radius: 0; }
+.sb-slide { gap: var(--s2); }
+.sb-range { height: 3px; border-radius: 0; }
 /* つまみは丸ではなく面取りの四角（アプリの他のボタンと同じ形）。clip-path は影も切るので
    素の `box-shadow` の光は消える＝ここでは「光らない小さな四角」が狙いどおりの見た目。 */
-.sg-wrap .sb-range::-webkit-slider-thumb { width: 16px; height: 16px; border-radius: 0; clip-path: var(--chamfer-xs); }
-.sg-wrap .sb-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 0; clip-path: var(--chamfer-xs); }
-.sg-wrap .sb-step { width: 28px; height: 28px; font-size: 13px; clip-path: var(--chamfer-sm); }
-.sg-wrap .sb-amount { min-width: 52px; font-size: 14px; }
-.sg-wrap .sb-amount-u { font-size: 9px; }
+.sb-range::-webkit-slider-thumb { width: 16px; height: 16px; border-radius: 0; clip-path: var(--chamfer-xs); }
+.sb-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 0; clip-path: var(--chamfer-xs); }
+.sb-step { width: 28px; height: 28px; font-size: 13px; clip-path: var(--chamfer-sm); }
+.sb-amount { min-width: 52px; font-size: 14px; }
+.sb-amount-u { font-size: 9px; }
 
 /* FOLD / CHECK / CALL / RAISE。字は読みやすさの要なので大きさをほぼ保ち、上下の厚みだけ削る。
-   サイザーのすぐ下に続くときは、サイザー側の margin-bottom と二重にならないよう上の余白を消す
-   （Slumbot 側の `.sb-sizer + .sb-actions` と同じ扱い。`.sg-wrap > .sb-actions` の指定が
-   後勝ちで効いてしまうため、ここで打ち消す）。 */
+   これも同じ理由で `.sg-wrap` 限定を外し、両画面に効かせる。 */
+.sb-act { padding: 10px 4px; font-size: 14.5px; }
+.sb-act-sub { font-size: 10px; }
+
+/* サイザーのすぐ下に続くときは、サイザー側の margin-bottom と二重にならないよう上の余白を消す
+   （Slumbot HU 側は styles.css の無限定 `.sb-sizer + .sb-actions { margin-top: 0 }` が
+   ソース順で後勝ちして自然に効くが、SIT & GO 側は `.sg-wrap > .sb-actions` という別の指定
+   （このファイル冒頭・ラッパーのクラス名が違うだけの間隔再現）が同じ詳細度で後から効いて
+   しまうため、`.sg-wrap` 限定のこの 1 行だけは残して打ち消す。`.sb-wrap` 側には同名の
+   ラッパー直下ルールが無いのでこの上書きは要らない——実際に styles.css を確認済み）。 */
 .sg-wrap > .sb-sizer + .sb-actions { margin-top: 0; }
-.sg-wrap .sb-act { padding: 10px 4px; font-size: 14.5px; }
-.sg-wrap .sb-act-sub { font-size: 10px; }
 
 /* ---- 退室確認 ---- */
 .sg-confirm-backdrop {

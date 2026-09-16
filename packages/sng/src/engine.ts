@@ -23,7 +23,16 @@ import type {
 export type Rng = () => number;
 
 export type EngineCommand =
-  | { readonly t: 'join'; readonly userId: string; readonly name: string }
+  | {
+      readonly t: 'join';
+      readonly userId: string;
+      readonly name: string;
+      /**
+       * アイコンの参照（PlayerState.avatarUrl と同じ形）。省略可（テスト等で渡さない場合は
+       * null 扱いになる。実際の呼び出し元 worker/sng/table.ts は毎回 auth.avatarUrl を渡す）。
+       */
+      readonly avatarUrl?: string | null;
+    }
   | { readonly t: 'leave'; readonly userId: string }
   | { readonly t: 'sitin'; readonly userId: string }
   | { readonly t: 'connected'; readonly userId: string; readonly connected: boolean }
@@ -61,8 +70,15 @@ export type EngineResult =
   | { readonly ok: false; readonly error: EngineError };
 
 export interface Engine {
-  /** 待機中の部屋を作る（作成者は着席済み）。 */
-  createTable(roomId: string, hostId: string, hostName: string, config: SngConfig, now: number): TableState;
+  /** 待機中の部屋を作る（作成者は着席済み）。hostAvatarUrl は省略可（省略時は null）。 */
+  createTable(
+    roomId: string,
+    hostId: string,
+    hostName: string,
+    config: SngConfig,
+    now: number,
+    hostAvatarUrl?: string | null,
+  ): TableState;
   /** コマンドを適用する。状態が変わらない場合も ok:true で同じ state を返してよい。 */
   apply(state: TableState, cmd: EngineCommand, now: number, rng: Rng): EngineResult;
   /** その席の合法手（手番でなければ全部 false / null）。 */

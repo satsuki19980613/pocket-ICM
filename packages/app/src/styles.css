@@ -2306,7 +2306,11 @@ button.cell { cursor: pointer; }
   /* 下段タブを出さない画面なので、ホームバーぶんはここで自前に確保する。
      ステータスバーぶん（.app の上パディング）も画面から引く。 */
   min-height: calc(100dvh - 103px - var(--sat) - var(--sab));
-  padding-bottom: var(--sab);
+  /* アクションボタンを 1 個ぶん（最大53px）上げた分の余白（sng-play.css の `.sgt`/
+     `.sb-wrap .sgt` の height 計算と同じ lift 式）。ここでリフト量ぶんの余白を確保しないと
+     ページ自体の高さが伸びてスクロールが発生する（卓は margin-bottom:auto で余りを吸う
+     だけで、リフト分の下限は保証しない）。値の根拠は sng-play.css の `.sgt` コメント参照。 */
+  padding-bottom: calc(var(--sab) + clamp(0px, calc(100dvh - 600px - var(--sat) - var(--sab)), 53px));
 }
 .sb-wrap > .sb-hud,
 .sb-wrap > .sb-sizer,

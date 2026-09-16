@@ -14,6 +14,8 @@
  * （`SngTable.tsx`/`SlumbotTable.tsx`）の責務にして、ここは「整形済みの値を並べるだけ」に徹する。
  */
 
+import { useStorageImage } from '../supabase/storageUrls';
+
 const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 
 /**
@@ -135,6 +137,30 @@ export interface FeltSeat {
   /** そのストリートに出した額。整形済み（例 "2.5bb"）。出さないときは null。 */
   readonly betText: string | null;
   readonly tags: readonly SeatTag[];
+  /**
+   * 席のアイコン（プロフィール画像、または Slumbot の bot 席のような専用記号）。
+   * `src` は **表示してよい URL ではなく、DB の生の参照**（`profiles.avatar_url` の値、または
+   * null）を渡す約束にしている——ここで署名 URL への変換（`SeatAvatar`／`useStorageImage`）
+   * まで済ませる設計で、呼び出し側（`SngTable.tsx`/`SlumbotTable.tsx`）に「生の参照を
+   * `<img src>` に入れてしまう」経路を作らせないため（avatars バケットは非公開・
+   * `storagePathFromRef` の検証を必ず通す。`supabase/storageUrls.ts` 冒頭コメント参照）。
+   * `initial` は画像が無い/読み込み中のときのフォールバック文字（頭文字や記号 1 文字）。
+   * 省略時（undefined/null）は何も描かない。
+   */
+  readonly avatar?: { readonly src: string | null; readonly initial: string } | null;
+}
+
+/**
+ * avatar の中身（画像 or 頭文字）を描く部品。`src` は DB の生の参照なので、ここで
+ * `useStorageImage('avatars')` に通して署名 URL に変換してから `<img>` に渡す
+ * （非公開バケット＋参照の形の検証を必ず経由させるため。迂回して `src` をそのまま
+ * `<img src>` に入れてはいけない）。6 席ぶん呼ばれても、`useStorageImage` の内部実装
+ * （`storageUrls.ts` の `createSignedUrlResolver`）が同一ティックの要求をまとめて 1 回の
+ * 署名リクエストにバッチするので、ここでは何も気にせず素直に呼ぶだけでよい。
+ */
+function SeatAvatar(props: { avatar: { readonly src: string | null; readonly initial: string } }): JSX.Element {
+  const url = useStorageImage(props.avatar.src, 'avatars');
+  return url ? <img src={url} alt="" /> : <span>{props.avatar.initial}</span>;
 }
 
 interface FeltSeatViewProps {
@@ -166,14 +192,29 @@ function FeltSeatView(props: FeltSeatViewProps): JSX.Element {
       <div className="sgt-cards">
         {seat.cards ? <Hand cards={seat.cards} big={seat.hero} /> : !seat.out && (seat.backs ? <Backs /> : <div className="sgt-cardsp" />)}
       </div>
-      <div className="sgt-plate">
-        <span className="sgt-name" title={seat.name}>
-          {seat.name}
-        </span>
-        <span className="sgt-sub">
-          {seat.badge && <span className={`sgt-pos p-${seat.badge.toLowerCase()}`}>{seat.badge}</span>}
-          <span className="sgt-stack">{seat.stackText}</span>
-        </span>
+      {/* .sgt-plate には clip-path（面取り）が掛かっており、子孫もろとも切り取る。
+          プレートの左辺からはみ出す丸アイコン（さつき指定）をそのまま .sgt-plate の
+          子にすると、はみ出た部分が半月状に消えてしまう（実機で確認済みの罠）。
+          そのため clip-path を持たない薄いラッパー .sgt-plateline で .sgt-plate を包み、
+          丸はそのラッパーの「きょうだい」として置く。ラッパーは position:relative だけの
+          素の div で、.sgt-seat（flex-direction:column, align-items:center）の子として
+          プレートの幅にそのまま shrink-wrap されるので、.sgt-plate 自身の width/height・
+          見た目は 1px も変わらない。 */}
+      <div className="sgt-plateline">
+        {seat.avatar && (
+          <span className="sgt-av" aria-hidden="true">
+            <SeatAvatar avatar={seat.avatar} />
+          </span>
+        )}
+        <div className="sgt-plate">
+          <span className="sgt-name" title={seat.name}>
+            {seat.name}
+          </span>
+          <span className="sgt-sub">
+            {seat.badge && <span className={`sgt-pos p-${seat.badge.toLowerCase()}`}>{seat.badge}</span>}
+            <span className="sgt-stack">{seat.stackText}</span>
+          </span>
+        </div>
       </div>
       {seat.timer != null && (
         <div className="sgt-timer">

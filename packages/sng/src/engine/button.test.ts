@@ -7,6 +7,7 @@ function makePlayers(n: number, outSeats: readonly number[] = []): PlayerState[]
   return Array.from({ length: n }, (_, seat) => ({
     userId: `u${seat}`,
     name: `P${seat}`,
+    avatarUrl: null,
     seat,
     stack: outSeats.includes(seat) ? 0 : 10000,
     status: outSeats.includes(seat) ? 'out' : 'active',

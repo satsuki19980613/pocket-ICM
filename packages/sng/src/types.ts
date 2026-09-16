@@ -71,6 +71,17 @@ export interface PlayerState {
   readonly userId: string;
   /** 表示名（profiles.display_name）。 */
   readonly name: string;
+  /**
+   * アカウントアイコンの参照（profiles.avatar_url をそのまま持つ）。画像が無い/未設定なら null。
+   * 表示側（GlassTable.tsx）はこれを署名 URL に変換してから出す（生の参照のまま <img src> に
+   * 入れない）。
+   *
+   * `?` にしているのは「このフィールドが増える前に DO のストレージへ保存済みの部屋」を
+   * 読んだときに実際に undefined になりうるため（`ctx.storage.get<TableState>` は型を
+   * 被せるだけで実体を検証しない）。読み出し側は必ず `?? null` で丸めること
+   * （worker/sng/table.ts の `normalizeState`・SngTable.tsx/SlumbotTable.tsx の buildSeat 参照）。
+   */
+  readonly avatarUrl?: string | null;
   readonly seat: number;
   readonly stack: number;
   readonly status: PlayerStatus;

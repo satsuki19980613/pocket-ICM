@@ -9,6 +9,7 @@ function makePlayers(stacks: readonly number[]): PlayerState[] {
   return stacks.map((stack, seat) => ({
     userId: `u${seat}`,
     name: `P${seat}`,
+    avatarUrl: null,
     seat,
     stack,
     status: 'active',

@@ -62,6 +62,17 @@ function actionPillLabel(a: ActionRecord, bb: number): string {
   return a.auto ? `${body}（自動）` : body;
 }
 
+/**
+ * 席の既定アイコン（画像があれば画像、無ければ名前の頭文字。`feedShared.tsx` の `Avatar` と
+ * 同じ流儀）を組み立てる。`avatarUrl` は PlayerState 由来で、古い部屋の状態だと undefined に
+ * なりうる（`PlayerState.avatarUrl` の型コメント参照）ので、ここで null に丸める。
+ * 純関数として切り出してあるのはテストのため（buildSeat 自体は table/hand/props に依存し
+ * 単体では呼びにくい）。
+ */
+export function seatAvatarOf(name: string, avatarUrl: string | null | undefined): NonNullable<FeltSeat['avatar']> {
+  return { src: avatarUrl ?? null, initial: name.trim().charAt(0).toUpperCase() || '?' };
+}
+
 /** 収支の符号つき bb 表記（Slumbot HU の HandResult と同じ流儀・"−" は全角ハイフンでなく減算記号）。 */
 function signedBb(chips: number, bb: number): string {
   if (chips === 0) return `±${formatBbDisplay(0)}bb`;
@@ -123,7 +134,12 @@ export function SgHandResult(props: { banner: ResultBanner }): JSX.Element {
   );
 }
 
-export function SngTable(props: { table: PublicTable; you: You; heroCards: readonly [string, string] | null; now: number }): JSX.Element {
+export function SngTable(props: {
+  table: PublicTable;
+  you: You;
+  heroCards: readonly [string, string] | null;
+  now: number;
+}): JSX.Element {
   const { table, you } = props;
   const hand = table.hand;
   const n = table.players.length;
@@ -211,6 +227,9 @@ export function SngTable(props: { table: PublicTable; you: You; heroCards: reado
       // streetBet 上書きは 2026-09-15 の QA で直っているが、表示の方針として残す。
       betText: streetBet > 0 && !folded && !out ? `${formatBbDisplay(streetBet / bb)}bb` : null,
       tags,
+      // 本人のアイコン（`profiles.avatar_url` 由来）。無ければ名前の頭文字に落とす
+      // （`feedShared.tsx` の `Avatar` と同じ流儀）。
+      avatar: seatAvatarOf(player.name, player.avatarUrl),
     };
   };
 

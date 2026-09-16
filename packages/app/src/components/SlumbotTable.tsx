@@ -74,6 +74,12 @@ export function SlumbotTable(props: {
   /** 相手の応答待ち（＝Slumbot が考えている）。bot 席の待ち表示に出す。 */
   thinking: boolean;
   streetLabel: string;
+  /**
+   * hero（自分）のアイコン。`getMyProfile()` は非同期なので、SlumbotView.tsx は届くまで
+   * `{ src: null, initial: '?' }` 相当（枠と頭文字だけ）を渡し、届いたら差し替える。
+   * 省略時は画像なし・initial '?' 扱い（枠の大きさは変わらないのでレイアウトは動かない）。
+   */
+  heroAvatar?: { readonly src: string | null; readonly initial: string };
 }): JSX.Element {
   const { view } = props;
   const { state } = view;
@@ -125,6 +131,9 @@ export function SlumbotTable(props: {
       pill,
       betText: !view.over && streetBet > 0 ? `${bbLabel(streetBet, 1)}bb` : null,
       tags: [],
+      // Slumbot はプログラムなので、人物アイコンではなく専用の記号 1 文字にする
+      // （実在のサービス・人物を模さない）。
+      avatar: isHero ? (props.heroAvatar ?? { src: null, initial: '?' }) : { src: null, initial: '♠' },
     };
   };
 

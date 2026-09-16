@@ -16,6 +16,8 @@ const TIMEOUT_MS = 5_000;
 export interface AuthedUser {
   readonly userId: string;
   readonly name: string;
+  /** profiles.avatar_url（アイコン画像の参照）。未設定なら null。 */
+  readonly avatarUrl: string | null;
 }
 
 async function fetchWithTimeout(url: string, headers: Record<string, string>, ms: number): Promise<Response | null> {
@@ -47,17 +49,20 @@ export async function verifyToken(env: Env, token: string): Promise<AuthedUser |
   }
 
   const profileRes = await fetchWithTimeout(
-    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=display_name`,
+    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=display_name,avatar_url`,
     authHeaders,
     TIMEOUT_MS,
   );
   if (!profileRes || !profileRes.ok) return null;
 
   try {
-    const rows = (await profileRes.json()) as ReadonlyArray<{ display_name?: unknown }>;
+    const rows = (await profileRes.json()) as ReadonlyArray<{ display_name?: unknown; avatar_url?: unknown }>;
     const name = rows[0]?.display_name;
     if (typeof name !== 'string' || name.length === 0) return null;
-    return { userId, name };
+    // avatar_url は無くても認証自体は成立させる（アイコンが無いだけの利用者なので落とさない）。
+    const rawAvatar = rows[0]?.avatar_url;
+    const avatarUrl = typeof rawAvatar === 'string' && rawAvatar.length > 0 ? rawAvatar : null;
+    return { userId, name, avatarUrl };
   } catch {
     return null;
   }

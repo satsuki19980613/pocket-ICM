@@ -201,38 +201,88 @@
 .sg-tag.out { background: var(--surface-3); color: var(--dim2); }
 
 /* ---- 卓の器。SngRoom.tsx 下側の操作系（ベットサイザー・アクションボタン）が押し出され
-   ないよう、Slumbot HU の .sb-felt と同じ考え方でビューポートだけから高さを決める。 ---- */
+   ないよう、Slumbot HU の .sb-felt と同じ考え方でビューポートだけから高さを決める。
+
+   さつき承認（2026-09-16、デザイン承認プレビューで検証・本移植）:
+     (1) 「卓以外」の引き算の値が実測より小さく、対戦画面でボタンが画面外に 6px はみ出し
+         ページが 38px スクロールする既存バグを修正した（旧値 262px は、操作系を一回り
+         小さくした改修（同日・別コミット）のときに引き直されずに残っていた古い値だった）。
+     (2) アクションボタンを 1 個ぶん（53px）画面上へ上げる（下に余白を足し、卓の予算も
+         同じだけ増やす）。
+     (3) 縦の短い端末（下の `@media (max-height: 680px)`）では `.sb-act` を縮めて浮いた分
+         だけ (2) の余地を広げる。
+   優先順位（さつき指示）: 1.はみ出しゼロ最優先 → 2.できるだけ上げる →
+   3.卓は小さくなってよいが席・ピル・チップが重ならないこと。
+
+   ---- (1) の実測（Chrome DevTools, getBoundingClientRect()。375×812 と 320×568 の
+   両方で確認・幅では変わらない） ----
+   「卓以外」の合計＝`.app` の下端 − `.sgt` の高さ、を直接測った（推測しない）:
+     進行中（サイザー＋ボタン）: 300px
+       内訳: .app 上パディング16 + .topbar 38 + margin-bottom16 + .sb-hud 54 + margin-bottom8
+            + .sgt との間12 + .sb-sizer 63 + .sb-actions との間8 + .sb-actions 53
+            + .app 下パディング32 = 300
+     ハンド終了（結果バナーのみ）: 262px（S&G6人）/264px（S&G2人）← 進行中より小さい
+   局面によって下に来るものが変わり、進行中のほうが高い＝worst case は 300px。
+   Slumbot 側（330px、下の `.sb-wrap .sgt`）は実測で 323px（ハンド終了 worst case）に
+   対し 7px のクッションを持たせた値で、既に正しいのでここでは変えていない。
+
+   ---- リフト量の式（さつき指示の優先順位をそのまま計算式にした） ----
+     lift = clamp(0px, (100dvh − 卓以外) − 下限, 53px)
+   卓以外・下限とも上の実測値を使う。この式は「卓が下限を割ってはみ出す」ケースを作らない
+   （下限を割りそうになったら lift 自体が 0 に向かって縮む）。ただし 320×568 のように、
+   リフトを 0 にしても（＝(1) の修正だけでも）卓以外＋下限がビューポートを超えるサイズが
+   実在する。ここは下限（300px/270px）を下げない限り解消できないので、無理に詰めず・
+   下限も勝手に下げず、はみ出したまま（ただし旧 262px 基準よりは小さいはみ出しになる）
+   にしてある。
+   閾値の決め方: 卓の下限（S&G=300px/Slumbot=270px）に「卓以外の合計＋卓の下限」が収まる
+   境目を実測の定数から逆算する。S&G: 300(卓以外)+300(下限)=600px。Slumbot: 330+270=600px
+   （偶然どちらも600）。この 600px を下回るとリフト無しでも卓が下限に張り付いてはみ出す
+   ＝そもそも直しようがない領域なので、lift の clamp の基準にそのまま 600 を使う。
+   上限 507px（旧 560px）は、リフトが最大 53px 乗るぶん、卓が伸びすぎないよう詰め直した値。 ---- */
 .sgt {
   position: relative;
   width: 100%;
-  /* `.app` は flex ではない（＝親から高さは降りてこない）ので、卓の高さはここで決めるしかない。
-     引く 335px は「アプリの上下余白＋ヘッダ＋HUD＋プリセット1行＋スライダー＋ボタン」の
-     実測ぶん（ヘッダまで 78px ＋ 卓の下 180px）。プリセットを横1行のスクロールにした
-     （さつき指示 2026-09-16）ことで行数が増えなくなり、ストリートが変わっても卓の高さが
-     動かない。操作系を一回り小さくした（同日）ぶんもここから引いてある。数px の余裕は
-     接続警告（`.sg-connwarn`）が出たときのため。余りは margin-bottom:auto が吸う
-     （旧 `.sb-felt` と同じ考え方）。 */
-  height: clamp(300px, calc(100dvh - 262px - var(--sat) - var(--sab)), 560px);
+  height: clamp(300px, calc(100dvh - 300px - clamp(0px, calc(100dvh - 600px - var(--sat) - var(--sab)), 53px) - var(--sat) - var(--sab)), 507px);
   flex: none;
   margin-bottom: auto;
+}
+/* (2) のリフト分だけ下に余白を足す。アクションボタンが浮いた高さぶんを、見えない余白として
+   確保しないとページ自体の高さが伸びてスクロールが発生してしまう（卓自身は margin-bottom:auto
+   で余りを吸うだけで、リフト分の下限を保証しないため）。 */
+.sg-wrap {
+  padding-bottom: calc(var(--sab) + clamp(0px, calc(100dvh - 600px - var(--sat) - var(--sab)), 53px));
+}
+
+/* 縦の短い端末（下の `.sb-act` 縮小と同じ閾値 680px）だけ、S&G の「卓以外」をボタン分
+   軽くする（300px→288px、600→588px）。閾値の理由: 600〜653px（600+53）は「卓は下限に
+   張り付かないが、53pxまるまる足すと下限を割る」半端な領域で、ボタンを縮めて浮いた分
+   （53−41=12px）だけこの境目を 12px 広げられる。680px はこの必要域（〜653px）を余裕を
+   持ってカバーしつつ、縦に余裕がある端末では素の大きさのボタンのままにできる、実測に
+   基づく閾値。
+   Slumbot（下の `.sb-wrap .sgt`）はここでは縮めない——理由は下の `.sb-act` の
+   `@media (max-height: 680px)` ブロックのコメント（btnrow の罠）を参照。 */
+@media (max-height: 680px) {
+  .sgt {
+    height: clamp(300px, calc(100dvh - 288px - clamp(0px, calc(100dvh - 588px - var(--sat) - var(--sab)), 53px) - var(--sat) - var(--sab)), 507px);
+  }
+  .sg-wrap {
+    padding-bottom: calc(var(--sab) + clamp(0px, calc(100dvh - 588px - var(--sat) - var(--sab)), 53px));
+  }
 }
 
 /* Slumbot HU だけ卓の下の予算を広げる。SIT & GO は精算後（settled）でも `.sb-actions` の
    代わりに結果バナー 1 つを出すだけ（ゲームが自動で次のハンドへ進むため、ボタンが要らない）
    なのに対し、Slumbot HU はハンド終了後に `.sb-result`＋`.btnrow`（終了/次のハンドの 2
-   ボタン）を出す必要があり、これが `.sb-sizer`＋`.sb-actions` より縦に大きい。上の 262px は
+   ボタン）を出す必要があり、これが `.sb-sizer`＋`.sb-actions` より縦に大きい。上の 300px は
    S&G の worst case（ベット操作中）だけを見て決めた値なので、そのまま Slumbot HU の
-   ハンド終了直後に当てはめると画面からボタンがはみ出し、実機（375×812 相当で確認）で
-   スクロールが発生した（約 60px 分）。卓の高さは phase に関わらず一定でなければならない
-   （ストリート・phase で卓が動くのを防ぐのがそもそもの目的）ので、Slumbot HU の worst case
-   （結果バナー＋btnrow）に合わせて一律に広げる。
+   ハンド終了直後に当てはめると画面からボタンがはみ出す。卓の高さは phase に関わらず一定で
+   なければならない（ストリート・phase で卓が動くのを防ぐのがそもそもの目的）ので、
+   Slumbot HU の worst case（結果バナー＋btnrow）に合わせて一律に広げる。
    下限を 270px にしてあるのは、縦 568px 級（iPhone SE 第1世代）でショーダウンを出したときに
    卓が下限で突っ張って、結果バナー＋ボタンぶんだけ画面からはみ出すのを最小限にするため。
-   この画面サイズでは旧実装（`.sb-felt` の下限 270px）でも同じだけスクロールしていたので、
-   ここは「据え置き」であって悪化ではない。S&G は精算後もボタンを出さないぶん余裕があり、
-   下限 300px のままでよい（上の `.sgt`）。 */
+   S&G は精算後もボタンを出さないぶん余裕があり、下限 300px のままでよい（上の `.sgt`）。 */
 .sb-wrap .sgt {
-  height: clamp(270px, calc(100dvh - 330px - var(--sat) - var(--sab)), 560px);
+  height: clamp(270px, calc(100dvh - 330px - clamp(0px, calc(100dvh - 600px - var(--sat) - var(--sab)), 53px) - var(--sat) - var(--sab)), 507px);
 }
 
 /* ガラス卓本体（縦長カプセル）。背景・枠・影・backdrop-filter は .sb-felt の値を
@@ -356,16 +406,72 @@
 .sgt-seat.edge-bottom.anchor-l { transform: none; }
 .sgt-seat.edge-top.anchor-r,
 .sgt-seat.edge-bottom.anchor-r { transform: none; }
-.sgt-seat.anchor-l { left: 8px; transform: translateY(-50%); }
-.sgt-seat.anchor-r { right: 8px; left: auto; transform: translateY(-50%); }
+/* 左右の席は 18px（丸アイコンの半径25pxがビューポート外へ切れないための余白。詳細は
+   下の `.sgt-av` のコメント参照）。丸アイコンが無い席・画面でも、全席で余白を揃えるため
+   常に 18px にしてある（かつては 8px だった）。 */
+.sgt-seat.anchor-l { left: 18px; transform: translateY(-50%); }
+.sgt-seat.anchor-r { right: 18px; left: auto; transform: translateY(-50%); }
 
 .sgt-cards { display: flex; align-items: center; justify-content: center; }
 .sgt-cardsp { height: 30px; }
+
+/* 罠1（実機で発覚・修正済み）: `.sgt-av`（丸アイコン）は当初 `.sgt-plate` の子にしていたが、
+   `.sgt-plate` には `clip-path: var(--chamfer)`（面取り）が掛かっており、clip-path は
+   子孫もろとも切り取る。プレートの左辺からはみ出す丸の左半分が半月状に消えて見えた
+   （getBoundingClientRect() はレイアウト上の矩形を返すので、はみ出しゼロ・重なりゼロの
+   数値チェックだけでは検出できなかった＝要実機目視、という教訓）。
+   対策: clip-path を持たない薄いラッパー `.sgt-plateline` で `.sgt-plate` を包み、
+   `.sgt-av` をそのラッパーの「きょうだい」（`.sgt-plate` と同じ階層。DOM は
+   GlassTable.tsx 参照）として置く。位置の基準を `.sgt-plate` から `.sgt-plateline` に
+   変えただけで、座標の考え方（中心をプレート左辺・垂直中央に合わせる）は変わらない。 */
+.sgt-plateline {
+  position: relative; /* .sgt-av の絶対配置の基準（clip-path を継承しない素のラッパー）。 */
+}
+/* 実測（Chrome DevTools, getBoundingClientRect()）: `.sgt-plate` の高さ＝ 390×844 幅で
+   42px、320×568 幅（360px以下の詰め media query が効く側）で 40px。幅で 2px しか変わらない
+   ので、丸の直径は 1 サイズだけ用意すればどのビューポートでも「はみ出し方の比率」がほぼ
+   同じに見える。さつき指示: 上下に 4〜5px ずつはっきり出る大きさにする（直径46px＝上下2〜3px
+   では「切れていなければプレートとほぼ同じ高さ」に見えて物足りない、との指摘）。直径 50px
+   （半径25px）を採用: (50-42)/2=4px, (50-40)/2=5px で狙い通りの範囲に入る。
+   DOM は `seat.avatar` が渡されたときだけ GlassTable.tsx が出す（`{seat.avatar && (...)}`）
+   ので、この CSS を無条件にしても、アイコンが無い場面で何かが出ることはない。 */
+.sgt-av {
+  display: flex;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid rgba(190, 232, 255, 0.5);
+  box-shadow: 0 0 8px rgba(58, 230, 255, 0.35), 0 1px 4px rgba(0, 0, 0, 0.5);
+  color: var(--yellow);
+  font-family: var(--disp);
+  font-size: 16px;
+  font-weight: 700;
+}
+.sgt-av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 .sgt-plate {
   min-width: 96px;
   max-width: 118px;
   padding: 4px 8px;
+  /* 丸がプレートへ食い込む深さ（半径25px）+ 名前との間の余白ぶん、左パディングを足して
+     名前・スタックが丸の下に潜らないようにする。text-align は center のままにして、
+     空いた右側の領域の中で自然に中央寄りに見えるようにしている。アイコンの無い席・画面
+     でも同じ値にして、席ごとにプレートの中身の位置がずれないようにしてある。 */
+  padding-left: 30px;
   background: rgba(4, 10, 22, 0.9);
   border: 1px solid rgba(190, 232, 255, 0.34);
   clip-path: var(--chamfer);
@@ -544,14 +650,25 @@
   .sgt-plate { min-width: 82px; max-width: 102px; }
   .sgt-name { font-size: 11px; }
   .sgt-stack { font-size: 12px; }
-  .sgt-seat.anchor-l { left: 4px; }
-  .sgt-seat.anchor-r { right: 4px; }
+  /* 丸アイコンの半径25pxが画面外へ切れないための余白は幅が狭くても 18px を維持する
+     （狭幅側だけ 4px に戻すと丸の左半分がビューポート外へ切れる）。 */
+  .sgt-seat.anchor-l { left: 18px; }
+  .sgt-seat.anchor-r { right: 18px; }
   /* 左右のピルとボードが触れるので、ボードとプレートを一回り小さくして間を空ける。 */
   .sgt-slot { width: 25px; height: 35px; }
   .sgt-felt { inset: 42px 17% 86px; }
   .sgt-plate { min-width: 76px; max-width: 88px; }
   .sgt-act,
   .sgt-bet { font-size: 9px; padding: 2px 4px; }
+  /* 罠3（360px以下でカードと1pxだけ重なる・実測で発覚）: `.sgt-plate` の高さは 360px超で
+     42px（丸のはみ出しは上下 (50-42)/2=4px）だが、この詰め media query で 40px に縮む
+     （はみ出しは (50-40)/2=5px）。カードとの間隔（`.sgt-seat{gap:4px}`）は 4px 固定なので、
+     5px はみ出すと 1px だけ `.sgt-cards` に食い込む。「重なる場合は丸を小さくせず位置で
+     逃がす」方針で、`.sgt-plateline` に上マージンを足し丸ごと（丸＋プレート）を少し下げて
+     カードとの間隔だけを広げる。ピル側（`.sgt-plateline` の次に続く `.sgt-pills`）は
+     一緒に下がるので、丸とピルの間隔は変わらない——上だけ逃がして下は動かさない、が
+     このマージンの狙い。 */
+  .sgt-plateline { margin-top: 2px; }
 }
 
 /* 縦の余裕が無い端末（iPhone SE など）は、卓の中央（ポット＋ボード）と札を一回り小さくして、
@@ -641,6 +758,22 @@
    これも同じ理由で `.sg-wrap` 限定を外し、両画面に効かせる。 */
 .sb-act { padding: 10px 4px; font-size: 14.5px; }
 .sb-act-sub { font-size: 10px; }
+
+/* 縦の短い端末だけボタンをさらに詰める（実測 53px→41px）。padding 7px 4px・font-size 11px・
+   サブ文言 8px で、タップ領域は幅が広いボタンなので高さ 41px でも指では押しづらくない
+   （さつき指示の「最低40px弱」はクリア）。上の `.sgt`/`.sg-wrap` の 680px ブロックと
+   同じ閾値（decide の根拠もそちら参照）。
+   Slumbot のハンド終了は `.sb-act` ではなく `.btnrow`（「終了／次のハンド」の2つの
+   `.btn`）が下に来て、これはここでの縮小対象に入っていない。実測 worst case は、S&G は
+   進行中(300、縮めると288)が常にハンド終了(262〜264)を上回るので縮めた値を使ってよいが、
+   Slumbot は進行中を縮めても294（実測306−12）なのに対しハンド終了が323で上回ったまま
+   ＝縮めた分の余裕は使えない。これを見落として `.sb-wrap .sgt` にも同じ 12px を引いたところ
+   360×640 の Slumbot ハンド終了で 0px だったはみ出しが 5px に悪化する回帰が確認されたため、
+   `.sb-wrap .sgt` はこの `@media` の外（縮めない側）に置いてある。 */
+@media (max-height: 680px) {
+  .sb-act { padding: 7px 4px; font-size: 11px; }
+  .sb-act-sub { font-size: 8px; }
+}
 
 /* サイザーのすぐ下に続くときは、サイザー側の margin-bottom と二重にならないよう上の余白を消す
    （Slumbot HU 側は styles.css の無限定 `.sb-sizer + .sb-actions { margin-top: 0 }` が

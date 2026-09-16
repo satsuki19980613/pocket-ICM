@@ -31,6 +31,7 @@ import { loadPrefs, loadToken, savePrefs, saveToken, type GamePrefs } from '../s
 import { useBgm, type BgmFailure } from '../slumbot/bgm';
 import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
 import { createStartLatch } from '../solveJob';
+import { getMyProfile } from '../supabase/profile';
 import { addPending, flushPending, readPending, writePending } from '../supabase/huStats';
 import { buildRecord, newHandId } from '../slumbot/history';
 import { withEv } from '../slumbot/allInEv';
@@ -83,6 +84,13 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
   const [armed, setArmed] = useState(true);
   const [session, setSession] = useState({ hands: 0, netChips: 0 });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * hero（自分）のアイコン。`getMyProfile()` は非同期なので、届くまでは画像なし・頭文字
+   * だけの枠を出す（枠の大きさは最初から確定しているので、届いた瞬間にレイアウトが
+   * 動くことはない）。プレートの名前は今までどおり「あなた」のまま変えない
+   * （SlumbotTable.tsx 参照）——アイコンだけ本人のものに差し替える。
+   */
+  const [heroAvatar, setHeroAvatar] = useState<{ src: string | null; initial: string }>({ src: null, initial: '?' });
   /** BGM を鳴らせなかったときの一言（音源が無い・ブラウザに止められた）。 */
   const [bgmNote, setBgmNote] = useState<string | null>(null);
 
@@ -299,6 +307,19 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
     };
   }, [store]);
 
+  // hero のアイコン取得（対局とは独立。失敗/未ログインなら初期値の頭文字枠のまま）。
+  useEffect(() => {
+    let alive = true;
+    void getMyProfile().then((r) => {
+      if (!alive || !r.ok) return;
+      const initial = r.data.handle.trim().charAt(0).toUpperCase() || '?';
+      setHeroAvatar({ src: r.data.avatar_url, initial });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const streetLabel = view ? (STREET_LABEL[view.state.street] ?? 'PREFLOP') : 'PREFLOP';
   const thinking = phase === 'sending' || phase === 'starting';
   const canAct = phase === 'acting' && armed && view?.heroToAct === true;
@@ -394,7 +415,7 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
 
       {bgmNote && <p className="sb-bgm-note">{bgmNote}</p>}
 
-      <SlumbotTable view={view} last={last} thinking={thinking} streetLabel={streetLabel} />
+      <SlumbotTable view={view} last={last} thinking={thinking} streetLabel={streetLabel} heroAvatar={heroAvatar} />
 
       {phase === 'over' ? (
         <>

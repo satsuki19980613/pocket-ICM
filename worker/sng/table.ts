@@ -34,6 +34,17 @@ function isOpenStatus(status: TableStatus): boolean {
 }
 
 /**
+ * ストレージから読んだ状態の PlayerState を今の型に揃える。`avatarUrl` はこの機能追加より
+ * 前に保存された部屋には存在しない（`ctx.storage.get<TableState>` は実体を検証せず型だけ
+ * 被せて返すので、古いデータでは実行時に `undefined` になる）。進行中の部屋がデプロイの
+ * 瞬間に壊れないよう、読み出し側でここだけ `undefined → null` に丸める（書き込み側は毎回
+ * 今の型で書くので、この丸めは古いデータを引きずるための一回限りの変換）。
+ */
+export function normalizeState(state: TableState): TableState {
+  return { ...state, players: state.players.map((p) => ({ ...p, avatarUrl: p.avatarUrl ?? null })) };
+}
+
+/**
  * `leave` コマンド適用後、Lobby の userRoom からその人を外すべきか（純関数・テスト対象）。
  * finished/cancelled は handleEffects の game_over -> notifyLobbyRelease が部屋ごと片付けるので
  * ここでは外さない（二重処理を避ける）。waiting/running/paused はどれも本人の目線では
@@ -78,7 +89,8 @@ export class SngTable implements DurableObject {
   ) {}
 
   private async loadState(): Promise<TableState | null> {
-    return (await this.ctx.storage.get<TableState>('state')) ?? null;
+    const state = (await this.ctx.storage.get<TableState>('state')) ?? null;
+    return state ? normalizeState(state) : null;
   }
 
   private async persist(state: TableState): Promise<void> {
@@ -114,14 +126,15 @@ export class SngTable implements DurableObject {
   }
 
   private async handleInit(body: unknown): Promise<Response> {
-    const { roomId, hostId, hostName, config, now } = body as {
+    const { roomId, hostId, hostName, hostAvatarUrl, config, now } = body as {
       roomId: string;
       hostId: string;
       hostName: string;
+      hostAvatarUrl?: string | null;
       config: SngConfig;
       now: number;
     };
-    const state = engine.createTable(roomId, hostId, hostName, config, now);
+    const state = engine.createTable(roomId, hostId, hostName, config, now, hostAvatarUrl ?? null);
     await this.persist(state);
     await scheduleAlarm(this.ctx, state);
     return Response.json({ ok: true });
@@ -364,7 +377,12 @@ export class SngTable implements DurableObject {
           }
         }
 
-        const state = await this.runCommand(ws, { t: 'join', userId: auth.userId, name: auth.name });
+        const state = await this.runCommand(ws, {
+          t: 'join',
+          userId: auth.userId,
+          name: auth.name,
+          avatarUrl: auth.avatarUrl,
+        });
         if (state) {
           const you = engine.you(state, auth.userId);
           if (you.hole && state.hand) {

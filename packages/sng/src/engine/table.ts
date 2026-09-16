@@ -52,10 +52,12 @@ export function createTable(
   hostName: string,
   config: SngConfig,
   now: number,
+  hostAvatarUrl: string | null = null,
 ): TableState {
   const host: PlayerState = {
     userId: hostId,
     name: hostName,
+    avatarUrl: hostAvatarUrl,
     seat: 0,
     stack: config.startBb * BASE_BB,
     status: 'active',
@@ -266,7 +268,7 @@ function checkPauseOrDeal(state: TableState, now: number, rng: Rng): { state: Ta
 export function apply(state: TableState, cmd: EngineCommand, now: number, rng: Rng): EngineResult {
   switch (cmd.t) {
     case 'join':
-      return handleJoin(state, cmd.userId, cmd.name, now, rng);
+      return handleJoin(state, cmd.userId, cmd.name, now, rng, cmd.avatarUrl);
     case 'leave':
       return handleLeave(state, cmd.userId, now, rng);
     case 'sitin':
@@ -282,14 +284,23 @@ export function apply(state: TableState, cmd: EngineCommand, now: number, rng: R
   }
 }
 
-function handleJoin(state: TableState, userId: string, name: string, now: number, rng: Rng): EngineResult {
+function handleJoin(
+  state: TableState,
+  userId: string,
+  name: string,
+  now: number,
+  rng: Rng,
+  avatarUrl: string | null = null,
+): EngineResult {
   if (state.status === 'finished' || state.status === 'cancelled') return err('room_closed');
 
   const existing = state.players.find((p) => p.userId === userId);
 
   if (state.status === 'waiting') {
     if (existing) {
-      const players = state.players.map((p) => (p.userId === userId ? { ...p, connected: true } : p));
+      // 再入室のたびにアイコンも今の値へ揃える（設定画面で変えた後の再入室で古い画像の
+      // ままにならないように）。avatarUrl を渡さない呼び出し（テスト等）は null に丸まる。
+      const players = state.players.map((p) => (p.userId === userId ? { ...p, connected: true, avatarUrl } : p));
       return ok(bump({ ...state, players }));
     }
     if (state.players.length >= state.config.players) return err('room_full');
@@ -297,6 +308,7 @@ function handleJoin(state: TableState, userId: string, name: string, now: number
     const newPlayer: PlayerState = {
       userId,
       name,
+      avatarUrl,
       seat,
       stack: state.config.startBb * BASE_BB,
       status: 'active',

@@ -105,7 +105,14 @@ async function handleRooms(request: Request, env: Env): Promise<Response> {
     const initRes = await tableStub(env, roomId).fetch('https://do/internal/init', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ roomId, hostId: auth.userId, hostName: auth.name, config, now: Date.now() }),
+      body: JSON.stringify({
+        roomId,
+        hostId: auth.userId,
+        hostName: auth.name,
+        hostAvatarUrl: auth.avatarUrl,
+        config,
+        now: Date.now(),
+      }),
     });
     if (!initRes.ok) {
       // 卓の初期化に失敗したらロビー登録を巻き戻す（1人1部屋の帳簿を狂わせない）。

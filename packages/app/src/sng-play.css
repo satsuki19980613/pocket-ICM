@@ -197,10 +197,12 @@
   width: 100%;
   /* `.app` は flex ではない（＝親から高さは降りてこない）ので、卓の高さはここで決めるしかない。
      引く 335px は「アプリの上下余白＋ヘッダ＋HUD＋プリセット1行＋スライダー＋ボタン」の
-     実測ぶん。プリセットを横1行のスクロールにした（さつき指示 2026-09-16）ことで行数が
-     増えなくなり、ストリートが変わっても卓の高さが動かない。余りは margin-bottom:auto が
-     吸う（旧 `.sb-felt` と同じ考え方）。 */
-  height: clamp(300px, calc(100dvh - 338px - var(--sat) - var(--sab)), 560px);
+     実測ぶん（ヘッダまで 78px ＋ 卓の下 180px）。プリセットを横1行のスクロールにした
+     （さつき指示 2026-09-16）ことで行数が増えなくなり、ストリートが変わっても卓の高さが
+     動かない。操作系を一回り小さくした（同日）ぶんもここから引いてある。数px の余裕は
+     接続警告（`.sg-connwarn`）が出たときのため。余りは margin-bottom:auto が吸う
+     （旧 `.sb-felt` と同じ考え方）。 */
+  height: clamp(300px, calc(100dvh - 262px - var(--sat) - var(--sab)), 560px);
   flex: none;
   margin-bottom: auto;
 }
@@ -359,17 +361,20 @@
   animation: turnpulse 1.4s ease-in-out infinite;
 }
 
-/* 残り時間バー（acting のときだけ。吹き出しでボードに被せない）。 */
+/* 残り時間バー（acting のときだけ。吹き出しでボードに被せない）。
+   丸いカプセルは卓の上で一番「柔らかい」形になって浮くので、面取りの計器（HUD のゲージ）に
+   寄せる: 暗い溝＋薄いシアンの伸び＋小さい数字（さつき指示 2026-09-16 世界観の統一）。 */
 .sgt-timer {
   margin-top: 3px;
   position: relative;
   width: 100%;
-  height: 12px;
-  background: var(--surface-3);
-  border-radius: 7px;
+  height: 11px;
+  background: rgba(4, 10, 22, 0.85);
+  border: 1px solid var(--line);
+  clip-path: var(--chamfer-xs);
   overflow: hidden;
 }
-.sgt-timer i { position: absolute; inset: 0 auto 0 0; background: var(--cyan); opacity: 0.55; }
+.sgt-timer i { position: absolute; inset: 0 auto 0 0; background: var(--cyan); opacity: 0.32; }
 .sgt-timer b {
   position: absolute;
   inset: 0;
@@ -377,9 +382,10 @@
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
-  color: var(--fg);
+  letter-spacing: 0.08em;
+  color: var(--cyan);
 }
 
 .sgt-tags { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
@@ -390,31 +396,42 @@
 .sgt-seat.folded .sgt-cards { opacity: 0.45; }
 .sgt-seat.out { opacity: 0.42; }
 
-/* 直前のアクション（そのストリートで各席が最後に取ったアクション）。色付きのピル。 */
+/* 直前のアクション（そのストリートで各席が最後に取ったアクション）のタグ。
+   丸いピル＋大きな字は、面取りで統一したこのアプリの中で浮いていた（さつき指示 2026-09-16:
+   「世界観を統一してサイズを T4 に寄せる」）ので、面取り・等幅・小文字詰めの小さなタグにする。
+   色の割り当て（Fold=青 / Check=灰 / Call=緑 / Bet・Raise=赤 / All-in=黄）は変えない。 */
 .sgt-act {
-  font-size: 11.5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
   font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
+  letter-spacing: 0.06em;
+  /* 大文字化はしない。額の単位が「2BB」になってしまい、アプリ全体の「25.9bb」表記とずれる。 */
+  padding: 2px 6px;
+  line-height: 1;
+  clip-path: var(--chamfer-xs);
   white-space: nowrap;
 }
-.sgt-act.k-fold { color: #9ec1ff; background: rgba(60, 110, 210, 0.22); border: 1px solid rgba(60, 110, 210, 0.5); }
-.sgt-act.k-check { color: var(--dim); background: var(--surface-3); border: 1px solid var(--line-2); }
-.sgt-act.k-call { color: #5fe39a; background: rgba(60, 200, 130, 0.16); border: 1px solid rgba(95, 227, 154, 0.5); }
+.sgt-act.k-fold { color: #8fb4ff; background: rgba(12, 24, 52, 0.86); border: 1px solid rgba(90, 130, 220, 0.55); }
+.sgt-act.k-check { color: var(--dim); background: rgba(10, 12, 8, 0.86); border: 1px solid var(--line-2); }
+.sgt-act.k-call { color: #5fe39a; background: rgba(6, 26, 18, 0.86); border: 1px solid rgba(95, 227, 154, 0.55); }
 .sgt-act.k-bet,
-.sgt-act.k-raise { color: var(--red); background: rgba(255, 59, 59, 0.14); border: 1px solid rgba(255, 59, 59, 0.5); }
-.sgt-act.k-allin { color: var(--yellow-ink); background: var(--yellow); }
+.sgt-act.k-raise { color: var(--red); background: rgba(34, 6, 6, 0.86); border: 1px solid rgba(255, 59, 59, 0.55); }
+/* All-in だけは塗りつぶし。場でいちばん強い合図なので、小さくしても目に飛び込む必要がある。 */
+.sgt-act.k-allin { color: var(--yellow-ink); background: var(--yellow); border: 1px solid var(--yellow); }
 
-/* そのストリートに出した額（無彩色）。アクションのピルと同じ箱に積む。 */
+/* そのストリートに出した額（無彩色）。アクションのタグと同じ箱に積む。
+   「出したチップ」なので主役ではない。タグより一段暗く、同じ面取りで揃える。 */
 .sgt-bet {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 9.5px;
   font-weight: 700;
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(190, 232, 255, 0.3);
-  border-radius: 11px;
-  padding: 2px 8px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--dim);
+  background: rgba(4, 10, 22, 0.86);
+  border: 1px solid var(--line-2);
+  clip-path: var(--chamfer-xs);
+  padding: 2px 6px;
   white-space: nowrap;
 }
 
@@ -453,7 +470,7 @@
   .sgt-felt { inset: 42px 17% 86px; }
   .sgt-plate { min-width: 76px; max-width: 88px; }
   .sgt-act,
-  .sgt-bet { font-size: 10px; padding: 1px 5px; }
+  .sgt-bet { font-size: 9px; padding: 2px 4px; }
 }
 
 /* 縦の余裕が無い端末（iPhone SE など）は、卓の中央（ポット＋ボード）と札を一回り小さくして、
@@ -506,7 +523,41 @@
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
 }
 .sg-wrap .sb-presets::-webkit-scrollbar { display: none; }
-.sg-wrap .sb-preset { flex: 0 0 auto; min-width: 54px; scroll-snap-align: start; }
+
+/* ---- 操作系（プリセット・スライダー・アクション）を一回り小さくする（さつき指示 2026-09-16）----
+   Slumbot HU（`.sb-*` の素の値）は PC でも触る単独画面なので大きめのままでよいが、SIT & GO は
+   卓と同じ画面に同居していて、操作系が厚いぶんだけ卓が小さくなる。ここは `.sg-wrap` 配下だけを
+   詰めて、押せる大きさ（実測でどれも 24px 以上）は保ったまま卓に高さを返す。
+   併せて角を面取り（`--chamfer-sm`）にしてアプリ全体の形と揃える。 */
+.sg-wrap .sb-sizer { margin-bottom: var(--s2); }
+.sg-wrap .sb-presets { margin-bottom: var(--s2); }
+.sg-wrap .sb-preset {
+  flex: 0 0 auto;
+  min-width: 46px;
+  padding: 5px 7px;
+  clip-path: var(--chamfer-sm);
+  scroll-snap-align: start;
+}
+.sg-wrap .sb-preset-v { font-size: 12px; }
+.sg-wrap .sb-preset-u { font-size: 8.5px; }
+
+.sg-wrap .sb-slide { gap: var(--s2); }
+.sg-wrap .sb-range { height: 3px; border-radius: 0; }
+/* つまみは丸ではなく面取りの四角（アプリの他のボタンと同じ形）。clip-path は影も切るので
+   素の `box-shadow` の光は消える＝ここでは「光らない小さな四角」が狙いどおりの見た目。 */
+.sg-wrap .sb-range::-webkit-slider-thumb { width: 16px; height: 16px; border-radius: 0; clip-path: var(--chamfer-xs); }
+.sg-wrap .sb-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 0; clip-path: var(--chamfer-xs); }
+.sg-wrap .sb-step { width: 28px; height: 28px; font-size: 13px; clip-path: var(--chamfer-sm); }
+.sg-wrap .sb-amount { min-width: 52px; font-size: 14px; }
+.sg-wrap .sb-amount-u { font-size: 9px; }
+
+/* FOLD / CHECK / CALL / RAISE。字は読みやすさの要なので大きさをほぼ保ち、上下の厚みだけ削る。
+   サイザーのすぐ下に続くときは、サイザー側の margin-bottom と二重にならないよう上の余白を消す
+   （Slumbot 側の `.sb-sizer + .sb-actions` と同じ扱い。`.sg-wrap > .sb-actions` の指定が
+   後勝ちで効いてしまうため、ここで打ち消す）。 */
+.sg-wrap > .sb-sizer + .sb-actions { margin-top: 0; }
+.sg-wrap .sb-act { padding: 10px 4px; font-size: 14.5px; }
+.sg-wrap .sb-act-sub { font-size: 10px; }
 
 /* ---- 退室確認 ---- */
 .sg-confirm-backdrop {

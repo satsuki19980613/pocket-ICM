@@ -89,15 +89,16 @@
 - 管理画面のプログラム（`adminScreens-*.js`）は PWA の precache から外しているので、管理者以外の端末には
   ダウンロードされない。
 
-### アバターの枠・バッジ（0012, 2026-09-16 追加）
+### アバターの枠・バッジ（0012, 2026-09-16 追加／0013, 2026-09-22 バッジ拡張）
 
-- `supabase/migrations/0012_avatar_frames.sql` を SQL Editor で1回実行する（冪等）。
+- `supabase/migrations/0012_avatar_frames.sql` → `0013_badge_honey.sql` の順に SQL Editor で
+  1回ずつ実行する（どちらも冪等）。
 - `profiles.frame_color` は本人が6色（steel/yellow/cyan/red/white/purple）から自由に選べる。
   `special` は特別枠が付与されている（`special_frame` が入っている）ときだけ選べる
   （`protect_profile_privileged` トリガが、付与なしでの `special` 指定を元の色に戻す）。
-- `profiles.special_frame`（色指定の16進 or `prism`）・`profiles.badge`（今は `crab` のみ）は
-  管理者が SQL Editor で直接 update するだけ（付与 UI は今回作らない・付与手順は
-  0012 のファイル末尾コメント参照）。本人からは一切書き換えられない。
+- `profiles.special_frame`（色指定の16進 or `prism`）・`profiles.badge`（`crab` / `honey` の
+  2種類）は管理者が SQL Editor で直接 update するだけ（付与 UI は今回作らない・付与手順は
+  0012・0013 のファイル末尾コメント参照）。本人からは一切書き換えられない。
 - 特別枠を取り消す（`special_frame` を null に戻す）と、`frame_color` が `special` のままの人も
   自動で `steel` に戻る（同じトリガが面倒を見る）。
 

@@ -29,7 +29,7 @@ function Avatar(props: { row: RankRow }): JSX.Element {
   return (
     <div className={`av ${deco.ringClass}`} style={deco.ringStyle}>
       {src ? <img src={src} alt="" /> : initial}
-      {deco.badge && <AvatarBadge />}
+      {deco.badge && <AvatarBadge id={deco.badge} />}
     </div>
   );
 }

@@ -7,10 +7,10 @@
  * 展開するだけにして、色の意味づけ（steel が既定・special は管理者付与のみ等）を
  * このファイル以外に散らばらせない。
  *
- * DB 列（public.profiles、supabase/migrations/0012 で追加）:
+ * DB 列（public.profiles、supabase/migrations/0012 で追加、badge の種類は 0013 で拡張）:
  *   frame_color   text NOT NULL DEFAULT 'steel'  ∈ steel|yellow|cyan|red|white|purple|special（本人が選べる）
  *   special_frame text NULL — 'prism' か '#rrggbb'（小文字）。管理者のみ付与
- *   badge         text NULL — 'crab'（管理者のみ付与。本人が外す設定は無い＝付与されたら常に出す）
+ *   badge         text NULL — 'crab' | 'honey'（管理者のみ付与。本人が外す設定は無い＝付与されたら常に出す）
  *
  * 値は他人の投稿・卓の相手も含め「サーバから来た文字列」なので、想定外の値が来ても
  * 表示が壊れないよう防御的に解決する（未知の frame_color・special なのに special_frame が
@@ -18,6 +18,7 @@
  */
 import React from 'react';
 import CRAB_BADGE_URL from './assets/badge-crab.svg';
+import HONEY_BADGE_URL from './assets/badge-honey.svg';
 
 /** 本人が選べる通常色（6色）。styles.css の `.ring-*` と対応する。 */
 export const NORMAL_FRAME_COLORS = ['steel', 'yellow', 'cyan', 'red', 'white', 'purple'] as const;
@@ -26,8 +27,24 @@ export type NormalFrameColor = (typeof NORMAL_FRAME_COLORS)[number];
 /** 特別枠込みの frame_color の全体（DB constraint と同じ列挙）。 */
 export type FrameColor = NormalFrameColor | 'special';
 
-/** 管理者が付与できるバッジ（今は蟹の1種類のみ）。 */
-export type BadgeId = 'crab';
+/** 管理者が付与できるバッジ（カニ・はちみつの2種類）。 */
+export type BadgeId = 'crab' | 'honey';
+
+/**
+ * バッジ id → 画像 URL のテーブル。新しいバッジを追加するときはここと BADGE_LABEL に
+ * 1行足すだけで resolveAvatarDeco・AvatarBadge の両方が対応する（badge_check の CHECK
+ * 制約側は別途新しいマイグレーションで広げること）。テストからも参照するので export する。
+ */
+export const BADGE_SRC: Record<BadgeId, string> = {
+  crab: CRAB_BADGE_URL,
+  honey: HONEY_BADGE_URL,
+};
+
+/** バッジ id → aria-label（日本語）。BADGE_SRC と対で管理する。 */
+const BADGE_LABEL: Record<BadgeId, string> = {
+  crab: 'カニのバッジ',
+  honey: 'はちみつのバッジ',
+};
 
 /** resolveAvatarDeco への入力。DB 行の該当3列をそのまま渡せる形にしてある。 */
 export interface AvatarDecoInput {
@@ -88,10 +105,17 @@ const STEEL: AvatarDeco = { ringClass: 'ring-steel', ringStyle: undefined, badge
  * - frame_color === 'special' なのに special_frame が無い/不正 → steel（管理者付与前の事故防止）
  * - special_frame === 'prism' → 回転する虹色（ring-special ring-prism）
  * - special_frame が有効な #rrggbb → その色から算出した金属調グラデーション
- * - badge が 'crab' 以外（未知/欠損）→ null（バッジ無し）
+ * - badge が BADGE_SRC に無い値（未知/欠損）→ null（バッジ無し）。
+ *   `in` 演算子は Object.prototype 由来のキー（'toString' 等）まで拾ってしまうため使わない
+ *   （サーバから来た未検証の文字列を扱う防御層で、それを拾うと BADGE_SRC[badge] が
+ *   関数を返し <img src> に渡ってしまう）。own property だけを見る hasOwnProperty で判定する。
  */
 export function resolveAvatarDeco(input: AvatarDecoInput | null | undefined): AvatarDeco {
-  const badge: BadgeId | null = input?.badge === 'crab' ? 'crab' : null;
+  const rawBadge = input?.badge;
+  const badge: BadgeId | null =
+    typeof rawBadge === 'string' && Object.prototype.hasOwnProperty.call(BADGE_SRC, rawBadge)
+      ? (rawBadge as BadgeId)
+      : null;
   const frameColor = input?.frame_color;
 
   if (frameColor === 'special') {
@@ -112,17 +136,18 @@ export function resolveAvatarDeco(input: AvatarDecoInput | null | undefined): Av
 }
 
 /**
- * バッジの描画（左下の黒丸＋蟹の SVG）。全箇所（feedShared.tsx の Avatar・GlassTable.tsx の
- * 席アイコン・RankingModal.tsx・Settings.tsx）で使う共通部品なので、レンダリング先ごとに
- * DOM 構造が食い違わないようここへ1つだけ置く。クリックを奪わないよう pointer-events は
- * CSS 側（`.av-badge`）で殺す。JSX 構文を使わず `React.createElement` にしているのは、この
- * ファイルを拡張子 `.ts` のまま（＝純関数モジュールとそのテストに JSX を持ち込まずに）
- * 書けるようにするため。
+ * バッジの描画（左下の黒丸＋バッジ種別ごとの SVG）。全箇所（feedShared.tsx の Avatar・
+ * GlassTable.tsx の席アイコン・RankingModal.tsx・Settings.tsx）で使う共通部品なので、
+ * レンダリング先ごとに DOM 構造が食い違わないようここへ1つだけ置く。呼び出し側は
+ * `resolveAvatarDeco` が返した badge（null でないことを確認済み）をそのまま渡すだけでよい。
+ * クリックを奪わないよう pointer-events は CSS 側（`.av-badge`、両バッジ共通）で殺す。
+ * JSX 構文を使わず `React.createElement` にしているのは、このファイルを拡張子 `.ts` のまま
+ * （＝純関数モジュールとそのテストに JSX を持ち込まずに）書けるようにするため。
  */
-export function AvatarBadge(): JSX.Element {
+export function AvatarBadge({ id }: { readonly id: BadgeId }): JSX.Element {
   return React.createElement(
     'span',
-    { className: 'av-badge', role: 'img', 'aria-label': 'カニのバッジ' },
-    React.createElement('img', { src: CRAB_BADGE_URL, alt: '', draggable: false }),
+    { className: 'av-badge', role: 'img', 'aria-label': BADGE_LABEL[id] },
+    React.createElement('img', { src: BADGE_SRC[id], alt: '', draggable: false }),
   );
 }

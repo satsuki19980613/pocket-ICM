@@ -84,7 +84,7 @@ export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX
   const inner = (
     <>
       {src ? <img src={src} alt="" /> : initial}
-      {deco.badge && <AvatarBadge />}
+      {deco.badge && <AvatarBadge id={deco.badge} />}
     </>
   );
   if (props.onClick) {

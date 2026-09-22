@@ -212,7 +212,7 @@ function FeltSeatView(props: FeltSeatViewProps): JSX.Element {
           return (
             <span className={`sgt-av ${deco.ringClass}`} style={deco.ringStyle} aria-hidden="true">
               <SeatAvatar avatar={seat.avatar} />
-              {deco.badge && <AvatarBadge />}
+              {deco.badge && <AvatarBadge id={deco.badge} />}
             </span>
           );
         })()}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { isValidHex, resolveAvatarDeco, specialVars } from './avatarDeco';
+import { BADGE_SRC, isValidHex, resolveAvatarDeco, specialVars } from './avatarDeco';
 
 describe('isValidHex', () => {
   it('小文字の #rrggbb を受け付ける', () => {
@@ -75,16 +75,35 @@ describe('resolveAvatarDeco', () => {
     });
   });
 
-  it('badge は crab のみ通し、未知/欠損は null', () => {
+  it('badge は crab・honey を通し、未知/欠損は null', () => {
     expect(resolveAvatarDeco({ badge: 'crab' }).badge).toBe('crab');
+    expect(resolveAvatarDeco({ badge: 'honey' }).badge).toBe('honey');
     expect(resolveAvatarDeco({ badge: 'dragon' }).badge).toBeNull();
     expect(resolveAvatarDeco({ badge: null }).badge).toBeNull();
     expect(resolveAvatarDeco({}).badge).toBeNull();
+  });
+
+  it('Object.prototype 由来のキーは badge として通さない（未検証文字列の防御層）', () => {
+    expect(resolveAvatarDeco({ badge: 'toString' }).badge).toBeNull();
+    expect(resolveAvatarDeco({ badge: 'constructor' }).badge).toBeNull();
+    expect(resolveAvatarDeco({ badge: 'hasOwnProperty' }).badge).toBeNull();
+    expect(resolveAvatarDeco({ badge: '__proto__' }).badge).toBeNull();
   });
 
   it('frame_color と badge は独立に解決する（special が崩れても badge は生きる）', () => {
     const deco = resolveAvatarDeco({ frame_color: 'special', special_frame: null, badge: 'crab' });
     expect(deco.ringClass).toBe('ring-steel');
     expect(deco.badge).toBe('crab');
+  });
+});
+
+describe('BADGE_SRC', () => {
+  it('crab・honey ともに空でない src を持つ', () => {
+    expect(BADGE_SRC.crab).toBeTruthy();
+    expect(BADGE_SRC.honey).toBeTruthy();
+  });
+
+  it('crab と honey の src は異なる（別画像を指している）', () => {
+    expect(BADGE_SRC.crab).not.toBe(BADGE_SRC.honey);
   });
 });

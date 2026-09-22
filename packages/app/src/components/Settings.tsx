@@ -316,7 +316,7 @@ export function Settings(props: {
       <div className="avpick">
         <div className={`avbig ${deco.ringClass}`} style={deco.ringStyle}>
           {avatarSrc ? <img src={avatarSrc} alt="" /> : initial}
-          {deco.badge && <AvatarBadge />}
+          {deco.badge && <AvatarBadge id={deco.badge} />}
         </div>
         <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => void onPickAvatar(e)} />
         <div className="avpick-actions">

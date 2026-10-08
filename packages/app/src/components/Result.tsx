@@ -74,7 +74,8 @@ export function Result(props: {
   const headline = headlineNode(result);
   const heroSeat = state.seats.find((s) => s.pos === result.heroPos);
 
-  const editable = !props.readOnly && !!props.record && !!props.onSelectAction && !!props.onTogglePublish;
+  // 公開レバー（onTogglePublish）は任意。無ければ「自分の選択」だけ出す（ローカル版）。
+  const editable = !props.readOnly && !!props.record && !!props.onSelectAction;
 
   // ---- 自分の選択（3択: ALL IN / FOLD / 未選択） ----
   const [action, setAction] = useState<HeroAction | null>(props.record?.heroAction ?? null);
@@ -213,6 +214,8 @@ export function Result(props: {
           )}
           {actionPhase === 'error' && <p className="auth-err">{actionErr}</p>}
 
+          {props.onTogglePublish && (
+            <>
           <div className="tog">
             <div>
               ホームで公開する
@@ -251,6 +254,8 @@ export function Result(props: {
             </div>
           )}
           {pubPhase === 'error' && <p className="auth-err">{pubErr}</p>}
+            </>
+          )}
         </div>
       )}
 

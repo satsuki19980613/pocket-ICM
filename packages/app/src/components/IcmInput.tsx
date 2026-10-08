@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CameraIcon } from './feedShared';
+import { CameraIcon } from './icons';
 import { GameModeSelect, type GameSel } from './GameModeSelect';
 import { InfoModal } from './InfoModal';
 

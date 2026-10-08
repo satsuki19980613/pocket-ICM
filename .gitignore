@@ -47,3 +47,4 @@ supabase/.temp/
 # SIT & GO の Worker シークレット（wrangler dev 用）。.dev.vars.example のみコミット。
 .dev.vars
 .tmp-e2e/
+dist-local/

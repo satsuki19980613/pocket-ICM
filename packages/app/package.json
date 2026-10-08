@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:local": "vite --config vite.local.config.ts --host",
+    "build:local": "tsc --noEmit && vite build --config vite.local.config.ts",
+    "preview:local": "vite preview --config vite.local.config.ts --host"
   },
   "dependencies": {
     "@oshihiki/core": "*",

@@ -151,7 +151,8 @@ def scheduler_loop():
                     _sched["phase"] = "run"
                     _sched["phase_until"] = now + run_s
 
-UI_STATES = ("idle", "running", "paused", "stopped", "done")
+# status ファイルの state を既知の定数に置き換える表（知らない値は None 扱い。ファイルの文字列を応答へ流さない）。
+KNOWN_STATES = {"running": "running", "paused": "paused", "stopped": "stopped", "done": "done"}
 
 def _num(v):
     """status ファイル由来の値を数値に限る（数値以外は 0）。応答にファイルの中身をそのまま流さない。"""
@@ -168,7 +169,7 @@ def combined_status():
     if not isinstance(st, dict):
         st = {}
     alive = child_alive()
-    raw_state = st.get("state")  # running|paused|stopped|done|None
+    raw_state = KNOWN_STATES.get(st.get("state"))  # running|paused|stopped|done|None
     if not st:
         ui_state = "idle"
     elif raw_state == "done":
@@ -178,8 +179,6 @@ def combined_status():
     else:
         # 子が居ない → stopped(=レジューム可) か、以前 done か
         ui_state = "stopped" if raw_state in ("stopped", "paused", "running") else (raw_state or "idle")
-    if ui_state not in UI_STATES:
-        ui_state = "idle"
     last_stacks = st.get("lastStacks")
     with _sched_lock:
         sched = dict(_sched)

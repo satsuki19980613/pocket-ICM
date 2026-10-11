@@ -31,7 +31,7 @@ export function settleShowdown(
     const h = hole[s];
     if (!h) continue;
     eligible[s] = true;
-    const cards = [...h, ...board].map(parseCard);
+    const cards = [...h, ...board].map((c) => parseCard(c));
     score[s] = eval7(cards);
   }
   const strongerCount = new Array<number>(n).fill(0);

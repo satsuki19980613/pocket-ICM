@@ -84,8 +84,7 @@ function expandNonPairDash(
 function expandXFamily(hiIdx: number): string[] {
   const out: string[] = [];
   for (let i = hiIdx + 1; i < RANKS.length; i++) {
-    out.push(nonPairLabel(hiIdx, i, 's'));
-    out.push(nonPairLabel(hiIdx, i, 'o'));
+    out.push(nonPairLabel(hiIdx, i, 's'), nonPairLabel(hiIdx, i, 'o'));
   }
   return out;
 }
@@ -143,27 +142,31 @@ function expandDash(left: string, right: string): string[] {
 
 /** 単一トークン（ダッシュ以外）を展開する。 */
 function expandToken(tok: string): string[] {
-  let m: RegExpExecArray | null;
-
-  if ((m = PAIR_PLUS_RE.exec(tok))) {
-    return expandPairPlus(rankIndex(m[1]!.toUpperCase()));
+  const pairPlus = PAIR_PLUS_RE.exec(tok);
+  if (pairPlus) {
+    return expandPairPlus(rankIndex(pairPlus[1]!.toUpperCase()));
   }
-  if ((m = PAIR_RE.exec(tok))) {
-    return [pairLabel(RANKS[rankIndex(m[1]!.toUpperCase())]!)];
+  const pair = PAIR_RE.exec(tok);
+  if (pair) {
+    return [pairLabel(RANKS[rankIndex(pair[1]!.toUpperCase())]!)];
   }
-  if ((m = NONPAIR_PLUS_RE.exec(tok))) {
-    const [hi, lo, kind] = parseNonPairAtom(m[1]!, m[2]!, m[3]!);
+  const nonPairPlus = NONPAIR_PLUS_RE.exec(tok);
+  if (nonPairPlus) {
+    const [hi, lo, kind] = parseNonPairAtom(nonPairPlus[1]!, nonPairPlus[2]!, nonPairPlus[3]!);
     return expandNonPairPlus(hi, lo, kind);
   }
-  if ((m = NONPAIR_RE.exec(tok))) {
-    const [hi, lo, kind] = parseNonPairAtom(m[1]!, m[2]!, m[3]!);
+  const nonPair = NONPAIR_RE.exec(tok);
+  if (nonPair) {
+    const [hi, lo, kind] = parseNonPairAtom(nonPair[1]!, nonPair[2]!, nonPair[3]!);
     return [nonPairLabel(hi, lo, kind)];
   }
-  if ((m = X_PLUS_RE.exec(tok))) {
-    return expandXFamilyPlus(rankIndex(m[1]!.toUpperCase()));
+  const xPlus = X_PLUS_RE.exec(tok);
+  if (xPlus) {
+    return expandXFamilyPlus(rankIndex(xPlus[1]!.toUpperCase()));
   }
-  if ((m = X_RE.exec(tok))) {
-    return expandXFamily(rankIndex(m[1]!.toUpperCase()));
+  const x = X_RE.exec(tok);
+  if (x) {
+    return expandXFamily(rankIndex(x[1]!.toUpperCase()));
   }
   throw new RangeSyntaxError(`unrecognized range token: "${tok}"`);
 }
@@ -219,8 +222,7 @@ function allLabels(): string[] {
     for (let j = 0; j < RANKS.length; j++) {
       if (i === j) out.push(`${RANKS[i]}${RANKS[j]}`);
       else if (i < j) {
-        out.push(`${RANKS[i]}${RANKS[j]}s`);
-        out.push(`${RANKS[i]}${RANKS[j]}o`);
+        out.push(`${RANKS[i]}${RANKS[j]}s`, `${RANKS[i]}${RANKS[j]}o`);
       }
     }
   }

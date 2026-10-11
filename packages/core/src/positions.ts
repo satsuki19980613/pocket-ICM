@@ -47,7 +47,12 @@ export function positionsMatchPlayersLeft(positions: readonly string[], n: numbe
   if (!isValidPlayersLeft(n)) return false;
   const expected = positionsForPlayersLeft(n);
   if (positions.length !== expected.length) return false;
-  const a = [...positions].sort();
-  const b = [...expected].sort();
+  // 既定 sort と同じ UTF-16 コード単位順で比較（集合一致の判定用なので順序自体は任意）
+  const byCodeUnit = (x: string, y: string): number => {
+    if (x < y) return -1;
+    return x > y ? 1 : 0;
+  };
+  const a = [...positions].sort(byCodeUnit);
+  const b = [...expected].sort(byCodeUnit);
   return a.every((p, i) => p === b[i]);
 }

@@ -13,13 +13,10 @@ import type {
   HandState,
   PlayerState,
   SngConfig,
-  TableState,
 } from '../types';
-import { ACTION_MS } from '../types';
 import { blindsAt } from '../structure';
 import { freshDeck, shuffle } from './cards';
-import { computeButtonForHand, isLive, nextLive, type ButtonAssignment } from './button';
-import { computeLevel } from './level';
+import { computeButtonForHand, isLive, type ButtonAssignment } from './button';
 import { computeDeadline, timeBankAfterManualAction } from './timer';
 import { settleShowdown, settleUncontested } from './showdown';
 import { computeLegalActions } from './betting';
@@ -387,7 +384,7 @@ export function settleHand(hand: HandState, players: readonly PlayerState[], mod
     won = settleUncontested(hand.commits, nonFoldedSeats[0]!);
     revealed = [];
   } else {
-    const seated = players.map((_, s) => Object.prototype.hasOwnProperty.call(hand.hole, s));
+    const seated = players.map((_, s) => Object.hasOwn(hand.hole, s));
     won = settleShowdown(hand.commits, hand.folded, seated, hand.hole, hand.board, hand.btn);
     revealed = nonFoldedSeats.slice();
   }
@@ -437,5 +434,6 @@ export function settleHand(hand: HandState, players: readonly PlayerState[], mod
   return { hand: settledHand, players: newPlayers };
 }
 
-export { nextActable, actionableSeats, isStreetComplete, shouldCloseStreet, nextLive };
-export { computeLevel };
+export { nextActable, actionableSeats, isStreetComplete, shouldCloseStreet };
+export { nextLive } from './button';
+export { computeLevel } from './level';

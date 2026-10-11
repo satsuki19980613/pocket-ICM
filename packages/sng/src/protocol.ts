@@ -41,14 +41,16 @@ export const sngConfigSchema = z.object({
   mode: z.enum(GAME_MODES),
 });
 
+/** 型検査専用（実行時は何もしない）。T へ代入できない値を渡すとコンパイルエラーになる。 */
+function assertAssignable<T>(_value: T): void {
+  // 中身は不要。呼び出し側の型引数との整合だけを見る
+}
+
 // 定数配列とスキーマが食い違ったらここで型エラーにする。
-const _check: readonly PlayerCountCheck[] = PLAYER_COUNTS;
-type PlayerCountCheck = z.infer<typeof sngConfigSchema>['players'];
-const _check2: readonly z.infer<typeof sngConfigSchema>['startBb'][] = START_BBS;
-const _check3: readonly z.infer<typeof sngConfigSchema>['levelMin'][] = LEVEL_MINUTES;
-void _check;
-void _check2;
-void _check3;
+type SngConfigInput = z.infer<typeof sngConfigSchema>;
+assertAssignable<readonly SngConfigInput['players'][]>(PLAYER_COUNTS);
+assertAssignable<readonly SngConfigInput['startBb'][]>(START_BBS);
+assertAssignable<readonly SngConfigInput['levelMin'][]>(LEVEL_MINUTES);
 
 export function parseConfig(input: unknown): SngConfig | null {
   const r = sngConfigSchema.safeParse(input);

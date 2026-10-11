@@ -133,7 +133,7 @@ export function gameModeLabel(mode: GameMode | undefined): string {
  */
 export function ptDisplayScale(mode: GameMode | undefined): number {
   const p = gameModeSpec(mode).payouts;
-  const span = p[0]! - p[p.length - 1]!;
+  const span = p[0]! - p.at(-1)!;
   const clubSpan = GAME_MODE_SPECS.club.payouts[0]! - GAME_MODE_SPECS.club.payouts[5]!;
   return clubSpan / span;
 }

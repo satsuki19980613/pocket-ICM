@@ -3,7 +3,6 @@
  */
 
 import type { BoardState, SolutionNode } from '@oshihiki/core';
-import { normalizeKey } from '@oshihiki/core';
 import type { HarnessCase, ExpectedNode, NodeDiff, CaseResult } from './types.js';
 import {
   resolveTolerances,
@@ -68,7 +67,7 @@ function compareNode(
   }
 
   // レンジ照合（境界ハンド許容）
-  const evByHand: Record<string, number> = { ...(exp.ev ?? {}), ...actual.ev };
+  const evByHand: Record<string, number> = { ...exp.ev, ...actual.ev };
   const { boundaryHands, hardMismatchHands } = compareRange(
     exp.range,
     actual.hands,
@@ -165,4 +164,4 @@ export async function runHarness(
 }
 
 // re-export so callers can build normalized keys for expectations if desired
-export { normalizeKey };
+export { normalizeKey } from '@oshihiki/core';

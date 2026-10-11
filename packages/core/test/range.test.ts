@@ -20,7 +20,7 @@ describe('parseRange: 基本トークン', () => {
   });
 
   it('22+ は全ペア13個', () => {
-    expect(parseRange('22+').length).toBe(13);
+    expect(parseRange('22+')).toHaveLength(13);
   });
 
   it('スーテッド/オフスート単体', () => {
@@ -61,13 +61,13 @@ describe('parseRange: 基本トークン', () => {
   });
 
   it('Tx+ は高カード T 以上の非ペア全部（100個）', () => {
-    expect(parseRange('Tx+').length).toBe(100);
+    expect(parseRange('Tx+')).toHaveLength(100);
   });
 
   it('Any two は全169クラス', () => {
-    expect(parseRange('Any two').length).toBe(169);
-    expect(parseRange('anytwo').length).toBe(169);
-    expect(parseRange('100%').length).toBe(169);
+    expect(parseRange('Any two')).toHaveLength(169);
+    expect(parseRange('anytwo')).toHaveLength(169);
+    expect(parseRange('100%')).toHaveLength(169);
   });
 
   it('大文字小文字を無視', () => {

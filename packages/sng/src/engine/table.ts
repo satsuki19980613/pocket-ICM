@@ -5,20 +5,27 @@
 
 import { gameModeSpec } from '@oshihiki/core';
 
-import { BASE_BB } from '../types';
 import type {
   EngineCommand,
   EngineEffect,
   EngineError,
   EngineResult,
+  Rng,
 } from '../engine';
-import type { ActionKind, HandState, PlayerState, SngConfig, SngGameResult, SngHandRecord, TableState } from '../types';
 import {
   AUTO_TO_SITOUT,
+  BASE_BB,
   BETWEEN_HANDS_MS,
   PAUSED_EXPIRES_MS,
   TIME_BANK_MS,
   WAITING_EXPIRES_MS,
+  type ActionKind,
+  type HandState,
+  type PlayerState,
+  type SngConfig,
+  type SngGameResult,
+  type SngHandRecord,
+  type TableState,
 } from '../types';
 import { computeLevel } from './level';
 import {
@@ -28,7 +35,6 @@ import {
   settleHand,
   type ResolvedAction,
 } from './hand';
-import type { Rng } from '../engine';
 
 function err(error: EngineError): EngineResult {
   return { ok: false, error };
@@ -198,8 +204,7 @@ function finalizeProgression(
   let next: TableState = { ...state, ...extra, players: progressed.players, hand: progressed.hand };
   if (progressed.gameOver) {
     next = { ...next, status: 'finished', endedAt: now, wake: null };
-    effects.push({ t: 'game_over', result: progressed.gameOver });
-    effects.push({ t: 'lobby_changed' });
+    effects.push({ t: 'game_over', result: progressed.gameOver }, { t: 'lobby_changed' });
   } else if (progressed.hand.phase === 'settled') {
     next = { ...next, wake: { at: now + BETWEEN_HANDS_MS, kind: 'next_hand' } };
   } else if (progressed.hand.deadline !== null) {
@@ -257,7 +262,7 @@ function dealNextHand(state: TableState, now: number, rng: Rng, forcedBtn?: numb
 /** ハンド間の判定: 生存者全員が sitout/left/未接続なら paused。誰か動けるなら次のハンドを配る。 */
 function checkPauseOrDeal(state: TableState, now: number, rng: Rng): { state: TableState; effects: EngineEffect[] } {
   const survivors = state.players.filter((p) => p.status !== 'out' && p.status !== 'left');
-  const allAway = survivors.length === 0 || survivors.every((p) => p.status === 'sitout' || !p.connected);
+  const allAway = survivors.every((p) => p.status === 'sitout' || !p.connected);
   if (allAway) {
     return {
       state: bump({ ...state, status: 'paused', hand: null, wake: { at: now + PAUSED_EXPIRES_MS, kind: 'paused_expired' } }),
@@ -303,10 +308,10 @@ function handleJoin(
 ): EngineResult {
   if (state.status === 'finished' || state.status === 'cancelled') return err('room_closed');
 
-  const existing = state.players.find((p) => p.userId === userId);
+  const isSeated = state.players.some((p) => p.userId === userId);
 
   if (state.status === 'waiting') {
-    if (existing) {
+    if (isSeated) {
       // 再入室のたびにアイコン・枠・バッジも今の値へ揃える（設定画面で変えた後の再入室で
       // 古い見た目のままにならないように）。渡さない呼び出し（テスト等）は null に丸まる。
       const players = state.players.map((p) =>
@@ -351,7 +356,7 @@ function handleJoin(
   }
 
   // running / paused: 既に着席している人の再入室のみ。
-  if (!existing) return err('room_full');
+  if (!isSeated) return err('room_full');
   return handleConnected(state, userId, true, now, rng);
 }
 
@@ -371,8 +376,8 @@ function shuffleSeats(players: readonly PlayerState[], rng: Rng): PlayerState[] 
 }
 
 function handleLeave(state: TableState, userId: string, now: number, rng: Rng): EngineResult {
-  const existing = state.players.find((p) => p.userId === userId);
-  if (!existing) return err('not_seated');
+  const isSeated = state.players.some((p) => p.userId === userId);
+  if (!isSeated) return err('not_seated');
 
   if (state.status === 'waiting') {
     if (userId === state.hostId) {
@@ -443,8 +448,8 @@ function handleSitin(state: TableState, userId: string, now: number, rng: Rng): 
 }
 
 function handleConnected(state: TableState, userId: string, connected: boolean, now: number, rng: Rng): EngineResult {
-  const existing = state.players.find((p) => p.userId === userId);
-  if (!existing) return err('not_seated');
+  const isSeated = state.players.some((p) => p.userId === userId);
+  if (!isSeated) return err('not_seated');
   const players = state.players.map((p) => (p.userId === userId ? { ...p, connected } : p));
 
   if (state.status === 'paused' && connected) {

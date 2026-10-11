@@ -42,12 +42,9 @@ export function potChecksum(
     return acc + (voluntary ? f.screenBet : f.blindOb);
   }, 0);
   const anteAmount = reads.ante.scheme === 'none' ? 0 : reads.ante.amount.value;
-  const anteContribution =
-    reads.ante.scheme === 'all'
-      ? anteAmount * facts.length
-      : reads.ante.scheme === 'bb'
-        ? anteAmount
-        : 0;
+  let anteContribution = 0;
+  if (reads.ante.scheme === 'all') anteContribution = anteAmount * facts.length;
+  else if (reads.ante.scheme === 'bb') anteContribution = anteAmount;
   const theoretical = contributions + anteContribution;
   const readPot = reads.pot.value;
   const delta = Math.abs(theoretical - readPot);
@@ -101,5 +98,6 @@ export function aggregateConfidence(
     for (const f of facts) low.add(`${f.pos}.bet`);
   }
 
-  return { lowConfidenceFields: [...low].sort(), checksum };
+  // Set 由来で要素は一意。既定 sort と同じ UTF-16 コード単位順を明示する。
+  return { lowConfidenceFields: [...low].sort((a, b) => (a < b ? -1 : 1)), checksum };
 }

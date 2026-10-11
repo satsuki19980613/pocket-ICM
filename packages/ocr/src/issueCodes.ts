@@ -72,9 +72,9 @@ const RULES: readonly Rule[] = [
   },
   // pipeline.ts の zod 検証が返す英語メッセージ（BoardState スキーマ）。
   // 例: 'heroHand: invalid hand-class notation'（カード検出が 2 枚揃わず空文字）。
-  { code: 'hero_hand_unreadable', test: (m) => /^heroHand:/.test(m) || /手札が読めません/.test(m) },
+  { code: 'hero_hand_unreadable', test: (m) => m.startsWith('heroHand:') || /手札が読めません/.test(m) },
   // 例: 'pot: Expected number, received nan'（中央ピルの数字が読めず NaN）。
-  { code: 'pot_unreadable', test: (m) => /^pot:/.test(m) || /ポットが読めません/.test(m) },
+  { code: 'pot_unreadable', test: (m) => m.startsWith('pot:') || /ポットが読めません/.test(m) },
 ];
 
 /** 1 件のメッセージを理由コードへ分類する。どれにも一致しなければ 'unknown'。 */

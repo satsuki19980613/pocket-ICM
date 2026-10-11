@@ -13,6 +13,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { loadTemplates, recognizeField } from './digitsCore.js';
 import { CHIPS_6MAX_NUMBER_REGIONS } from '../src/numberLayout.js';
 
@@ -31,12 +32,12 @@ if (!input || !tplPath) {
   console.error('usage: verifyFrame.ts <input.png> <templates.json> "field=truth,..."');
   process.exit(1);
 }
-const img = decodePng(readFileSync(input));
-const templates = loadTemplates(tplPath);
+const img = decodePng(readFileSync(safePath(input, 'input')));
+const templates = loadTemplates(safePath(tplPath, 'templates.json'));
 const truths: Record<string, string> = {};
 for (const kv of (truthsStr ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
   const [k, v] = kv.split('=');
-  if (k && v !== undefined) truths[k] = v.replace(/[^0-9]/g, '');
+  if (k && v !== undefined) truths[k] = v.replace(/\D/g, '');
 }
 
 let ok = 0, scored = 0;

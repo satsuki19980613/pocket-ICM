@@ -80,11 +80,13 @@ export function binaryComponents(bin: Gray): Rect[] {
     stack.length = 0; stack.push(i); label[i] = id;
     while (stack.length) {
       const p = stack.pop()!;
-      const px = p % w, py = (p / w) | 0;
+      const px = p % w, py = Math.trunc(p / w);
       const b = boxes[id]!;
       b.area++;
-      if (px < b.x0) b.x0 = px; if (px > b.x1) b.x1 = px;
-      if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
+      if (px < b.x0) b.x0 = px;
+      if (px > b.x1) b.x1 = px;
+      if (py < b.y0) b.y0 = py;
+      if (py > b.y1) b.y1 = py;
       if (px > 0 && data[p - 1]! > 0 && label[p - 1] === -1) { label[p - 1] = id; stack.push(p - 1); }
       if (px < w - 1 && data[p + 1]! > 0 && label[p + 1] === -1) { label[p + 1] = id; stack.push(p + 1); }
       if (py > 0 && data[p - w]! > 0 && label[p - w] === -1) { label[p - w] = id; stack.push(p - w); }
@@ -170,8 +172,8 @@ export function recognizeAmount(
   opts: RecognizeAmountOptions = {},
 ): Read<number> {
   const g = recognizeGlyphs(img, rect, templates, opts);
-  if (g.rects.length === 0) return { value: NaN, conf: 0 };
+  if (g.rects.length === 0) return { value: Number.NaN, conf: 0 };
   const value = parseAmount(g.text);
-  if (value === null) return { value: NaN, conf: 0 };
+  if (value === null) return { value: Number.NaN, conf: 0 };
   return { value, conf: g.conf };
 }

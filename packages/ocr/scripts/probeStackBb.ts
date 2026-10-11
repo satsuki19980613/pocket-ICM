@@ -10,7 +10,7 @@ import type { Rgba } from '../src/color.js';
 import type { Rect } from '../src/types.js';
 
 const DIR = 'local-fixtures';
-const file = (ts: string) => { for (const p of [`${DIR}/Screenshot_20260901-${ts}.png`, `${DIR}/Screenshot_20260902-${ts}.png`]) if (existsSync(p)) return p; throw new Error(ts); };
+const file = (ts: string) => { for (const p of [`${DIR}/Screenshot_20260901-${ts}.png`, `${DIR}/Screenshot_20260902-${ts}.png`]) { if (existsSync(p)) return p; } throw new Error(ts); };
 const toRgba = (r: Raster): Rgba => ({ w: r.width, h: r.height, data: r.rgba });
 const px = (r: Raster, fr: readonly number[]): Rect => ({ x: Math.round(fr[0]! * r.width), y: Math.round(fr[1]! * r.height), w: Math.round(fr[2]! * r.width), h: Math.round(fr[3]! * r.height) });
 const T = templatesFromJson(JSON.parse(readFileSync(`${DIR}/digits.json`, 'utf8')));
@@ -23,10 +23,14 @@ const STACK: Record<string, readonly number[]> = {
 function rawComps(bin: { w: number; h: number; data: Uint8Array }) {
   const { w, h, data } = bin; const label = new Int32Array(w * h).fill(-1);
   const boxes: { x0: number; y0: number; x1: number; y1: number; area: number }[] = []; const st: number[] = [];
-  for (let i = 0; i < w * h; i++) { if (data[i] === 0 || label[i] !== -1) continue; const id = boxes.length;
+  for (let i = 0; i < w * h; i++) { if (data[i] === 0 || label[i] !== -1) continue;
+    const id = boxes.length;
     boxes.push({ x0: w, y0: h, x1: -1, y1: -1, area: 0 }); st.length = 0; st.push(i); label[i] = id;
-    while (st.length) { const p = st.pop()!; const pxx = p % w, py = (p / w) | 0; const b = boxes[id]!; b.area++;
-      if (pxx < b.x0) b.x0 = pxx; if (pxx > b.x1) b.x1 = pxx; if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
+    while (st.length) { const p = st.pop()!; const pxx = p % w, py = Math.trunc(p / w); const b = boxes[id]!; b.area++;
+      if (pxx < b.x0) b.x0 = pxx;
+      if (pxx > b.x1) b.x1 = pxx;
+      if (py < b.y0) b.y0 = py;
+      if (py > b.y1) b.y1 = py;
       if (pxx > 0 && data[p - 1]! > 0 && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
       if (pxx < w - 1 && data[p + 1]! > 0 && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
       if (py > 0 && data[p - w]! > 0 && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }

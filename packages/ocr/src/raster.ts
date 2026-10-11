@@ -89,7 +89,7 @@ export function meanStd(img: Gray): { mean: number; std: number } {
 /** Otsu の判別分析法で 2 値化しきい値を求める（0..255）。 */
 export function otsuThreshold(img: Gray): number {
   const hist = new Array<number>(256).fill(0);
-  for (let i = 0; i < img.data.length; i++) hist[img.data[i]!]!++;
+  for (const v of img.data) hist[v]!++;
   const total = img.data.length;
   if (total === 0) return 127;
   let sumAll = 0;

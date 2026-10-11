@@ -28,10 +28,14 @@ function rawComps(bin: { w: number; h: number; data: Uint8Array }): { x: number;
   const { w, h, data } = bin; const label = new Int32Array(w * h).fill(-1);
   const boxes: { x0: number; y0: number; x1: number; y1: number; area: number }[] = []; const st: number[] = [];
   for (let i = 0; i < w * h; i++) {
-    if (data[i] === 0 || label[i] !== -1) continue; const id = boxes.length;
+    if (data[i] === 0 || label[i] !== -1) continue;
+    const id = boxes.length;
     boxes.push({ x0: w, y0: h, x1: -1, y1: -1, area: 0 }); st.length = 0; st.push(i); label[i] = id;
-    while (st.length) { const p = st.pop()!; const pxx = p % w, py = (p / w) | 0; const b = boxes[id]!; b.area++;
-      if (pxx < b.x0) b.x0 = pxx; if (pxx > b.x1) b.x1 = pxx; if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
+    while (st.length) { const p = st.pop()!; const pxx = p % w, py = Math.trunc(p / w); const b = boxes[id]!; b.area++;
+      if (pxx < b.x0) b.x0 = pxx;
+      if (pxx > b.x1) b.x1 = pxx;
+      if (py < b.y0) b.y0 = py;
+      if (py > b.y1) b.y1 = py;
       if (pxx > 0 && data[p - 1]! > 0 && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
       if (pxx < w - 1 && data[p + 1]! > 0 && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
       if (py > 0 && data[p - w]! > 0 && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }

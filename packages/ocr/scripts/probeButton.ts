@@ -13,7 +13,7 @@ for(const [n,t] of Object.entries(truth)){
   const table={x:Math.round(0.05*img.width),y:Math.round(0.12*img.height),w:Math.round(0.90*img.width),h:Math.round(0.68*img.height)};
   const r=detectButtonSeat(toRgba(img),table,ANCHORS);
   const got=r.value>=0?NAMES[r.value]:'--';
-  const good=got===t; if(good)ok++; tot++;
+  const good=got===t; if(good){ok++;} tot++;
   console.log(`${good?'OK':'XX'} ${n} truth=${t} got=${got} conf=${r.conf.toFixed(2)}`);
 }
 console.log(`\nD席一致: ${ok}/${tot}`);

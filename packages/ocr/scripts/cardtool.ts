@@ -9,6 +9,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng, encodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 
 function cropGray(r: Raster, fx: number, fy: number, fw: number, fh: number): { w: number; h: number; data: number[] } {
   const x0 = Math.max(0, Math.round(fx * r.width));
@@ -49,7 +50,7 @@ if (!input || !outMontage || !outJson || specs.length === 0) {
   console.error('usage: cardtool.ts <input.png> <montage.png> <templates.json> <label:x,y,w,h> ...');
   process.exit(1);
 }
-const img = decodePng(readFileSync(input));
+const img = decodePng(readFileSync(safePath(input, 'input')));
 const labels: string[] = [];
 const tiles: { w: number; h: number; data: number[] }[] = [];
 const templates: Record<string, { w: number; h: number; data: number[] }> = {};
@@ -62,6 +63,6 @@ for (const spec of specs) {
   tiles.push(g);
   templates[label] = g;
 }
-writeFileSync(outMontage, encodePng(montage(tiles)));
-writeFileSync(outJson, JSON.stringify({ source: input, labels, templates }));
+writeFileSync(safePath(outMontage, 'montage'), encodePng(montage(tiles)));
+writeFileSync(safePath(outJson, 'templates'), JSON.stringify({ source: input, labels, templates }));
 console.log(`montage: ${outMontage} | labels(左→右): ${labels.join(' ')} | templates: ${outJson}`);

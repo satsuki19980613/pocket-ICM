@@ -28,5 +28,5 @@ const cases:[string,string,keyof typeof Z,string][]=[
   ['142820 BR none','142820','BR','none'],
 ];
 let ok=0,tot=0;
-for(const [name,fr,seat,truth] of cases){const img=decodePng(readFileSync(f(fr)));const r=recognizeAction(toRgba(img),px(img,Z[seat]),T);const good=r.value===truth;if(good)ok++;tot++;console.log(`${good?'OK':'XX'} ${name.padEnd(24)} truth=${truth.padEnd(6)} got=${r.value.padEnd(6)} conf=${r.conf.toFixed(2)}`);}
+for(const [name,fr,seat,truth] of cases){const img=decodePng(readFileSync(f(fr)));const r=recognizeAction(toRgba(img),px(img,Z[seat]),T);const good=r.value===truth;if(good){ok++;}tot++;console.log(`${good?'OK':'XX'} ${name.padEnd(24)} truth=${truth.padEnd(6)} got=${r.value.padEnd(6)} conf=${r.conf.toFixed(2)}`);}
 console.log(`\n一致: ${ok}/${tot}`);

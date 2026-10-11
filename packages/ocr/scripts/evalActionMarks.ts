@@ -66,7 +66,7 @@ for (const gt of GTS) {
     const grid = pickMarkGrid(img.w / img.h);
     for (const slot of SLOTS) {
       const s = fr.seats?.[slot];
-      if (!s || s.occ !== 'occupied') continue;
+      if (s?.occ !== 'occupied') continue;
       const seat = enr.seats.find((q) => q.slot === slot);
       const zone = markZoneRect(nimg, slot, seat?.nameBox, grid);
       const { read, diag } = recognizeMarkDiag(nimg, zone, templates);

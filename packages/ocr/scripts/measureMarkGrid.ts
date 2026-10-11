@@ -64,7 +64,7 @@ for (const gt of GTS) {
     const { img: nimg } = normalizeForAnchors(img);
     for (const slot of SLOTS) {
       const s = fr.seats?.[slot];
-      if (!s || s.occ !== 'occupied') continue;
+      if (s?.occ !== 'occupied') continue;
       const truth = s.action ?? 'none';
       if (truth === 'none') continue; // グリッド較正はマークが有る席だけで行う
       const a = SLOT_ANCHORS[slot];
@@ -102,10 +102,10 @@ for (const gt of GTS) {
 // --- 集計: 解像度 × 席 ---
 const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
-  return s.length === 0 ? NaN : s[Math.floor(s.length / 2)]!;
+  return s.length === 0 ? Number.NaN : s[Math.floor(s.length / 2)]!;
 };
 const key = (r: Row) => `${r.w}x${r.h}`;
-const bands = [...new Set(rows.map(key))].sort();
+const bands = [...new Set(rows.map(key))].sort((a, b) => (a < b ? -1 : 1)); // 一意・既定 sort と同順
 const grid: Record<string, Record<string, unknown>> = {};
 
 console.log('=== per-instance ===');

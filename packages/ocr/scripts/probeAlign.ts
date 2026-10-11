@@ -16,4 +16,4 @@ const cases:[string,string,string,readonly number[]][]=[
   ['allin 101510','101510','allin',[0.35,0.545,0.20,0.055]],
   ['check 143035','143035','check',[0.43,0.03,0.16,0.06]],
 ];
-for(const [name,fr,truth,zone] of cases){const img=decodePng(readFileSync(f(fr)));const b=findTagBox(toRgba(img),px(img,zone));const r=recognizeAction(toRgba(img),px(img,zone),T);console.log(`${r.value===truth?'OK':'XX'} ${name.padEnd(14)} truth=${truth.padEnd(6)} got=${r.value.padEnd(6)} conf=${r.conf.toFixed(2)} box=${b?`${b.rect.w}x${b.rect.h}`:'-'}`);}
+for(const [name,fr,truth,zone] of cases){const img=decodePng(readFileSync(f(fr)));const b=findTagBox(toRgba(img),px(img,zone));const r=recognizeAction(toRgba(img),px(img,zone),T);const box=b?`${b.rect.w}x${b.rect.h}`:'-';console.log(`${r.value===truth?'OK':'XX'} ${name.padEnd(14)} truth=${truth.padEnd(6)} got=${r.value.padEnd(6)} conf=${r.conf.toFixed(2)} box=${box}`);}

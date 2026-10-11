@@ -2,6 +2,7 @@
  * 解像度正規化で「小さいスマホ」でも読めるかを検証する。 */
 import { readFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { extractRawReads, type ExtractTemplates } from '../src/extract.js';
 import { detectContentRect, type ContentRect } from '../src/contentRect.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
@@ -52,14 +53,14 @@ function resample(img: Rgba, dw: number, dh: number): Rgba {
 }
 
 const frame = process.argv[2]!;
-const img = decodePng(readFileSync(`local-fixtures/${frame}`));
+const img = decodePng(readFileSync(safePath(`local-fixtures/${frame}`, 'frame')));
 const rgba: Rgba = { w: img.width, h: img.height, data: img.rgba };
 const crArg = process.argv[3];
 const cr: ContentRect = crArg ? (() => { const [x, y, w, h] = crArg.split(',').map(Number); return { x, y, w, h }; })() : detectContentRect(rgba, CHIPS_6MAX, templates.digits);
 console.log(`detected cr=x${cr.x} y${cr.y} w${cr.w} h${cr.h}  (src ${rgba.w}x${rgba.h})`);
 const up = resample(cropFrac(rgba, cr), 2730, 1260);
 if (process.argv.includes('save')) { const { encodePng } = await import('./pngCodec.js'); const { writeFileSync } = await import('node:fs'); writeFileSync('C:/Users/SA641~1.SAT/AppData/Local/Temp/up.png', encodePng({ width: up.w, height: up.h, rgba: up.data })); console.log('saved up.png'); }
-const dm = process.argv[4] === 'bb' ? 'bb' : process.argv[4] === 'chips' ? 'chips' : undefined;
+const dm = (['bb', 'chips'] as const).find((m) => m === process.argv[4]);
 const reads = extractRawReads(up, CHIPS_6MAX, templates, { betMinCh: 125, ...(dm ? { displayMode: dm } : {}) });
 const f = (r: { value: number; conf: number }) => `${Number.isFinite(r.value) ? r.value.toFixed(2) : 'NaN'}(${r.conf.toFixed(2)})`;
 console.log(`street=${reads.street.value} blinds=${f(reads.blinds.sb)}/${f(reads.blinds.bb)} ante=${f(reads.ante.amount)} pot=${f(reads.pot)} hero=${reads.heroHand.value}(${reads.heroHand.conf.toFixed(2)}) mode=${reads.displayMode}`);

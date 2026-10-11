@@ -41,14 +41,14 @@ describe('contentRect mapping', () => {
   it('mapProfile は全領域と席を写像する（席数・isHero は保持）', () => {
     const cr = { x: 0.03, y: 0.015, w: 0.9, h: 0.9 };
     const p = mapProfile(CHIPS_6MAX, cr);
-    expect(p.seats.length).toBe(CHIPS_6MAX.seats.length);
+    expect(p.seats).toHaveLength(CHIPS_6MAX.seats.length);
     // 先頭席 stack が cr へ写像されている
     const s0 = CHIPS_6MAX.seats[0]!;
     expect(p.seats[0]!.stack.x).toBeCloseTo(cr.x + s0.stack.x * cr.w);
     expect(p.seats[0]!.stack.w).toBeCloseTo(s0.stack.w * cr.w);
     expect(p.seats[0]!.isHero).toBe(s0.isHero);
     // hero 席が保たれる
-    expect(p.seats.filter((s) => s.isHero).length).toBe(1);
+    expect(p.seats.filter((s) => s.isHero)).toHaveLength(1);
     // blinds 等トップレベル領域も写像
     expect(p.blindsNum.x).toBeCloseTo(cr.x + CHIPS_6MAX.blindsNum.x * cr.w);
   });

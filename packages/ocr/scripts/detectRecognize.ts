@@ -9,9 +9,10 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { findCardRects, cornerOf } from '../src/detect.js';
 import { resize } from '../src/raster.js';
-import { bestMatch, matchConfidence, type Template } from '../src/match.js';
+import { bestMatch, type Template } from '../src/match.js';
 import { recognizeSuit } from '../src/color.js';
 import type { Gray, Rect } from '../src/types.js';
 
@@ -35,10 +36,11 @@ function cropGray(g: Gray, r: Rect): Gray {
   return { w: r.w, h: r.h, data };
 }
 
-const [, , mode, tplPath, input, zoneStr, thStr, labelsStr] = process.argv;
+const [, , mode, tplPathArg, input, zoneStr, thStr, labelsStr] = process.argv;
+const tplPath = safePath(tplPathArg!, 'templates.json');
 const [zx, zy, zw, zh] = zoneStr!.split(',').map(Number);
 const labels = (labelsStr ?? '').split(',').filter(Boolean);
-const img = decodePng(readFileSync(input));
+const img = decodePng(readFileSync(safePath(input!, 'input')));
 const gray = subGray(img, zx!, zy!, zw!, zh!);
 const rects = findCardRects(gray, { threshold: Number(thStr), minAreaFrac: 0.008, aspectRange: [0.4, 0.78], minFill: 0.2, closeRadius: 1 });
 console.log(`detected ${rects.length} cards; labels given ${labels.length}`);
@@ -49,12 +51,12 @@ if (mode === 'build') {
   if (labels.length !== rects.length) { console.error('label 数が検出数と不一致'); process.exit(1); }
   // 既存 JSON があればマージ（複数スクショから全ランクを集める）。
   const templates: Record<string, { w: number; h: number; data: number[] }> =
-    existsSync(tplPath!) ? (JSON.parse(readFileSync(tplPath!, 'utf8')).templates ?? {}) : {};
+    existsSync(tplPath) ? (JSON.parse(readFileSync(tplPath, 'utf8')).templates ?? {}) : {};
   corners.forEach((c, i) => { templates[labels[i]!] = { w: c.w, h: c.h, data: [...c.data] }; });
-  writeFileSync(tplPath!, JSON.stringify({ templates }));
-  console.log(`built/merged → ${Object.keys(templates).length} templates: ${Object.keys(templates).sort().join(' ')}`);
+  writeFileSync(tplPath, JSON.stringify({ templates }));
+  console.log(`built/merged → ${Object.keys(templates).length} templates: ${Object.keys(templates).sort((a, b) => (a < b ? -1 : 1)).join(' ')}`);
 } else {
-  const tplRaw = JSON.parse(readFileSync(tplPath!, 'utf8')) as { templates: Record<string, { w: number; h: number; data: number[] }> };
+  const tplRaw = JSON.parse(readFileSync(tplPath, 'utf8')) as { templates: Record<string, { w: number; h: number; data: number[] }> };
   const templates: Template[] = Object.entries(tplRaw.templates).map(([label, g]) => ({ label, img: { w: g.w, h: g.h, data: Uint8Array.from(g.data) } }));
   const rankOf = (code: string) => code.slice(0, -1); // 真ラベルは "4h"/"10d"/"Js" → rank
   const rankSet = new Set(templates.map((t) => t.label)); // テンプレラベルはランク直接
@@ -73,8 +75,14 @@ if (mode === 'build') {
     const canTest = rankSet.has(rankOf(truth)); // rank テンプレが在るものだけ公平に判定
     const rOk = predRank === rankOf(truth);
     const cOk = predCard === truth;
-    if (canTest) { tested++; if (rOk) rankOk++; if (cOk) cardOk++; }
-    console.log(`${canTest ? (cOk ? 'OK ' : 'XX ') : '.. '} truth=${truth.padEnd(3)} rank=${predRank.padEnd(2)} suit=${suit.value} → ${predCard.padEnd(3)} (rankScore=${m.score.toFixed(3)} suitConf=${suit.conf.toFixed(2)})${canTest ? '' : ' (rankテンプレ外)'}`);
+    if (canTest) {
+      tested++;
+      if (rOk) rankOk++;
+      if (cOk) cardOk++;
+    }
+    let mark = '.. ';
+    if (canTest) mark = cOk ? 'OK ' : 'XX ';
+    console.log(`${mark} truth=${truth.padEnd(3)} rank=${predRank.padEnd(2)} suit=${suit.value} → ${predCard.padEnd(3)} (rankScore=${m.score.toFixed(3)} suitConf=${suit.conf.toFixed(2)})${canTest ? '' : ' (rankテンプレ外)'}`);
   });
   console.log(`\nrank 一致: ${rankOk}/${tested} | フルカード一致: ${cardOk}/${tested}`);
 }

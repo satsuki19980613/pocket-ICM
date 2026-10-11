@@ -19,9 +19,8 @@
  */
 
 import type { BoardState, Position, Seat } from '@oshihiki/core';
-import type { RawReads, RawSeatRead, SeatAction } from './types.js';
+import type { PhysicalSeat, RawReads, RawSeatRead, SeatAction } from './types.js';
 import { derivePositions } from './positionDerivation.js';
-import type { PhysicalSeat } from './types.js';
 
 const EPS = 1e-6;
 

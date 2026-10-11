@@ -4,14 +4,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
-import { bestMatch, matchConfidence, type Template } from '../src/match.js';
+import { bestMatch, type Template } from '../src/match.js';
 import { whiteMask, digitComponents, grayFromRgba } from '../src/numberField.js';
-import { crop, resize } from '../src/raster.js';
 import { findCardRects } from '../src/detect.js';
 import { parseAmount } from '../src/digits.js';
 import { loadTemplates, normGlyph } from './digitsCore.js';
 import type { Rgba } from '../src/color.js';
-import type { Gray, Rect } from '../src/types.js';
+import type { Rect } from '../src/types.js';
 
 const DIR = 'local-fixtures';
 const f = (n: string) => `${DIR}/Screenshot_20260901-${n}.png`;

@@ -28,7 +28,7 @@ for (const raw of readFileSync(tsvPath, 'utf8').split('\n')) {
   const kv = (truthsStr ?? '').split(',').map((s) => s.trim());
   const found = kv.map((s) => s.split('=')).find(([k]) => k === field);
   if (!found) continue;
-  const truth = String(Number(found[1]!.replace(/[^0-9]/g, '')));
+  const truth = String(Number(found[1]!.replace(/\D/g, '')));
   const img = decodePng(readFileSync(`local-fixtures/Screenshot_20260901-${id}.png`));
   cases.push({ id: id!, img, truth });
 }

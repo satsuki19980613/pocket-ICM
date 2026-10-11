@@ -114,11 +114,9 @@ for (const [frame, gt] of Object.entries(GT.frames)) {
   let reads: RawReads;
   if (useLegacy) {
     const isAndroid = rgba.w >= 2400;
-    reads = useAuto
-      ? (isAndroid
-          ? extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads
-          : extractRawReadsAuto(rgba, IOS_6MAX, templates, { betMinCh: 125, contentRect: FULL_FRAME }).reads)
-      : extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
+    if (!useAuto) reads = extractRawReads(rgba, CHIPS_6MAX, templates, { betMinCh: 125 });
+    else if (isAndroid) reads = extractRawReadsAuto(rgba, CHIPS_6MAX, templates, { betMinCh: 125 }).reads;
+    else reads = extractRawReadsAuto(rgba, IOS_6MAX, templates, { betMinCh: 125, contentRect: FULL_FRAME }).reads;
   } else {
     try {
       // 本番 prefill と同一のアスペクト別グリッド選択（検証パリティ）。

@@ -22,7 +22,7 @@ let ok=0,tot=0;
 for(const [n,exp] of cases){const img=decodePng(readFileSync(f(n)));const rgba=toRgba(img);
   const line:string[]=[];
   for(const [seat,fr] of Object.entries(BET)){const r=recognizeAmount(rgba,px(img,fr),T,{minCh:MINCH});
-    if(seat in exp){tot++;const good=r.value===exp[seat];if(good)ok++;line.push(`${good?'OK':'XX'}${seat}=${r.value}(exp${exp[seat]},c${r.conf.toFixed(2)})`);}
+    if(seat in exp){tot++;const good=r.value===exp[seat];if(good){ok++;}line.push(`${good?'OK':'XX'}${seat}=${r.value}(exp${exp[seat]},c${r.conf.toFixed(2)})`);}
     else if(!Number.isNaN(r.value)&&r.conf>0.5){line.push(`?${seat}=${r.value}(誤検出?c${r.conf.toFixed(2)})`);}
   }
   console.log(`${n}: ${line.join(' ')}`);

@@ -5,6 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { findCardRects, cornerOf } from '../src/detect.js';
 import type { Gray } from '../src/types.js';
 
@@ -44,7 +45,7 @@ function suitByColor(R: number, G: number, B: number): 's' | 'h' | 'd' | 'c' {
 const [, , input, zoneStr, thStr, truthStr] = process.argv;
 const [zx, zy, zw, zh] = zoneStr!.split(',').map(Number);
 const truth = (truthStr ?? '').split(',').filter(Boolean);
-const img = decodePng(readFileSync(input));
+const img = decodePng(readFileSync(safePath(input!, 'input')));
 const x0 = Math.round(zx! * img.width), y0 = Math.round(zy! * img.height);
 const w = Math.round(zw! * img.width), h = Math.round(zh! * img.height);
 const gray = toGraySub(img, x0, y0, w, h);
@@ -56,7 +57,8 @@ rects.forEach((r, i) => {
   const s = inkRGB(img, x0 + c.x, y0 + c.y, c.w, c.h);
   const pred = suitByColor(s.R, s.G, s.B);
   const t = truth[i];
-  const match = t ? (pred === t ? 'OK ' : 'XX ') : '.. ';
+  let match = '.. ';
+  if (t) match = pred === t ? 'OK ' : 'XX ';
   if (t) { n++; if (pred === t) ok++; }
   console.log(`${match} truth=${t ?? '?'} pred=${pred} RGB=(${s.R.toFixed(0)},${s.G.toFixed(0)},${s.B.toFixed(0)}) ink=${s.ink}`);
 });

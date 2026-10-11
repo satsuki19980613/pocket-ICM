@@ -116,6 +116,6 @@ export function recognizeNumber(
 ): Read<number> {
   const s = recognizeDigitString(strip, templates, opts);
   const n = parseAmount(s.value);
-  if (n === null) return { value: NaN, conf: 0 };
+  if (n === null) return { value: Number.NaN, conf: 0 };
   return { value: n, conf: s.conf };
 }

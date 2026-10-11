@@ -7,7 +7,7 @@ import type { Template } from '../src/match.js';
 import type { Rgba } from '../src/color.js';
 import type { Rect } from '../src/types.js';
 const DIR='local-fixtures';
-function file(ts:string){for(const p of [`${DIR}/Screenshot_20260901-${ts}.png`,`${DIR}/Screenshot_20260902-${ts}.png`])if(existsSync(p))return p;throw new Error(ts);}
+function file(ts:string){for(const p of [`${DIR}/Screenshot_20260901-${ts}.png`,`${DIR}/Screenshot_20260902-${ts}.png`]){if(existsSync(p))return p;}throw new Error(ts);}
 const toRgba=(r:Raster):Rgba=>({w:r.width,h:r.height,data:r.rgba});
 const px=(r:Raster,fr:readonly number[]):Rect=>({x:Math.round(fr[0]!*r.width),y:Math.round(fr[1]!*r.height),w:Math.round(fr[2]!*r.width),h:Math.round(fr[3]!*r.height)});
 const HERO=[0.425,0.655,0.105,0.150] as const;
@@ -24,7 +24,7 @@ for(const [ts,lr,rr,kind] of M){
   const img=decodePng(readFileSync(file(ts)));const rgba=toRgba(img);const rect=px(img,HERO);
   const g=grayFromRgba(rgba,rect);
   const found=findCardRects(g,{threshold:190,minAreaFrac:0.02,closeRadius:1}).map(r=>({x:rect.x+r.x,y:rect.y+r.y,w:r.w,h:r.h}));const rects=largestCardRects(found,2);
-  if(rects.length<2){console.log(`XX ${ts} cards=${rects.length}`);tot+=2;if(kind==='H')hTot+=2;continue;}
+  if(rects.length<2){console.log(`XX ${ts} cards=${rects.length}`);tot+=2;if(kind==='H'){hTot+=2;}continue;}
   const c0=recognizeCardColor(rgba,rects[0]!,T), c1=recognizeCardColor(rgba,rects[1]!,T);
   const g0=c0.value.slice(0,-1), g1=c1.value.slice(0,-1);
   const e0=norm(lr),e1=norm(rr);

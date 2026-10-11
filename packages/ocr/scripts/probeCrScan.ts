@@ -1,6 +1,7 @@
 /** dev: 強制 contentRect を拡大パスに当ててスキャンし、canonical profile が復活するか調べる。 */
 import { readFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { extractRawReadsAuto, type ExtractTemplates } from '../src/extract.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
 import { runOcrPipeline } from '../src/pipeline.js';
@@ -17,9 +18,9 @@ const templates: ExtractTemplates = {
 };
 
 const frame = process.argv[2]!;
-const img0 = decodePng(readFileSync(`local-fixtures/${frame}`));
+const img0 = decodePng(readFileSync(safePath(`local-fixtures/${frame}`, 'frame')));
 const rgba: Rgba = { w: img0.width, h: img0.height, data: img0.rgba };
-const dm = process.argv[3] === 'chips' ? 'chips' : process.argv[3] === 'bb' ? 'bb' : undefined;
+const dm = (['chips', 'bb'] as const).find((m) => m === process.argv[3]);
 
 const f = (r: { value: number; conf: number }) =>
   `${Number.isFinite(r.value) ? r.value.toFixed(2) : 'NaN'}(${r.conf.toFixed(2)})`;

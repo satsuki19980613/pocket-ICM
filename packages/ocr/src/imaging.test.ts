@@ -134,7 +134,7 @@ describe('digits', () => {
     const t = otsuThreshold(s);
     const b = binarize(s, t, true);
     const rects = segmentGlyphs(b);
-    expect(rects.length).toBe(3);
+    expect(rects).toHaveLength(3);
   });
 
   it('recognizeDigitString: "12.5" を復元', () => {
@@ -183,7 +183,7 @@ describe('cards — ハンドクラス組み立て', () => {
   });
   it('allCardCodes は 52 枚', () => {
     const codes = allCardCodes();
-    expect(codes.length).toBe(52);
+    expect(codes).toHaveLength(52);
     expect(new Set(codes).size).toBe(52);
   });
 

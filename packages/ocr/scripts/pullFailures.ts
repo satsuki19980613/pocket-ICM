@@ -112,7 +112,7 @@ function extForMime(mime: string | null | undefined): string {
 /** CSV の1セル（カンマ・改行・引用符を含む値はダブルクオートで囲む）。 */
 function csvCell(v: unknown): string {
   const s = v === null || v === undefined ? '' : String(v);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  if (/[",\n]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
   return s;
 }
 
@@ -228,4 +228,4 @@ async function main(): Promise<void> {
   console.log('  index.csv も書き出しました（表計算で機種別・原因別に眺められます）。');
 }
 
-void main();
+await main();

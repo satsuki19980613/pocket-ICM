@@ -21,8 +21,11 @@ function rawComps(bin: Gray): Array<Rect & { area: number }> {
     const id = boxes.length; boxes.push({ x0: w, y0: h, x1: -1, y1: -1, area: 0 });
     st.length = 0; st.push(i); label[i] = id;
     while (st.length) {
-      const p = st.pop()!; const px = p % w, py = (p / w) | 0; const b = boxes[id]!; b.area++;
-      if (px < b.x0) b.x0 = px; if (px > b.x1) b.x1 = px; if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
+      const p = st.pop()!; const px = p % w, py = Math.trunc(p / w); const b = boxes[id]!; b.area++;
+      if (px < b.x0) b.x0 = px;
+      if (px > b.x1) b.x1 = px;
+      if (py < b.y0) b.y0 = py;
+      if (py > b.y1) b.y1 = py;
       if (px > 0 && data[p - 1]! > 0 && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
       if (px < w - 1 && data[p + 1]! > 0 && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
       if (py > 0 && data[p - w]! > 0 && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }

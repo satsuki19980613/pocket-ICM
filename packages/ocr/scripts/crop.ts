@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { decodePng, encodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 
 function crop(r: Raster, fx: number, fy: number, fw: number, fh: number): Raster {
   const x0 = Math.max(0, Math.round(fx * r.width));
@@ -30,13 +31,13 @@ if (!input || !outdir || specs.length === 0) {
   console.error('usage: crop.ts <input.png> <outdir> <name:x,y,w,h> ...');
   process.exit(1);
 }
-mkdirSync(outdir, { recursive: true });
-const img = decodePng(readFileSync(input));
+mkdirSync(safePath(outdir, 'outdir'), { recursive: true });
+const img = decodePng(readFileSync(safePath(input, 'input')));
 for (const spec of specs) {
   const [name, rest] = spec.split(':');
   const [x, y, w, h] = rest!.split(',').map(Number);
   const c = crop(img, x!, y!, w!, h!);
   const path = join(outdir, `${name}.png`);
-  writeFileSync(path, encodePng(c));
+  writeFileSync(safePath(path, 'name'), encodePng(c));
   console.log(`${path} ${c.width}x${c.height}`);
 }

@@ -1,6 +1,8 @@
 /** dev(実験): コンテンツ矩形を検出→較正解像度(2730×1260)へ拡大→既存抽出をそのまま実行。
  * 解像度正規化で「小さいスマホ」でも読めるかを検証する。 */
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { decodePng } from './pngCodec.js';
 import { safePath } from './safePath.js';
 import { extractRawReads, type ExtractTemplates } from '../src/extract.js';
@@ -59,7 +61,7 @@ const crArg = process.argv[3];
 const cr: ContentRect = crArg ? (() => { const [x, y, w, h] = crArg.split(',').map(Number); return { x, y, w, h }; })() : detectContentRect(rgba, CHIPS_6MAX, templates.digits);
 console.log(`detected cr=x${cr.x} y${cr.y} w${cr.w} h${cr.h}  (src ${rgba.w}x${rgba.h})`);
 const up = resample(cropFrac(rgba, cr), 2730, 1260);
-if (process.argv.includes('save')) { const { encodePng } = await import('./pngCodec.js'); const { writeFileSync } = await import('node:fs'); writeFileSync('C:/Users/SA641~1.SAT/AppData/Local/Temp/up.png', encodePng({ width: up.w, height: up.h, rgba: up.data })); console.log('saved up.png'); }
+if (process.argv.includes('save')) { const { encodePng } = await import('./pngCodec.js'); const { mkdtempSync, writeFileSync } = await import('node:fs'); const out = join(mkdtempSync(join(tmpdir(), 'upscale-')), 'up.png'); writeFileSync(out, encodePng({ width: up.w, height: up.h, rgba: up.data })); console.log(`saved ${out}`); }
 const dm = (['bb', 'chips'] as const).find((m) => m === process.argv[4]);
 const reads = extractRawReads(up, CHIPS_6MAX, templates, { betMinCh: 125, ...(dm ? { displayMode: dm } : {}) });
 const f = (r: { value: number; conf: number }) => `${Number.isFinite(r.value) ? r.value.toFixed(2) : 'NaN'}(${r.conf.toFixed(2)})`;

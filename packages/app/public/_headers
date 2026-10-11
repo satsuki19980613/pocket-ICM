@@ -17,7 +17,10 @@
 #      3〜6人は黙って MC にフォールバックする（ブラウザ検証で発見）。data: はページ内の値を読むだけで
 #      外へは何も送らない。
 # 1行で書くこと（_headers は値の折り返しを許さない）。Supabase のプロジェクト URL を変えたらここも変える。
+# HSTS: 一度 https で開いたブラウザは、以後 1 年は http で繋がない（Mozilla HTTP Observatory の評価項目）。
+# 公開中の値がこのファイルと一致するかは Live（scripts/live-check.mjs）が毎週確かめる。
 /*
+  Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

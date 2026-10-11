@@ -13,6 +13,7 @@
 import type { BoardState, Position, SolutionNode } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const GOLD = (workers: number): MultiwayNSolveOptions => ({ samples: 80_000, maxIters: 800, refreshEvery: 100, workers });
@@ -23,9 +24,7 @@ function stateN(stacks: number[]): BoardState {
   const order = positionsForPlayersLeft(n);
   const sb = 0.5, bb = 1, ante = 0.25;
   const seats = order.map((pos, i) => {
-    let betBlind = 0;
-    if (pos === 'SB') betBlind = sb;
-    else if (pos === 'BB') betBlind = bb;
+    const betBlind = blindBet(pos, sb, bb);
     return { pos, stack: stacks[i]! - betBlind - ante, state: 'live' as const, bet: betBlind };
   });
   return {

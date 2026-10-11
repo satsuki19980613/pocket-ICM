@@ -20,6 +20,7 @@ import {
   type MultiwayNSolveOptions,
   type MultiwayNSolveResult,
 } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 
@@ -29,9 +30,7 @@ const ORDER = positionsForPlayersLeft(3); // ['BU','SB','BB']
 
 function buildState(stacks: Record<Position, number>): BoardState {
   const seats = ORDER.map((pos) => {
-    let bet = 0;
-    if (pos === 'SB') bet = SB;
-    else if (pos === 'BB') bet = BB;
+    const bet = blindBet(pos, SB, BB);
     const total = stacks[pos]!;
     return { pos, stack: total - bet - ANTE, state: 'live' as const, bet };
   });

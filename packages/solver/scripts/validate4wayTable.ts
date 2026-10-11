@@ -13,6 +13,7 @@ import {
   buildPfTable, decodePfData, lookupPf, pfInRange, type PfMeta,
   solveMultiway, evaluateMultiwayStrategy, maxWorkerCap, type MultiwayNSolveOptions,
 } from '../src/index.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -23,9 +24,7 @@ const D = ORDER.length;
 
 function buildState(st: number[]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    let bet = 0;
-    if (pos === 'SB') bet = SB;
-    else if (pos === 'BB') bet = BB;
+    const bet = blindBet(pos, SB, BB);
     return { pos, stack: st[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {

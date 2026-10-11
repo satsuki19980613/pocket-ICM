@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react';
 
 import { HuChart, SERIES_META, type SeriesKey } from './HuChart';
+import { Stat, toneOf } from './StatTile';
 import { signedBbLabel } from '../slumbot/rules';
 import { PERIODS, cumulativeSeries, filterByPeriod, kLabel, pctLabel, summarize, type Period } from '../slumbot/stats';
 import { useHuHands } from '../slumbot/useHuHands';
@@ -21,32 +22,6 @@ function rate(v: number): string {
   if (v < 0) return `−${s.slice(1)}`;
   return s;
 }
-
-/** tone → 値の修飾クラス（先頭の空白込み）。 */
-function toneClass(tone: 'neg' | 'pos' | null | undefined): string {
-  if (tone === 'neg') return ' loss';
-  if (tone === 'pos') return ' gain';
-  return '';
-}
-
-function Stat(props: Readonly<{ label: string; value: string; unit?: string; sub?: string; tone?: 'neg' | 'pos' | null }>): JSX.Element {
-  return (
-    <div className="hs-stat">
-      <span className="statlbl">{props.label}</span>
-      <b className={`hs-val${toneClass(props.tone)}`}>
-        {props.value}
-        {props.unit && <span className="hs-unit">{props.unit}</span>}
-      </b>
-      {props.sub && <span className="hs-sub">{props.sub}</span>}
-    </div>
-  );
-}
-
-const toneOf = (v: number): 'neg' | 'pos' | null => {
-  if (v < 0) return 'neg';
-  if (v > 0) return 'pos';
-  return null;
-};
 
 export function HuStatsView(props: { onOpenHistory?: () => void } = {}): JSX.Element {
   const { onOpenHistory } = props;

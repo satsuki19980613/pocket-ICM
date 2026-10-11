@@ -21,6 +21,7 @@ import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HAND_CLASS_ORDER } from '../src/huEquity.js';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -38,9 +39,7 @@ const G = AXIS.length;
 
 function buildState(stacks: number[]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    let bet = 0;
-    if (pos === 'SB') bet = SB;
-    else if (pos === 'BB') bet = BB;
+    const bet = blindBet(pos, SB, BB);
     return { pos, stack: stacks[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {

@@ -6,6 +6,7 @@
 import { useMemo, useState, type PointerEvent } from 'react';
 
 import { niceTicks, xTickAnchor } from './HuChart';
+import { Stat, toneOf } from './StatTile';
 import { pctLabel } from '../slumbot/stats';
 import { PERIODS, cumulativePt, filterByPeriod, recentPlaces, summarizeSng, type Period, type PtPoint } from '../sng/stats';
 import { useSngHands } from '../sng/useSngHands';
@@ -19,32 +20,6 @@ function fmtPt(v: number): string {
   if (v === 0) return '±0';
   const s = (Math.round(Math.abs(v) * 10) / 10).toFixed(1).replace(/\.0$/, '');
   return `${v > 0 ? '+' : '−'}${s}`;
-}
-
-function toneOf(v: number): 'neg' | 'pos' | null {
-  if (v < 0) return 'neg';
-  if (v > 0) return 'pos';
-  return null;
-}
-
-/** tone → 値の修飾クラス（先頭の空白込み）。 */
-function toneClass(tone: 'neg' | 'pos' | null | undefined): string {
-  if (tone === 'neg') return ' loss';
-  if (tone === 'pos') return ' gain';
-  return '';
-}
-
-function Stat(props: Readonly<{ label: string; value: string; unit?: string; sub?: string; tone?: 'neg' | 'pos' | null }>): JSX.Element {
-  return (
-    <div className="hs-stat">
-      <span className="statlbl">{props.label}</span>
-      <b className={`hs-val${toneClass(props.tone)}`}>
-        {props.value}
-        {props.unit && <span className="hs-unit">{props.unit}</span>}
-      </b>
-      {props.sub && <span className="hs-sub">{props.sub}</span>}
-    </div>
-  );
 }
 
 const PLACE_LABEL = ['1位', '2位', '3位', '4位', '5位', '6位'];

@@ -16,6 +16,7 @@
 import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveResult } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const now = (): number => Number(process.hrtime.bigint() / 1000000n);
@@ -23,9 +24,7 @@ const now = (): number => Number(process.hrtime.bigint() / 1000000n);
 function equalStacks(n: number, stack: number, sb = 0.5, bb = 1.0): BoardState {
   const order = positionsForPlayersLeft(n);
   const seats = order.map((pos) => {
-    let bet = 0;
-    if (pos === 'SB') bet = sb;
-    else if (pos === 'BB') bet = bb;
+    const bet = blindBet(pos, sb, bb);
     return { pos, stack: stack - bet, state: 'live' as const, bet };
   });
   return {

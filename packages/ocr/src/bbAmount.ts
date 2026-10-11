@@ -40,8 +40,8 @@ interface RawComp extends Rect {
   readonly area: number;
 }
 
-/** 生 CCL（面積/高さフィルタ無し, 4 近傍）。左→右。 */
-function rawComponents(bin: Gray): RawComp[] {
+/** 生 CCL（面積/高さフィルタ無し, 4 近傍）。左→右。較正スクリプトからも使う。 */
+export function rawComponents(bin: Gray): RawComp[] {
   const { w, h, data } = bin;
   if (w === 0 || h === 0) return [];
   const label = new Int32Array(w * h).fill(-1);

@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 import type { BoardState, Position, ActionChar } from '@oshihiki/core';
 import { positionsForPlayersLeft, normalizeKey } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions, type MultiwayNSolveResult } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,9 +38,7 @@ function keyOf(order: Position[], s: RefStrategy): string {
 function buildState(ref: RefFile, bump = 0): BoardState {
   const { sb, bb } = ref.setup.blinds; const ante = ref.setup.ante.amount;
   const seats = ref.players.map((p, i) => {
-    let bet = 0;
-    if (p.pos === 'SB') bet = sb;
-    else if (p.pos === 'BB') bet = bb;
+    const bet = blindBet(p.pos, sb, bb);
     const stackTotal = p.stack + (i === 0 ? bump : 0); // player0 を +bump bb
     return { pos: p.pos, stack: stackTotal - bet - ante, state: 'live' as const, bet };
   });

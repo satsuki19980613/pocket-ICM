@@ -1,7 +1,7 @@
 /** dev: BB建てベット領域の成分分解を可視化（0.5→1.5 誤読の原因究明）。 */
 import { readFileSync, existsSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
-import { readAmountBb } from '../src/bbAmount.js';
+import { rawComponents as rawComps, readAmountBb } from '../src/bbAmount.js';
 import { whiteMask, grayFromRgba } from '../src/numberField.js';
 import { templatesFromJson } from '../src/templates.js';
 import { bestMatch, matchConfidence } from '../src/match.js';
@@ -22,26 +22,6 @@ const BET: Record<string, readonly number[]> = {
   TL: [0.315, 0.335, 0.075, 0.044], TC: [0.487, 0.243, 0.08, 0.044], TR: [0.665, 0.335, 0.066, 0.048],
   BL: [0.303, 0.466, 0.066, 0.05], BC: [0.516, 0.592, 0.066, 0.05], BR: [0.699, 0.47, 0.062, 0.05],
 };
-
-// rawComponents 相当を再現して各成分を表示（bbAmount 内部と同ロジック）。
-function rawComps(bin: { w: number; h: number; data: Uint8Array }): { x: number; y: number; w: number; h: number; area: number }[] {
-  const { w, h, data } = bin; const label = new Int32Array(w * h).fill(-1);
-  const boxes: { x0: number; y0: number; x1: number; y1: number; area: number }[] = []; const st: number[] = [];
-  for (let i = 0; i < w * h; i++) {
-    if (data[i] === 0 || label[i] !== -1) continue;
-    const id = boxes.length;
-    boxes.push({ x0: w, y0: h, x1: -1, y1: -1, area: 0 }); st.length = 0; st.push(i); label[i] = id;
-    while (st.length) { const p = st.pop()!; const pxx = p % w, py = Math.trunc(p / w); const b = boxes[id]!; b.area++;
-      if (pxx < b.x0) b.x0 = pxx;
-      if (pxx > b.x1) b.x1 = pxx;
-      if (py < b.y0) b.y0 = py;
-      if (py > b.y1) b.y1 = py;
-      if (pxx > 0 && data[p - 1]! > 0 && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
-      if (pxx < w - 1 && data[p + 1]! > 0 && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
-      if (py > 0 && data[p - w]! > 0 && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }
-      if (py < h - 1 && data[p + w]! > 0 && label[p + w] === -1) { label[p + w] = id; st.push(p + w); } } }
-  return boxes.map((b) => ({ x: b.x0, y: b.y0, w: b.x1 - b.x0 + 1, h: b.y1 - b.y0 + 1, area: b.area })).sort((a, b) => a.x - b.x);
-}
 
 // dx: 領域を左へずらす割合（0=元）。widen: 幅を割合で拡げる。
 // 一様 -0.008/+0.008 が全 BB席・全ベット値で安全かを網羅検証。

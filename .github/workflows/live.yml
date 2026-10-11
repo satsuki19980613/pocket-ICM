@@ -37,4 +37,9 @@ jobs:
           SITE: ${{ vars.SITE_URL || 'https://pocket-icm.wsk641.workers.dev' }}
           ENFORCE: ${{ (github.event_name != 'push' || github.ref == 'refs/heads/master') && '1' || '0' }}
           WAIT_SECONDS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && '600' || '0' }}
-        run: node scripts/live-check.mjs
+        shell: bash
+        run: |
+          node scripts/live-check.mjs | tee live.log
+      - name: まとめ
+        if: always()
+        run: sed -n '/^--- summary ---$/,$p' live.log | tail -n +2 >> "$GITHUB_STEP_SUMMARY"

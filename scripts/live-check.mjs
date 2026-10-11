@@ -14,7 +14,7 @@
 //                  （作業ブランチでは、まだ配信されていない _headers と比べることになるため）
 //   WAIT_SECONDS   2 が一致するまで待つ秒数（push 直後は Workers Builds の配信を待つ）
 //   MIN_GRADE      5 で求める等級（既定 A+）
-import { readFileSync, appendFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 const SITE = (process.env.SITE || 'https://pocket-icm.wsk641.workers.dev').replace(/\/+$/, '');
 const ENFORCE = process.env.ENFORCE === '1';
@@ -28,7 +28,7 @@ function check(name, ok, detail = '', { soft = false } = {}) {
   const mark = ok ? 'PASS' : soft ? 'WARN' : 'FAIL';
   if (!ok && !soft) failed++;
   console.log(`${mark}  ${name}${detail ? `  — ${detail}` : ''}`);
-  summary.push(`| ${mark} | ${name} | ${detail.replace(/\|/g, '\\|')} |`);
+  summary.push(`| ${mark} | ${name} | ${detail.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')} |`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -216,14 +216,7 @@ if (home) {
 }
 await checkObservatory();
 
-if (process.env.GITHUB_STEP_SUMMARY) {
-  appendFileSync(
-    process.env.GITHUB_STEP_SUMMARY,
-    [`### Live（${SITE}）`, '', '| 結果 | 確認 | 詳しく |', '|---|---|---|', ...summary, ''].join('\n'),
-  );
-}
-if (failed > 0) {
-  console.error(`\n${failed} 件の確認に失敗した`);
-  process.exit(1);
-}
-console.log('\nすべて通った');
+console.log(failed > 0 ? `\n${failed} 件の確認に失敗した` : '\nすべて通った');
+// 結果の表は最後に標準出力へ出す（ワークフローが `--- summary ---` 以降を Actions のまとめ欄に写す）
+console.log(['', '--- summary ---', `### Live（${SITE}）`, '', '| 結果 | 確認 | 詳しく |', '|---|---|---|', ...summary, ''].join('\n'));
+process.exit(failed > 0 ? 1 : 0);

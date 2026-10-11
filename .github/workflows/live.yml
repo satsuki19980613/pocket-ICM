@@ -1,0 +1,45 @@
+# 公開中のサイトとサーバーを、ログインせずに外から確かめる（scripts/live-check.mjs。書き込みはしない）。
+#   サイトが返るか・保護ヘッダが packages/app/public/_headers と一致するか・Worker（Slumbot 中継・SIT & GO）が
+#   余計なものを通さないか・ログインしていない人に Supabase が何も返さないか・Mozilla HTTP Observatory の評価
+# 起動：毎週月曜、master への push（配信やサーバーが変わったとき。Workers Builds の配信を最大 10 分待つ）、
+#       作業ブランチ（claude/**）への push（ヘッダと Observatory は結果を出すだけ。まだ配信されていないため）、
+#       Actions → Live → Run workflow
+name: Live
+
+on:
+  schedule:
+    - cron: '41 0 * * 1'
+  push:
+    branches: [master, 'claude/**']
+    paths:
+      - 'packages/app/public/_headers'
+      - 'packages/app/index.html'
+      - 'worker/**'
+      - 'supabase/**'
+      - 'scripts/live-check.mjs'
+      - '.github/workflows/live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 本番の確認
+        env:
+          SITE: ${{ vars.SITE_URL || 'https://pocket-icm.wsk641.workers.dev' }}
+          ENFORCE: ${{ (github.event_name != 'push' || github.ref == 'refs/heads/master') && '1' || '0' }}
+          WAIT_SECONDS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && '600' || '0' }}
+        shell: bash
+        run: |
+          node scripts/live-check.mjs | tee live.log
+      - name: まとめ
+        if: always()
+        run: sed -n '/^--- summary ---$/,$p' live.log | tail -n +2 >> "$GITHUB_STEP_SUMMARY"

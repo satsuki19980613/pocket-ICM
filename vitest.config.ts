@@ -12,5 +12,8 @@ export default defineConfig({
     ],
     environment: 'node',
     globals: false,
+    // 実テーブルを使うソルバーの同期テストは 1 本 5〜7 秒かかる。vitest 3 以降は同期テストにも
+    // 既定 5 秒の上限を当てるので、ふつうの上限を広げておく（個別に長い上限を持つテストはそのまま）。
+    testTimeout: 20_000,
   },
 });

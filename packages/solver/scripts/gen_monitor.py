@@ -16,6 +16,7 @@ file-based IPC（artifacts/nn{N}way.control.json / status.json）で連携する
 既定: players=5 / samples=40000 / axis=2,8,14,20,25 / ckpt=10 / port=4577
 """
 
+import html
 import json
 import os
 import shutil
@@ -150,8 +151,22 @@ def scheduler_loop():
                     _sched["phase"] = "run"
                     _sched["phase_until"] = now + run_s
 
+UI_STATES = ("idle", "running", "paused", "stopped", "done")
+
+def _num(v):
+    """status ファイル由来の値を数値に限る（数値以外は 0）。応答にファイルの中身をそのまま流さない。"""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return 0
+    return int(v) if isinstance(v, int) else float(v)
+
+def _text(v):
+    """status ファイル由来の文字列を HTML エスケープして返す（文字列以外は None）。"""
+    return html.escape(v) if isinstance(v, str) else None
+
 def combined_status():
-    st = read_status() or {}
+    st = read_status()
+    if not isinstance(st, dict):
+        st = {}
     alive = child_alive()
     raw_state = st.get("state")  # running|paused|stopped|done|None
     if not st:
@@ -163,6 +178,9 @@ def combined_status():
     else:
         # 子が居ない → stopped(=レジューム可) か、以前 done か
         ui_state = "stopped" if raw_state in ("stopped", "paused", "running") else (raw_state or "idle")
+    if ui_state not in UI_STATES:
+        ui_state = "idle"
+    last_stacks = st.get("lastStacks")
     with _sched_lock:
         sched = dict(_sched)
         if sched["enabled"] and sched["phase"] in ("run", "rest"):
@@ -171,10 +189,11 @@ def combined_status():
             sched["remain_s"] = 0
     return {
         "tag": TAG, "players": PLAYERS, "samples": SAMPLES, "axis": AXIS,
-        "done": st.get("done", 0), "total": st.get("total", 0),
-        "solved": st.get("solved", 0), "resumeDone": st.get("resumeDone", 0),
-        "avgMsPerPoint": st.get("avgMsPerPoint", 0), "etaMs": st.get("etaMs", 0),
-        "lastStacks": st.get("lastStacks"), "updatedAt": st.get("updatedAt"),
+        "done": _num(st.get("done")), "total": _num(st.get("total")),
+        "solved": _num(st.get("solved")), "resumeDone": _num(st.get("resumeDone")),
+        "avgMsPerPoint": _num(st.get("avgMsPerPoint")), "etaMs": _num(st.get("etaMs")),
+        "lastStacks": [_num(x) for x in last_stacks] if isinstance(last_stacks, list) else None,
+        "updatedAt": _text(st.get("updatedAt")),
         "childAlive": alive, "state": ui_state,
         "node": NODE, "scheduler": sched,
     }

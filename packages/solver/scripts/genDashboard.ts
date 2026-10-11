@@ -50,8 +50,10 @@ function playersArg(): number {
 function axisArg(): string {
   const raw = process.argv[4];
   const v = raw ?? '2,8,14,20,25';
-  if (!AXIS_CSV_RE.test(v) || v.split(',').some((x) => !(Number(x) > 0))) failArg('axis', raw);
-  return v;
+  const nums = v.split(',').map(Number);
+  if (!AXIS_CSV_RE.test(v) || nums.some((x) => !(x > 0))) failArg('axis', raw);
+  // 子プロセスへは検証済みの数値から組み直した文字列だけを渡す（引数の文字列をそのまま渡さない）。
+  return nums.join(',');
 }
 
 const PLAYERS = playersArg();

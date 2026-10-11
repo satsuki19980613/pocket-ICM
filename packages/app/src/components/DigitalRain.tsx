@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { mulberry32 } from '../drill/generate';
+
 /**
  * 背景の 0/1 デジタルレイン（サイバーパンク HUD の“端末が流れている”感じ）。
  * グラファイトの下地（`.bgfield` = z-index:-2）の上に重ねる薄い前景で、こちらが -1。
@@ -53,6 +55,8 @@ export function DigitalRain(): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    // 背景演出の乱数（識別子・秘密値ではない）。描画のたびに使うので軽い mulberry32 を起動時刻で種付けする。
+    const rand = mulberry32((Date.now() ^ 0x9e3779b9) >>> 0);
     const canvas = ref.current;
     if (!canvas) return;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -83,7 +87,7 @@ export function DigitalRain(): JSX.Element {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.font = `${FONT_PX}px ${mono}`;
       ctx.textBaseline = 'top';
-      cols = Array.from({ length: columnCount(w) }, () => makeColumn(Math.random));
+      cols = Array.from({ length: columnCount(w) }, () => makeColumn(rand));
     };
     resize();
 
@@ -110,10 +114,9 @@ export function DigitalRain(): JSX.Element {
         const y = row * ROW_H;
         if (y >= -ROW_H && y <= h) {
           ctx.fillStyle = col.hot > 0.92 ? 'rgba(190, 255, 200, 0.46)' : 'rgba(0, 255, 65, 0.30)';
-          // 背景演出の 0/1 を選ぶだけ（識別子・秘密値ではない）ので Math.random で十分。
-          ctx.fillText(Math.random() < 0.5 ? '0' : '1', i * COL_W + 3, y);
+          ctx.fillText(rand() < 0.5 ? '0' : '1', i * COL_W + 3, y);
         }
-        cols[i] = stepColumn(col, rows, Math.random);
+        cols[i] = stepColumn(col, rows, rand);
       }
     };
     raf = requestAnimationFrame(draw);

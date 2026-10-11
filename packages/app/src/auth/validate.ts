@@ -22,9 +22,9 @@ export function validateLogin(input: { handle: string; password: string }): {
   password: string | null;
   ok: boolean;
 } {
-  const handle = input.handle.trim() ? null : 'ユーザー名を入力してください';
-  const password = input.password ? null : 'パスワードを入力してください';
-  return { handle, password, ok: !handle && !password };
+  const handleError = input.handle.trim() ? null : 'ユーザー名を入力してください';
+  const passwordError = input.password ? null : 'パスワードを入力してください';
+  return { handle: handleError, password: passwordError, ok: !handleError && !passwordError };
 }
 
 /**

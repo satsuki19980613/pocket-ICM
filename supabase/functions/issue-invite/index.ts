@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   // TTL（既定7日）は app_config から。
   const cfg = await svc.from('app_config').select('invite_ttl_days').eq('id', 1).single();
   const ttlDays = cfg.data?.invite_ttl_days ?? 7;
-  const expiresAt = new Date(Date.now() + ttlDays * 86400_000).toISOString();
+  const expiresAt = new Date(Date.now() + ttlDays * 86_400_000).toISOString();
 
   // 衝突（極稀）に備えて数回リトライ。
   for (let attempt = 0; attempt < 5; attempt++) {

@@ -27,7 +27,7 @@ function sha256Hex(s) {
 
 const code = generateCode();
 const hash = sha256Hex(normalize(code));
-const expires = new Date(Date.now() + 7 * 86400_000).toISOString();
+const expires = new Date(Date.now() + 7 * 86_400_000).toISOString();
 
 console.log('\n=== ブートストラップ招待キー（初回アカウント用）===\n');
 console.log('生キー（アプリのサインアップ画面に入力）:');

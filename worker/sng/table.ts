@@ -358,7 +358,7 @@ export class SngTable implements DurableObject {
       const msg = typeof message === 'string' ? parseClientMsg(message) : null;
 
       if (!att.authed) {
-        if (!msg || msg.t !== 'auth') {
+        if (msg?.t !== 'auth') {
           ws.close(4001, 'unauthorized');
           return;
         }

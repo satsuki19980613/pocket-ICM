@@ -23,11 +23,14 @@ if (!url || !anon) {
 
 let pass = 0;
 let fail = 0;
+// 応答由来の detail に改行が混じっても、ログの行を偽装できないよう 1 行にする。
+const oneLine = (s) => String(s).replaceAll(/[\r\n]+/g, ' ');
 const ok = (name, cond, detail = '') => {
-  console.log(`${cond ? '  ✓ PASS' : '  ✗ FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
+  const suffix = detail ? `  — ${oneLine(detail)}` : '';
+  console.log(`${cond ? '  ✓ PASS' : '  ✗ FAIL'}  ${name}${suffix}`);
   cond ? pass++ : fail++;
 };
-const rnd = () => 'zz' + Math.random().toString(36).slice(2, 8);
+const rnd = () => 'zz' + crypto.randomUUID().replaceAll('-', '').slice(0, 6);
 
 async function post(fnPath, body, extraHeaders = {}) {
   const res = await fetch(`${url}${fnPath}`, {
@@ -91,7 +94,9 @@ async function main() {
   process.exit(fail === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
+try {
+  await main();
+} catch (e) {
   console.error('検証中エラー:', e);
   process.exit(1);
-});
+}

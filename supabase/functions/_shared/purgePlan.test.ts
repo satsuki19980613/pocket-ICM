@@ -40,7 +40,7 @@ describe('planEviction（総量上限を超えたときに消すスクショ）'
     const plan = planEviction([...files('a', 8, 1), ...files('b', 6, 1), ...files('c', 1, 1)], 9 * MB);
     expect(plan.filter((id) => id.startsWith('c'))).toEqual([]);
     // 15MB → 9MB に 6 個消す。a が多い間は a、並んだら交互。
-    expect(plan.length).toBe(6);
+    expect(plan).toHaveLength(6);
     expect(plan[0]).toBe('a-0');
   });
 

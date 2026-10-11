@@ -16,7 +16,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
-import type { BoardState, Position } from '@oshihiki/core';
+import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HAND_CLASS_ORDER } from '../src/huEquity.js';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
@@ -35,7 +35,9 @@ const G = AXIS.length;
 
 function buildState(stacks: [number, number, number]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    let bet = 0;
+    if (pos === 'SB') bet = SB;
+    else if (pos === 'BB') bet = BB;
     return { pos, stack: stacks[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {
@@ -129,4 +131,4 @@ async function main(): Promise<void> {
   log(`\n生成完了: ${total}点 / ${((Date.now() - t0) / 1000 / 60).toFixed(1)}分`);
   log(`保存: artifacts/pf3way.f32.bin = ${(buf!.byteLength / 1024 / 1024).toFixed(2)}MB (gzip ${(gz / 1024 / 1024).toFixed(2)}MB) + meta.json`);
 }
-void main();
+await main();

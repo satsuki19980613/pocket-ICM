@@ -153,6 +153,6 @@ export function classVsClassEquityExact(clsA: string, clsB: string): number {
       count++;
     }
   }
-  if (count === 0) return NaN;
+  if (count === 0) return Number.NaN;
   return sumEquity / count;
 }

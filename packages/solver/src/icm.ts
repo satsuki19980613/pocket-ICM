@@ -66,7 +66,7 @@ export function icmEquities(
   }
   if (n === 0) return [];
   for (const s of stacks) {
-    if (!(s >= 0) || !Number.isFinite(s)) throw new Error(`invalid stack: ${s}`);
+    if (s < 0 || !Number.isFinite(s)) throw new Error(`invalid stack: ${s}`);
   }
   if (n > 20) throw new RangeError('icmEquities: n too large for subset DP');
 
@@ -99,7 +99,7 @@ export function icmEquities(
         if (tieBreak) {
           let best = Number.NEGATIVE_INFINITY;
           for (const m of members) if (tieBreak[m]! > best) best = tieBreak[m]!;
-          top = members.filter((m) => tieBreak[m]! === best);
+          top = members.filter((m) => best === tieBreak[m]);
         }
         const p = 1 / top.length;
         for (const w of top) {

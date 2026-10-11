@@ -106,7 +106,7 @@ export function pfCoverage(table: PfTable, state: BoardState): PfCoverage {
   if (state.ante.scheme !== ante.scheme || Math.abs(state.ante.amount - ante.amount) > PF_ANTE_TOL) {
     return 'off';
   }
-  const hi = axis[axis.length - 1]!;
+  const hi = axis.at(-1)!;
   const totals = totalsOf(table, state); // order 順
   const heroIdx = order.indexOf(state.heroPos);
   // **hero が深い判定はモード非依存**（「概ね 25bb 超では AOF が最適でない」はペイアウト構造と

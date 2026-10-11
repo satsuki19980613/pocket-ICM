@@ -69,7 +69,7 @@ describe('rankClassesByEquityVs — winTie 表に基づく HU equity 降順ラ�
   it('opp=フルレンジ: 先頭は AA, KK/QQ は上位3以内, 72o は下位10以内', () => {
     const full = new Float64Array(169).fill(1);
     const rank = rankClassesByEquityVs(full, table);
-    expect(rank.length).toBe(169);
+    expect(rank).toHaveLength(169);
     expect(HAND_CLASS_ORDER[rank[0]!]).toBe('AA');
 
     const top3 = Array.from(rank.subarray(0, 3)).map((i) => HAND_CLASS_ORDER[i]!);
@@ -84,7 +84,7 @@ describe('rankClassesByEquityVs — winTie 表に基づく HU equity 降順ラ�
     const aaOnly = new Float64Array(169);
     aaOnly[HAND_CLASS_INDEX['AA']!] = 1;
     const rank = rankClassesByEquityVs(aaOnly, table);
-    expect(rank.length).toBe(169);
+    expect(rank).toHaveLength(169);
     const seen = new Set(Array.from(rank));
     expect(seen.size).toBe(169);
   });
@@ -150,7 +150,7 @@ describe('computeShowdownMc — StratSpec 層化経路', () => {
     const i72 = HAND_CLASS_INDEX['72o']!;
     expect(pc2[iAA]!).toBeGreaterThanOrEqual(pc2[i72]!);
 
-    expect(r.seatMarginal.length).toBe(3);
+    expect(r.seatMarginal).toHaveLength(3);
     const sum = r.seatMarginal.reduce((a, b) => a + b, 0);
     expect(sum).toBeCloseTo(payoutsForPlayers(3).reduce((a, b) => a + b, 0), 5);
   });

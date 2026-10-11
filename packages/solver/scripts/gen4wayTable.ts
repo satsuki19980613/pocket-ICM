@@ -38,7 +38,9 @@ const G = AXIS.length;
 
 function buildState(stacks: number[]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    let bet = 0;
+    if (pos === 'SB') bet = SB;
+    else if (pos === 'BB') bet = BB;
     return { pos, stack: stacks[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {
@@ -184,4 +186,4 @@ async function main(): Promise<void> {
   log(`保存: artifacts/pf4way.f32.bin = ${(buf!.byteLength / 1024 / 1024).toFixed(2)}MB (gzip ${(gz / 1024 / 1024).toFixed(2)}MB) + meta.json`);
   log(`（pf4way.progress.json はレジューム用。完了後は削除して構いません）`);
 }
-void main();
+await main();

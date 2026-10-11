@@ -343,10 +343,8 @@ export function solveThreeWay(state: BoardState, opts: MultiwaySolveOptions = {}
     }
     if (t % refreshEvery === 0 || t === maxIters) {
       exploitabilityPt = eng.exploitability(st, eng.computeEVs(st));
-      if (exploitabilityPt <= targetExpl) {
-        converged = true;
-        break;
-      }
+      // 収束判定（converged はループ後の最終見積りで確定させる）
+      if (exploitabilityPt <= targetExpl) break;
     }
   }
 

@@ -23,7 +23,9 @@ function stateN(stacks: number[]): BoardState {
   const order = positionsForPlayersLeft(n);
   const sb = 0.5, bb = 1, ante = 0.25;
   const seats = order.map((pos, i) => {
-    const betBlind = pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+    let betBlind = 0;
+    if (pos === 'SB') betBlind = sb;
+    else if (pos === 'BB') betBlind = bb;
     return { pos, stack: stacks[i]! - betBlind - ante, state: 'live' as const, bet: betBlind };
   });
   return {
@@ -89,4 +91,4 @@ async function main(): Promise<void> {
     }
   }
 }
-void main();
+await main();

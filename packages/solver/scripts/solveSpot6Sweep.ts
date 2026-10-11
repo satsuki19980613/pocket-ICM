@@ -14,7 +14,9 @@ const HRC_FIRSTIN: Record<string, number> = { UTG: 17.8, HJ: 33.8, CO: 51.4, BU:
 function buildSpot(): BoardState {
   const sb = 0.5, bb = 1, ante = 0.25;
   const seats = (Object.keys(STACKS) as Position[]).map((pos) => {
-    const betBlind = pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+    let betBlind = 0;
+    if (pos === 'SB') betBlind = sb;
+    else if (pos === 'BB') betBlind = bb;
     return { pos, stack: STACKS[pos]! - betBlind - ante, state: 'live' as const, bet: betBlind };
   });
   return {
@@ -54,4 +56,4 @@ async function main(): Promise<void> {
   await run(state, '中間 24k/500', { samples: 24_000, maxIters: 500, refreshEvery: 100, workers });
   await run(state, 'GOLD 80k/800', { samples: 80_000, maxIters: 800, refreshEvery: 100, workers });
 }
-void main();
+await main();

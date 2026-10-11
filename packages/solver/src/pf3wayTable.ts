@@ -10,14 +10,13 @@ import {
   buildPfTable,
   lookupPf,
   pfInRange,
-  PF_DEFAULT_INTERP_EXPL_BOUND,
   type PfMeta,
   type PfTable,
 } from './pfTable.js';
 import type { MultiwayNSolveResult } from './nwaySolver.js';
 
 /** 補間法の実証済み exploitability 上限（3人: 補間 ≈0.04pt, 直接解 ≈0.014pt）。 */
-export const PF3WAY_INTERP_EXPL_BOUND = PF_DEFAULT_INTERP_EXPL_BOUND;
+export { PF_DEFAULT_INTERP_EXPL_BOUND as PF3WAY_INTERP_EXPL_BOUND } from './pfTable.js';
 
 export type Pf3wayMeta = PfMeta;
 export type Pf3wayTable = PfTable;

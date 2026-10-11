@@ -14,7 +14,7 @@
  * 厳密性の根拠は huTable.ts を参照（hero 固定 + villain suit 正規化 + 零和上三角）。
  */
 
-import { writeFileSync, readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -203,9 +203,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e) => {
+try {
+  await main();
+} catch (e) {
   console.error(e);
   process.exit(1);
-});
-
-void existsSync; // (reserved for future resumability)
+}

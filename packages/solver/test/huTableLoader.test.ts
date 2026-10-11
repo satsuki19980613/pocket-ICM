@@ -9,7 +9,7 @@ describe.skipIf(!has)('同梱 HU equity テーブルの読み込み', () => {
   it('169×169・順序が core と一致', () => {
     const t = loadHuTable();
     expect(t.dims).toBe(169);
-    expect(t.equity.length).toBe(169 * 169);
+    expect(t.equity).toHaveLength(169 * 169);
     expect(t.order).toEqual(HAND_CLASS_ORDER);
   });
 

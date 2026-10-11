@@ -10,8 +10,7 @@
 
 import { createRequire } from 'node:module';
 import type { ShowdownNode } from './showdownMc.js';
-import type { ShowdownMcResult } from './showdownJob.js';
-import type { StratSpec } from './showdownJob.js';
+import type { ShowdownMcResult, StratSpec } from './showdownJob.js';
 import type { Exact3DenseChunk } from './showdownExact.js';
 
 type F64 = Float64Array;
@@ -36,12 +35,12 @@ export interface ShowdownJobInput {
 export class WorkerPool {
   private workers: import('node:worker_threads').Worker[] = [];
   private idle: import('node:worker_threads').Worker[] = [];
-  private queue: {
+  private readonly queue: {
     input: ShowdownJobInput;
     resolve: (r: ShowdownMcResult | Exact3DenseChunk) => void;
     reject: (e: unknown) => void;
   }[] = [];
-  private pending = new Map<
+  private readonly pending = new Map<
     import('node:worker_threads').Worker,
     { resolve: (r: ShowdownMcResult | Exact3DenseChunk) => void; reject: (e: unknown) => void }
   >();

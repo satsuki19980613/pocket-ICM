@@ -16,9 +16,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { BoardState, Position } from '@oshihiki/core';
+import type { BoardState, Position, ActionChar } from '@oshihiki/core';
 import { positionsForPlayersLeft, normalizeKey, parseRangeToSet } from '@oshihiki/core';
-import type { ActionChar } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
@@ -49,7 +48,9 @@ function buildState(ref: RefFile): BoardState {
   const { sb, bb } = ref.setup.blinds;
   const ante = ref.setup.ante.amount;
   const seats = ref.players.map((p) => {
-    const bet = p.pos === 'SB' ? sb : p.pos === 'BB' ? bb : 0;
+    let bet = 0;
+    if (p.pos === 'SB') bet = sb;
+    else if (p.pos === 'BB') bet = bb;
     return { pos: p.pos, stack: p.stack - bet - ante, state: 'live' as const, bet };
   });
   const potBets = seats.reduce((a, s) => a + s.bet, 0);
@@ -128,9 +129,11 @@ async function main(): Promise<void> {
   log(`\n## 速度比（GOLD比）と精度サマリ`);
   for (const r of rows) {
     const speedup = gold.ms / r.ms;
-    const ok = r.avgFreq <= 0.5 ? 'OK' : r.avgFreq <= 1.0 ? '△' : '×';
+    let ok = '×';
+    if (r.avgFreq <= 0.5) ok = 'OK';
+    else if (r.avgFreq <= 1.0) ok = '△';
     log(`  ${r.name}: ${speedup.toFixed(1)}x  平均|freq%|=${r.avgFreq.toFixed(2)}pt [${ok}]`);
   }
 }
 
-void main();
+await main();

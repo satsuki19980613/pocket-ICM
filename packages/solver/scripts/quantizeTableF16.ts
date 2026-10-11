@@ -12,17 +12,29 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { encodeFloat16, decodeFloat16 } from '../src/halfFloat.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ART = join(HERE, '..', 'artifacts');
+const ART = resolve(HERE, '..', 'artifacts');
 
 const base = process.argv[2] ?? 'pf4way';
-const metaPath = join(ART, `${base}.meta.json`);
-const f32Path = join(ART, `${base}.f32.bin`);
-const f16Path = join(ART, `${base}.f16.bin`);
+
+/** argv 由来のパスを解決し、artifacts/ 配下（=リポジトリ内）に収まることを検証する（パストラバーサル対策）。 */
+function artifactPath(file: string): string {
+  const p = resolve(ART, file);
+  const rel = relative(ART, p);
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    log(`basename が不正です（artifacts/ 外を指しています）: ${base}`);
+    process.exit(1);
+  }
+  return p;
+}
+
+const metaPath = artifactPath(`${base}.meta.json`);
+const f32Path = artifactPath(`${base}.f32.bin`);
+const f16Path = artifactPath(`${base}.f16.bin`);
 
 const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>;
 const bin = readFileSync(f32Path);

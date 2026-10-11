@@ -338,17 +338,46 @@ tick(); setInterval(tick,1500);
 </body></html>"""
 
 # ---- HTTP ハンドラ ---------------------------------------------------------
+SCHED_MIN_MAX = 24 * 60  # スケジューラの分指定の上限（1日）
+
+def _safe_json_bytes(obj):
+    """JSON 化し、HTML として解釈され得る文字（< > &）を \\uXXXX にエスケープ（JSON としては等価）。"""
+    text = json.dumps(obj, ensure_ascii=True)
+    text = text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    return text.encode("utf-8")
+
+def _clamp_minutes(v, default):
+    """リクエスト由来の分指定を 1..SCHED_MIN_MAX の int に正規化（不正値は既定値）。"""
+    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+        return default
+    try:
+        n = int(v)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return min(SCHED_MIN_MAX, max(1, n))
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # コンソールを静かに
         pass
 
+    def _send_common_headers(self):
+        # MIME スニッフィング抑止・キャッシュ無効（ローカル専用モニタ）
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
+
     def _json(self, obj, code=200):
-        body = json.dumps(obj).encode("utf-8")
+        body = _safe_json_bytes(obj)
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self._send_common_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def _not_found(self):
+        self.send_response(404)
+        self._send_common_headers()
+        self.end_headers()
 
     def _read_body(self):
         try:
@@ -365,13 +394,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self._send_common_headers()
             self.end_headers()
             self.wfile.write(body)
         elif self.path.startswith("/api/status"):
             self._json(combined_status())
         else:
-            self.send_response(404)
-            self.end_headers()
+            self._not_found()
 
     def do_POST(self):
         if self.path.startswith("/api/start"):
@@ -382,16 +411,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(stop_child())
         elif self.path.startswith("/api/schedule"):
             b = self._read_body()
+            if not isinstance(b, dict):
+                b = {}
+            # リクエスト値はそのまま保持せず、型・範囲を正規化してから格納（応答へ反映されるため）
+            enabled = b.get("enabled", False) is True
+            run_min = _clamp_minutes(b.get("run_min", 50), 50)
+            rest_min = _clamp_minutes(b.get("rest_min", 10), 10)
             with _sched_lock:
-                _sched["enabled"] = bool(b.get("enabled", False))
-                _sched["run_min"] = max(1, int(b.get("run_min", 50)))
-                _sched["rest_min"] = max(1, int(b.get("rest_min", 10)))
+                _sched["enabled"] = enabled
+                _sched["run_min"] = run_min
+                _sched["rest_min"] = rest_min
                 if not _sched["enabled"]:
                     _sched["phase"] = "-"
             self._json({"ok": True})
         else:
-            self.send_response(404)
-            self.end_headers()
+            self._not_found()
 
 # ---- 起動 ------------------------------------------------------------------
 def serve():

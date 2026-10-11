@@ -459,8 +459,10 @@ async function main(): Promise<void> {
 // main() が起動していた）。`--shard` worker（runParallel が子プロセスとして spawn する側）は
 // 直接実行なのでここを通る。
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  main().catch((e) => {
+  try {
+    await main();
+  } catch (e) {
     console.error(e);
     process.exit(1);
-  });
+  }
 }

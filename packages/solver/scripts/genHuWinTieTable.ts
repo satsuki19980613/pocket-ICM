@@ -179,7 +179,7 @@ function sanityCheck(win: Float64Array, tie: Float64Array): void {
   // 2) 同クラス対決は tie が大きい
   const tAA = T('AA', 'AA');
   process.stderr.write(`sanity tie AA vs AA = ${tAA.toFixed(4)} (>0.9 期待) ${tAA > 0.9 ? 'OK' : 'FAIL'}\n`);
-  if (!(tAA > 0.9)) throw new Error('sanity failed: AA vs AA tie');
+  if (tAA <= 0.9 || Number.isNaN(tAA)) throw new Error('sanity failed: AA vs AA tie');
   // 3) 全要素が確率として妥当（0<=win, 0<=tie, win+tie<=1）
   let bad = 0;
   for (let i = 0; i < N * N; i++) {
@@ -211,7 +211,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e) => {
+try {
+  await main();
+} catch (e) {
   console.error(e);
   process.exit(1);
-});
+}

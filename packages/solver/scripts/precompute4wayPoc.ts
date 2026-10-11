@@ -15,7 +15,7 @@
  *   既定 step=4, lo=8, hi=16（軸 8/12/16, セル中心 10/14）, gridSamples=60000。
  */
 import { gzipSync } from 'node:zlib';
-import type { BoardState, Position } from '@oshihiki/core';
+import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft, comboCount, parseHandClass } from '@oshihiki/core';
 import {
   solveMultiway,
@@ -34,7 +34,9 @@ const D = ORDER.length; // 4
 
 function buildState(stacks: number[]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    let bet = 0;
+    if (pos === 'SB') bet = SB;
+    else if (pos === 'BB') bet = BB;
     return { pos, stack: stacks[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {
@@ -93,7 +95,11 @@ function* gridPoints(): Generator<number[]> {
   while (true) {
     yield ix.slice();
     let d = D - 1;
-    while (d >= 0) { if (++ix[d]! < A) break; ix[d] = 0; d--; }
+    while (d >= 0) {
+      if (++ix[d]! < A) break;
+      ix[d] = 0;
+      d--;
+    }
     if (d < 0) return;
   }
 }
@@ -186,7 +192,7 @@ async function main(): Promise<void> {
   // D次元 TEST の全組み合わせ（オドメータ）
   const tix = new Array<number>(D).fill(0);
   const nT = TEST.length;
-  outer: while (true) {
+  while (true) {
     const xs = tix.map((t) => TEST[t]!);
     const interp = interpEvDiff(grid, xs);
     const st = buildState(xs);
@@ -222,8 +228,12 @@ async function main(): Promise<void> {
 
     // オドメータ更新
     let d = D - 1;
-    while (d >= 0) { if (++tix[d]! < nT) break; tix[d] = 0; d--; }
-    if (d < 0) break outer;
+    while (d >= 0) {
+      if (++tix[d]! < nT) break;
+      tix[d] = 0;
+      d--;
+    }
+    if (d < 0) break;
   }
   const avg = (a: number[]): number => a.reduce((x, y) => x + y, 0) / a.length;
   log(`\n=== 結論（4人・刻み${STEP}bb・窓[${LO}..${HI}]）===`);
@@ -234,4 +244,4 @@ async function main(): Promise<void> {
   log(`  最寄り点 = ${(avg(exN) - avg(exD)).toFixed(3)}pt  （補間なし ${avg(exN).toFixed(3)}）← 補間がこれより小さければ補間が効いている`);
   log(`\n総所要 ${((Date.now() - t0) / 1000 / 60).toFixed(1)}分`);
 }
-void main();
+await main();

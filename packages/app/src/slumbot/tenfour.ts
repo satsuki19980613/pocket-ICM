@@ -70,7 +70,7 @@ export interface TenfourHand {
 const UNKNOWN: TenfourCard = { rank: '?', suit: '?' };
 
 export function toTenfourCard(code: string | undefined): TenfourCard {
-  if (!code || code.length !== 2) return UNKNOWN;
+  if (code?.length !== 2) return UNKNOWN;
   const rank = code[0]!.toUpperCase();
   const suit = code[1]!.toLowerCase();
   if (!'AKQJT98765432'.includes(rank) || !'shdc'.includes(suit)) return UNKNOWN;
@@ -165,7 +165,9 @@ export function toTenfourHand(rec: HuHandRecord, heroName: string, now: number =
   // 勝者が持ち帰るのは「両者が出した額のうち少ない方 × 2」。降ろした側のコールされなかった
   // 上乗せは戻る（tenfour の "won" と同じ数え方）。
   const contested = 2 * Math.min(committed(fin, 0), committed(fin, 1));
-  const winner = rec.winnings > 0 ? heroName : rec.winnings < 0 ? BOT_NAME : '';
+  let winner = '';
+  if (rec.winnings > 0) winner = heroName;
+  else if (rec.winnings < 0) winner = BOT_NAME;
 
   return {
     source_file: '',

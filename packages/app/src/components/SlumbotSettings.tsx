@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 import {
   CATEGORY_LABEL,
   CATEGORY_UNITS,
@@ -42,11 +42,11 @@ const REVEAL_LABEL: Record<number, string> = {
  * SIT & GO の設定モーダル（SngSettings.tsx）もベットサイズは同じ形（カテゴリ×プリセット）
  * で編集するため export する（重複実装を避ける）。
  */
-export function CategoryBlock(props: {
+export function CategoryBlock(props: Readonly<{
   cat: SizeCategory;
   config: BetSizeConfig;
   onChange: (next: BetSizeConfig) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const units = CATEGORY_UNITS[props.cat];
   const list = props.config[props.cat];
   const [draft, setDraft] = useState('');
@@ -152,23 +152,22 @@ export function CategoryBlock(props: {
   );
 }
 
-export function SlumbotSettings(props: {
+export function SlumbotSettings(props: Readonly<{
   config: BetSizeConfig;
   prefs: GamePrefs;
   onChangeConfig: (next: BetSizeConfig) => void;
   onChangePrefs: (next: GamePrefs) => void;
   onClose: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   useBackLayer(props.onClose);
   const [tab, setTab] = useState<'game' | 'sizes'>('sizes');
   // 選んだ曲が消えていても先頭に落ちる（対戦画面が実際に鳴らす曲と必ず一致させる）。
   const selectedTrack = resolveTrack(BGM_TRACKS, props.prefs.bgmTrack);
 
   return (
-    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
+    <div className="modal-backdrop" onClick={backdropClick(props.onClose)} role="presentation">
       <div
         className="modal sb-settings"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Slumbot 設定"
@@ -289,8 +288,7 @@ export function SlumbotSettings(props: {
             <>
               <div className="bs-handle">
                 <div className="bs-h">
-                  ベットサイズハンドル 調整単位
-                  <span className="bs-h-val">{props.config.handleUnit}bb</span>
+                  ベットサイズハンドル 調整単位<span className="bs-h-val">{props.config.handleUnit}bb</span>
                 </div>
                 <div className="bs-units">
                   {HANDLE_UNITS.map((u) => (

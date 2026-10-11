@@ -18,7 +18,7 @@ import { useState } from 'react';
 import type { SngConfig } from '@oshihiki/sng';
 import { gameModeSpec } from '@oshihiki/core';
 
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 import { CategoryBlock } from './SlumbotSettings';
 import { type BetSizeConfig, HANDLE_UNITS, type HandleUnit } from '../slumbot/sizes';
 import { BGM_TRACKS, resolveTrack } from '../slumbot/bgmTracks';
@@ -28,7 +28,7 @@ const CATEGORIES = ['pfOpen', 'pfVsRaise', 'postBet', 'postVsBet'] as const;
 
 const SPEED_LABEL: Record<SngConfig['speed'], string> = { normal: '通常', slow: 'ゆっくり', veryslow: 'もっとゆっくり' };
 
-export function SngSettings(props: {
+export function SngSettings(props: Readonly<{
   roomConfig: SngConfig;
   config: BetSizeConfig;
   prefs: GamePrefs;
@@ -37,7 +37,7 @@ export function SngSettings(props: {
   onChangeConfig: (next: BetSizeConfig) => void;
   onChangePrefs: (next: GamePrefs) => void;
   onClose: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   useBackLayer(props.onClose);
   const [tab, setTab] = useState<'game' | 'sizes'>('sizes');
   const selectedTrack = resolveTrack(BGM_TRACKS, props.prefs.bgmTrack);
@@ -45,10 +45,9 @@ export function SngSettings(props: {
   const modeLabel = spec.variant ? `${spec.game}${spec.variant}` : spec.game;
 
   return (
-    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
+    <div className="modal-backdrop" onClick={backdropClick(props.onClose)} role="presentation">
       <div
         className="modal sb-settings"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="SIT & GO 設定"
@@ -133,8 +132,7 @@ export function SngSettings(props: {
             <>
               <div className="bs-handle">
                 <div className="bs-h">
-                  ベットサイズハンドル 調整単位
-                  <span className="bs-h-val">{props.config.handleUnit}bb</span>
+                  ベットサイズハンドル 調整単位<span className="bs-h-val">{props.config.handleUnit}bb</span>
                 </div>
                 <div className="bs-units">
                   {HANDLE_UNITS.map((u) => (

@@ -123,7 +123,7 @@ export interface BuildRecordInput {
 export function buildRecord(input: BuildRecordInput): SpotRecord {
   const { state, result, ms, heroAction } = input;
   const createdAt = input.createdAt ?? Date.now();
-  const id = input.id ?? `spot-${createdAt}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = input.id ?? `spot-${createdAt}-${crypto.randomUUID().slice(0, 5)}`;
   const head = headlineNode(result);
   const heroEv = head?.heroEv ?? 0;
   const verdict = head ? verdictOf(head) : 'FOLD';
@@ -172,7 +172,7 @@ export interface StartRecordInput {
  */
 export function startRecord(input: StartRecordInput): SpotRecord {
   const createdAt = input.createdAt ?? Date.now();
-  const id = input.id ?? `spot-${createdAt}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = input.id ?? `spot-${createdAt}-${crypto.randomUUID().slice(0, 5)}`;
   return {
     id,
     createdAt,

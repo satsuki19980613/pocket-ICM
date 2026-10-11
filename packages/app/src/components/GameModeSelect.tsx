@@ -43,12 +43,12 @@ export function selFromMode(mode: GameMode | undefined): GameSel {
   return { kind: spec.kind, last: { ...DEFAULT_GAME_SEL.last, [spec.kind]: spec.id } };
 }
 
-export function GameModeSelect(props: {
+export function GameModeSelect(props: Readonly<{
   sel: GameSel;
   onChange: (next: GameSel) => void;
   /** 計算中など、操作させたくないとき。 */
   disabled?: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const { sel, disabled } = props;
   const variants = MODES_BY_KIND[sel.kind];
   const hasVariants = variants.length > 1;

@@ -9,7 +9,7 @@ const TABS: { key: TabKey; label: string; ic: string }[] = [
   { key: 'settings', label: '設定', ic: '⚙' },
 ];
 
-export function TabBar(props: { active: TabKey; onNav: (key: TabKey) => void }): JSX.Element {
+export function TabBar(props: Readonly<{ active: TabKey; onNav: (key: TabKey) => void }>): JSX.Element {
   return (
     <nav className="tabs">
       {TABS.map((t) => (

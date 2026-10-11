@@ -9,14 +9,14 @@ export type FeedState = 'loading' | 'error' | 'ready';
  * ホーム（M6 公開フィード）。クラブの公開結果がスレッドとして新しい順に並ぶ。
  * 投稿カードのタップ＝スレッド詳細（コメント/返信/♡）。投稿者タップ＝その人の公開結果。
  */
-export function Home(props: {
+export function Home(props: Readonly<{
   state: FeedState;
   posts: FeedPost[];
   onOpenThread: (threadId: string) => void;
   onOpenAuthor: (author: FeedAuthor) => void;
   onToggleLike: (threadId: string, on: boolean) => void;
   onRetry: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   if (props.state === 'loading') {
     return (
       <div className="feed">
@@ -77,12 +77,12 @@ export function BrokenPost(): JSX.Element {
   );
 }
 
-function PostCard(props: {
+function PostCard(props: Readonly<{
   post: FeedPost;
   onOpenThread: () => void;
   onOpenAuthor: () => void;
   onToggleLike: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const p = props.post;
   return (
     <article className="post">

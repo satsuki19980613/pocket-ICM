@@ -1,13 +1,13 @@
-import { RANKS, handLabel } from '../handGrid';
+import { RANKS, cellKind, handLabel } from '../handGrid';
 
 /** 13×13 ハンドグリッド。セルをタップで hero ハンドを選ぶ。 */
-export function HandPicker(props: { value: string; onChange: (hand: string) => void }): JSX.Element {
+export function HandPicker(props: Readonly<{ value: string; onChange: (hand: string) => void }>): JSX.Element {
   return (
     <div className="grid">
       {RANKS.map((_, r) =>
         RANKS.map((__, c) => {
           const label = handLabel(r, c);
-          const kind = r === c ? 'pair' : r < c ? 'suited' : 'offsuit';
+          const kind = cellKind(r, c);
           const sel = label === props.value;
           return (
             <button

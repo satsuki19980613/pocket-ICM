@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 
 import { backLayers } from '../backLayers';
 
@@ -18,4 +18,22 @@ export function useBackLayer(onClose: () => void, active = true): void {
     const id = backLayers.register(() => latest.current());
     return () => backLayers.unregister(id);
   }, [active]);
+}
+
+/**
+ * モーダル背景（backdrop）の onClick を作る。背景そのもののクリックでだけ onClose を呼び、
+ * ダイアログ内部からバブリングしてきたクリックはここで止める（以前ダイアログ側の onClick で
+ * stopPropagation していたのと同じ効果。ダイアログ要素にマウス専用ハンドラを持たせずに済む）。
+ * `stopSelf` を立てると背景クリック自体も親へ伝えない（親モーダルの backdrop まで閉じないように）。
+ * キーボードでは各モーダルが `useBackLayer`（Esc／戻る）と ✕ ボタンで閉じられる。
+ */
+export function backdropClick(onClose: () => void, stopSelf = false): (e: MouseEvent) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) {
+      e.stopPropagation();
+      return;
+    }
+    if (stopSelf) e.stopPropagation();
+    onClose();
+  };
 }

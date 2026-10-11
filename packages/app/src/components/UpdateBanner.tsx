@@ -6,7 +6,7 @@ import { applyUpdateNow, dismissUpdateBanner, useAppUpdate } from '../pwa/appUpd
  * 触っている最中に届いたときだけ。✕ で閉じても、次に起動・復帰したときに自動で入る。
  * 計算中は入れ替えると計算が止まるので、押せないようにして理由を添える。
  */
-export function UpdateBanner(props: { blocked: boolean }): JSX.Element | null {
+export function UpdateBanner(props: Readonly<{ blocked: boolean }>): JSX.Element | null {
   const upd = useAppUpdate();
 
   if (upd.phase === 'applying') {

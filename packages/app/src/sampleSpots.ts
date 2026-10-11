@@ -5,6 +5,7 @@
 
 import type { BoardState, Position } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
+import { blindFor } from './formModel';
 
 export interface SampleSpot {
   label: string;
@@ -16,7 +17,7 @@ export interface SampleSpot {
 function equalStacks(n: number, stack: number, heroHand: string, sb = 0.5, bb = 1.0): BoardState {
   const order = positionsForPlayersLeft(n);
   const seats = order.map((pos: Position) => {
-    const bet = pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+    const bet = blindFor(pos, sb, bb);
     return { pos, stack: stack - bet, state: 'live' as const, bet };
   });
   return {

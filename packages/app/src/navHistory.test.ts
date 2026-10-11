@@ -141,7 +141,7 @@ describe('createBackController', () => {
     ctl.sync(0); // 例: 結果 → 完了トーストからタブへ
     expect(h.index).toBe(0);
     expect(h.deliver(ctl)).toBe(false);
-    expect(h.deliver(ctl)).toBe(null); // 追加の popstate は来ない
+    expect(h.deliver(ctl)).toBeNull(); // 追加の popstate は来ない
     expect(ctl.depth).toBe(0);
   });
 

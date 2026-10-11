@@ -110,6 +110,7 @@ export function DigitalRain(): JSX.Element {
         const y = row * ROW_H;
         if (y >= -ROW_H && y <= h) {
           ctx.fillStyle = col.hot > 0.92 ? 'rgba(190, 255, 200, 0.46)' : 'rgba(0, 255, 65, 0.30)';
+          // 背景演出の 0/1 を選ぶだけ（識別子・秘密値ではない）ので Math.random で十分。
           ctx.fillText(Math.random() < 0.5 ? '0' : '1', i * COL_W + 3, y);
         }
         cols[i] = stepColumn(col, rows, Math.random);

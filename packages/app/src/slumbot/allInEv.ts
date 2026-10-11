@@ -18,13 +18,13 @@ import { BOARD_COUNT, committed, potOf } from './rules';
  */
 export function evWinningsOf(rec: HuHandRecord): number {
   const w = walkActions(rec.action);
-  if (!w || w.allInStreet === null || !rec.botCards) return rec.winnings;
+  if (w?.allInStreet == null || !rec.botCards) return rec.winnings;
   const known = rec.board.slice(0, BOARD_COUNT[w.allInStreet] ?? 0);
   let equity: number;
   try {
     const hero: [number, number] = [parseCard(rec.heroCards[0]!), parseCard(rec.heroCards[1]!)];
     const bot: [number, number] = [parseCard(rec.botCards[0]!), parseCard(rec.botCards[1]!)];
-    equity = exactEquityVsHands(hero, bot, known.map(parseCard)).equity;
+    equity = exactEquityVsHands(hero, bot, known.map((c) => parseCard(c))).equity;
   } catch {
     return rec.winnings;
   }

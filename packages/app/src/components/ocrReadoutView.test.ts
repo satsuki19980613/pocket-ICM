@@ -226,6 +226,6 @@ describe('buildOcrReadoutView — 統合', () => {
     expect(() => buildOcrReadoutView(r)).not.toThrow();
     const view = buildOcrReadoutView(r);
     expect(view.seats).toHaveLength(1);
-    expect(view.issues.length).toBe(1);
+    expect(view.issues).toHaveLength(1);
   });
 });

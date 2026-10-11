@@ -69,7 +69,7 @@ function visibleSeats(readout: OcrReadout): readonly OcrSeatReadout[] {
 /** 総チップ保存チェック（chipConsistency）の要約文言。適用されていなければ null。 */
 export function buildChipCheckNote(readout: OcrReadout): string | null {
   const cc = readout.chipCheck;
-  if (!cc || !cc.applied) return null;
+  if (!cc?.applied) return null;
   const seatPart = cc.correctedSeatId ? `（補正席: ${cc.correctedSeatId}）` : '';
   const notePart = cc.note ? `: ${cc.note}` : '';
   return `総チップ保存チェックで補正しました${seatPart}${notePart}`;

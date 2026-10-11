@@ -77,7 +77,7 @@ const JPEG_QUALITY = 0.85;
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
   return new Promise((resolve) => {
-    canvas.toBlob((b) => resolve(b && b.type === type ? b : null), type, quality);
+    canvas.toBlob((b) => resolve(b?.type === type ? b : null), type, quality);
   });
 }
 

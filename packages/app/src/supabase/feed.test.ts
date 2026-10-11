@@ -55,10 +55,10 @@ describe('hero action の DB 変換', () => {
   it('PUSH↔ALL_IN, FOLD↔FOLD', () => {
     expect(heroActionToDb('PUSH')).toBe('ALL_IN');
     expect(heroActionToDb('FOLD')).toBe('FOLD');
-    expect(heroActionToDb(null)).toBe(null);
+    expect(heroActionToDb(null)).toBeNull();
     expect(dbToHeroAction('ALL_IN')).toBe('PUSH');
     expect(dbToHeroAction('FOLD')).toBe('FOLD');
-    expect(dbToHeroAction(null)).toBe(null);
+    expect(dbToHeroAction(null)).toBeNull();
   });
 });
 

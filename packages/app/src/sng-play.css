@@ -23,7 +23,16 @@
  */
 
 /* ---- 共通ラッパー ---- */
-.sg-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.sg-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  /* 下の (2) のリフト分だけ下に余白を足す。アクションボタンが浮いた高さぶんを、見えない余白として
+     確保しないとページ自体の高さが伸びてスクロールが発生してしまう（卓自身は margin-bottom:auto
+     で余りを吸うだけで、リフト分の下限を保証しないため）。 */
+  padding-bottom: calc(var(--sab) + clamp(0px, calc(100dvh - 600px - var(--sat) - var(--sab)), 53px));
+}
 /* Slumbot の `.sb-wrap > .sb-sizer/.sb-actions/.sb-result { margin-top }` と同じ間隔を、
    ラッパーのクラス名が違うだけの SIT & GO 側でも再現する（値そのものは複製せず、
    ここでは間隔だけを追加で当てる。sb-hud 自身の margin-bottom は styles.css 側で
@@ -246,12 +255,7 @@
   flex: none;
   margin-bottom: auto;
 }
-/* (2) のリフト分だけ下に余白を足す。アクションボタンが浮いた高さぶんを、見えない余白として
-   確保しないとページ自体の高さが伸びてスクロールが発生してしまう（卓自身は margin-bottom:auto
-   で余りを吸うだけで、リフト分の下限を保証しないため）。 */
-.sg-wrap {
-  padding-bottom: calc(var(--sab) + clamp(0px, calc(100dvh - 600px - var(--sat) - var(--sab)), 53px));
-}
+/* (2) のリフト分の下余白（`.sg-wrap` の padding-bottom）は冒頭「共通ラッパー」の `.sg-wrap` に置いてある。 */
 
 /* 縦の短い端末（下の `.sb-act` 縮小と同じ閾値 680px）だけ、S&G の「卓以外」をボタン分
    軽くする（300px→288px、600→588px）。閾値の理由: 600〜653px（600+53）は「卓は下限に
@@ -674,7 +678,6 @@
 
 /* 320px 幅でも成立させる: プレートを詰め、左右の席は画面端ぎりぎりまで寄せる。 */
 @media (max-width: 360px) {
-  .sgt-plate { min-width: 82px; max-width: 102px; }
   .sgt-name { font-size: 11px; }
   .sgt-stack { font-size: 12px; }
   /* 丸アイコンの半径25pxが画面外へ切れないための余白は幅が狭くても 18px を維持する
@@ -703,14 +706,13 @@
 @media (max-height: 720px) {
   .sgt-felt { inset: 40px 16% 84px; }
   /* 中央（ポット＋ボード）を少し上へ寄せ、hero の札とピルのぶんを下に空ける。 */
-  .sgt-mid { top: 46%; }
+  .sgt-mid { top: 46%; gap: 3px; }
   /* 縦に余裕が無い端末では、上端の席だけピルを横並びにして高さを半分にし、中央との間を空ける。
      左右の席は縦積みのまま（横に並べると「All-in 8.7bb ＋ 8.7bb」のように長くなって、
      今度はボードへ横から突っ込む）。 */
   .sgt-seat.edge-top .sgt-pills { flex-direction: row; }
   .sgt-slot { width: 26px; height: 37px; }
   .sgt-pot { font-size: 18px; }
-  .sgt-mid { gap: 3px; }
   .sgt-plate { max-width: 98px; }
   .sgt-seat.hero .pt-card.sb-big { width: 32px; height: 45px; }
   .sgt-seat.hero .pt-card.sb-big .pt-rank { font-size: 17px; }
@@ -749,6 +751,8 @@
   /* 右端をうっすら消して「まだ続く」と分かるようにする。 */
   mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+  /* 下の「操作系を一回り小さくする」節の詰め（.sb-sizer と揃えた下余白）。 */
+  margin-bottom: var(--s2);
 }
 .sb-presets::-webkit-scrollbar { display: none; }
 
@@ -760,7 +764,7 @@
    押せる大きさ（実測でどれも 24px 以上）は保ったまま卓に高さを返す・角を面取り
    （`--chamfer-sm`）にしてアプリ全体の形と揃える、という狙いは変わらない。 */
 .sb-sizer { margin-bottom: var(--s2); }
-.sb-presets { margin-bottom: var(--s2); }
+/* .sb-presets の margin-bottom は上のプリセット行の定義に同居させてある。 */
 .sb-preset {
   flex: 0 0 auto;
   min-width: 46px;

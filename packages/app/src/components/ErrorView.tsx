@@ -13,7 +13,7 @@ import { GameModeSelect, type GameSel } from './GameModeSelect';
  * 読めなかったかを見せるため）。SPEC §5.2.1: 「次はこの条件で撮ってください」として
  * `IcmInput.READ_CONDITIONS` と同じチェックリストを出す（icm 画面と文言を一致させる）。
  */
-export function ErrorView(props: {
+export function ErrorView(props: Readonly<{
   title?: string;
   desc?: string;
   issues: string[];
@@ -37,7 +37,7 @@ export function ErrorView(props: {
   onReread?: () => void;
   /** 読み直した結果の一言（受理できなかったときは「見つかった問題」も差し替わる）。 */
   modeNote?: { ok: boolean; text: string } | null;
-}): JSX.Element {
+}>): JSX.Element {
   const fromPhoto = !!props.onRetry;
   const canFixGame = !!props.onReread && !!props.gameSel && !!props.onGameModeChange;
   const [showImage, setShowImage] = useState(false);

@@ -102,12 +102,9 @@ export function listActions(action: string): readonly StreetAction[] {
     //   bet/raise は「そこまでの額 − 自分がそれまでにそのストリートで出していた額」
     //   （ブラインドや前のレイズ分を二重に数えないための引き算）。
     const already = s.streetBet[last.seat] ?? 0;
-    const put =
-      last.kind === 'check' || last.kind === 'fold'
-        ? 0
-        : last.kind === 'call'
-          ? s.streetLastBetTo - already
-          : last.betTo - already;
+    let put = 0;
+    if (last.kind === 'call') put = s.streetLastBetTo - already;
+    else if (last.kind !== 'check' && last.kind !== 'fold') put = last.betTo - already;
 
     // street は「直前状態」のもの（describeLastAction は返さないし、ベット自体では
     // ストリートは進まないので、この時点で before.state.street を使えば必ずそのトークン

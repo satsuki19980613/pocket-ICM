@@ -17,14 +17,23 @@ function fmtDate(ms: number): string {
 
 function rate(v: number): string {
   const s = (Math.round(v * 100) / 100).toFixed(2);
-  return v > 0 ? `+${s}` : v < 0 ? `−${s.slice(1)}` : s;
+  if (v > 0) return `+${s}`;
+  if (v < 0) return `−${s.slice(1)}`;
+  return s;
 }
 
-function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: 'neg' | 'pos' | null }): JSX.Element {
+/** tone → 値の修飾クラス（先頭の空白込み）。 */
+function toneClass(tone: 'neg' | 'pos' | null | undefined): string {
+  if (tone === 'neg') return ' loss';
+  if (tone === 'pos') return ' gain';
+  return '';
+}
+
+function Stat(props: Readonly<{ label: string; value: string; unit?: string; sub?: string; tone?: 'neg' | 'pos' | null }>): JSX.Element {
   return (
     <div className="hs-stat">
       <span className="statlbl">{props.label}</span>
-      <b className={`hs-val${props.tone === 'neg' ? ' loss' : props.tone === 'pos' ? ' gain' : ''}`}>
+      <b className={`hs-val${toneClass(props.tone)}`}>
         {props.value}
         {props.unit && <span className="hs-unit">{props.unit}</span>}
       </b>
@@ -33,7 +42,11 @@ function Stat(props: { label: string; value: string; unit?: string; sub?: string
   );
 }
 
-const toneOf = (v: number): 'neg' | 'pos' | null => (v < 0 ? 'neg' : v > 0 ? 'pos' : null);
+const toneOf = (v: number): 'neg' | 'pos' | null => {
+  if (v < 0) return 'neg';
+  if (v > 0) return 'pos';
+  return null;
+};
 
 export function HuStatsView(props: { onOpenHistory?: () => void } = {}): JSX.Element {
   const { onOpenHistory } = props;

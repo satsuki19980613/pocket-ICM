@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { Position } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { HandPicker } from './HandPicker';
 import { ImageModal } from './ImageModal';
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 import { buildBoardState, reconcilePositions, type AnteScheme, type BoardForm } from '../formModel';
 
 /**
@@ -13,7 +13,7 @@ import { buildBoardState, reconcilePositions, type AnteScheme, type BoardForm } 
  * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合しながら直せる（readout があれば
  * SPEC §5.2.3 の元画像×OCR出力の照合表も一緒に出す）。
  */
-export function InputForm(props: {
+export function InputForm(props: Readonly<{
   form: BoardForm;
   onFormChange: (f: BoardForm) => void;
   onSubmit: (form: BoardForm) => void;
@@ -25,11 +25,13 @@ export function InputForm(props: {
   imageSize?: { w: number; h: number };
   /** モーダルを閉じる（背景クリック / ✕ / Esc）。 */
   onClose: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const { form, onFormChange } = props;
   const [showGrid, setShowGrid] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const positions = positionsForPlayersLeft(form.playersLeft);
+  // ラベルと入力欄を htmlFor で結び付けるための id（モーダルが複数開いても衝突しないよう useId）。
+  const idBase = useId();
 
   const set = (patch: Partial<BoardForm>): void => onFormChange({ ...form, ...patch });
   const setStack = (pos: Position, v: string): void =>
@@ -41,8 +43,8 @@ export function InputForm(props: {
   useBackLayer(props.onClose);
 
   return (
-    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="手入力">
+    <div className="modal-backdrop" onClick={backdropClick(props.onClose)} role="presentation">
+      <div className="modal" role="dialog" aria-modal="true" aria-label="手入力">
         <div className="modal-head">
           <span className="modal-title">手入力</span>
           {props.imageUrl && (
@@ -57,7 +59,7 @@ export function InputForm(props: {
 
         <div className="modal-body form">
           <div className="grp">
-            <label className="lbl">残り人数</label>
+            <div className="lbl">残り人数</div>
             <div className="seg">
               {/* 2〜6 人に対応（5〜6 人は直接求解・数秒〜十数秒）。 */}
               {[2, 3, 4, 5, 6].map((n) => (
@@ -75,19 +77,20 @@ export function InputForm(props: {
 
           <div className="grp2">
             <div>
-              <label className="lbl">SB</label>
-              <input className="inp" inputMode="decimal" value={form.sb} onChange={(e) => set({ sb: e.target.value })} />
+              <label className="lbl" htmlFor={`${idBase}-sb`}>SB</label>
+              <input id={`${idBase}-sb`} className="inp" inputMode="decimal" value={form.sb} onChange={(e) => set({ sb: e.target.value })} />
             </div>
             <div>
-              <label className="lbl">BB</label>
-              <input className="inp" inputMode="decimal" value={form.bb} onChange={(e) => set({ bb: e.target.value })} />
+              <label className="lbl" htmlFor={`${idBase}-bb`}>BB</label>
+              <input id={`${idBase}-bb`} className="inp" inputMode="decimal" value={form.bb} onChange={(e) => set({ bb: e.target.value })} />
             </div>
           </div>
 
           <div className="grp2">
             <div>
-              <label className="lbl">アンティ方式</label>
+              <label className="lbl" htmlFor={`${idBase}-ante-scheme`}>アンティ方式</label>
               <select
+                id={`${idBase}-ante-scheme`}
                 className="inp"
                 value={form.anteScheme}
                 onChange={(e) => set({ anteScheme: e.target.value as AnteScheme })}
@@ -98,8 +101,9 @@ export function InputForm(props: {
               </select>
             </div>
             <div>
-              <label className="lbl">アンティ額 (bb)</label>
+              <label className="lbl" htmlFor={`${idBase}-ante-amount`}>アンティ額 (bb)</label>
               <input
+                id={`${idBase}-ante-amount`}
                 className="inp"
                 inputMode="decimal"
                 value={form.anteAmount}
@@ -110,7 +114,7 @@ export function InputForm(props: {
           </div>
 
           <div className="grp">
-            <label className="lbl">スタック (bb) ・ hero を選択</label>
+            <div className="lbl">スタック (bb) ・ hero を選択</div>
             <div className="seats">
               {positions.map((pos) => (
                 <div key={pos} className={`seatrow${form.heroPos === pos ? ' hero' : ''}`}>
@@ -135,7 +139,7 @@ export function InputForm(props: {
           </div>
 
           <div className="grp">
-            <label className="lbl">hero ハンド</label>
+            <div className="lbl">hero ハンド</div>
             <div className="handrow">
               <button type="button" className="handbtn" onClick={() => setShowGrid((s) => !s)}>
                 {form.heroHand} <span className="chev">{showGrid ? '▲' : '▼'}</span>

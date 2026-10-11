@@ -534,7 +534,7 @@ export function App(): JSX.Element {
       const byClient = new Map(local.map((r) => [r.clientId, r]));
       const merged = remote.data.map((r) => {
         const l = byClient.get(r.clientId);
-        const base = l && l.status === 'done' && r.status !== 'done' ? { ...l, serverId: r.serverId } : r;
+        const base = l?.status === 'done' && r.status !== 'done' ? { ...l, serverId: r.serverId } : r;
         // sngSource は端末ローカル専用（サーバの results には送っていない）ので、サーバ由来の
         // 行（base===r のとき）に付け直す。これをしないとアプリを開き直した直後に
         // 「計算済み」の印（ハンド履歴の ICM ボタン）が消えてしまう。
@@ -704,7 +704,7 @@ export function App(): JSX.Element {
    * 結果投稿のときだけ意味を持つ（通常投稿は結果を持たないため何もしない, v3）。
    */
   function openThreadResult(): void {
-    if (!thread || thread.kind !== 'result' || !thread.result) return;
+    if (thread?.kind !== 'result' || !thread.result) return;
     setState(thread.result.spot);
     setResult(thread.result.solution);
     setMs(0);
@@ -738,7 +738,7 @@ export function App(): JSX.Element {
       ),
     );
     setThread((t) =>
-      t && t.thread_id === threadId
+      t?.thread_id === threadId
         ? { ...t, liked_by_me: on, like_count: Math.max(0, t.like_count + (on ? 1 : -1)) }
         : t,
     );
@@ -1452,8 +1452,7 @@ export function App(): JSX.Element {
         <h1 className="tb-title">{TITLES[screen]}</h1>
         {showRanking ? (
           <button type="button" className="tb-rank" onClick={() => setRankingOpen(true)}>
-            <span className="tb-rank-ic">▲</span>
-            RANKING
+            <span className="tb-rank-ic">▲</span>RANKING
           </button>
         ) : (
           <span className="tb-sp" />
@@ -1489,36 +1488,37 @@ export function App(): JSX.Element {
         />
       )}
 
-      {screen === 'thread' &&
-        (threadState === 'loading' ? (
-          <div className="thread">
-            <div className="panel solving">
-              <div className="spinner" />
-              <p>スレッドを読み込み中…</p>
-            </div>
+      {screen === 'thread' && threadState === 'loading' && (
+        <div className="thread">
+          <div className="panel solving">
+            <div className="spinner" />
+            <p>スレッドを読み込み中…</p>
           </div>
-        ) : threadState === 'error' || !thread ? (
-          <div className="thread">
-            <div className="home-empty">
-              <p>スレッドを取得できませんでした。</p>
-              <button type="button" className="btn ghost" onClick={() => setScreen('home')}>
-                ホームに戻る
-              </button>
-            </div>
+        </div>
+      )}
+      {screen === 'thread' && threadState !== 'loading' && (threadState === 'error' || !thread) && (
+        <div className="thread">
+          <div className="home-empty">
+            <p>スレッドを取得できませんでした。</p>
+            <button type="button" className="btn ghost" onClick={() => setScreen('home')}>
+              ホームに戻る
+            </button>
           </div>
-        ) : (
-          <Thread
-            detail={thread}
-            onOpenResult={openThreadResult}
-            onOpenAuthor={(a) => void openAuthor(a)}
-            onToggleLike={(on) => void toggleLike(thread.thread_id, on)}
-            onReply={onReply}
-            onEditComment={onEditComment}
-            onDeleteComment={onDeleteComment}
-            onEditPost={onEditPost}
-            onDeletePost={onDeletePost}
-          />
-        ))}
+        </div>
+      )}
+      {screen === 'thread' && threadState !== 'loading' && threadState !== 'error' && thread && (
+        <Thread
+          detail={thread}
+          onOpenResult={openThreadResult}
+          onOpenAuthor={(a) => void openAuthor(a)}
+          onToggleLike={(on) => void toggleLike(thread.thread_id, on)}
+          onReply={onReply}
+          onEditComment={onEditComment}
+          onDeleteComment={onDeleteComment}
+          onEditPost={onEditPost}
+          onDeletePost={onDeletePost}
+        />
+      )}
 
       {screen === 'userpub' && (
         <UserPub

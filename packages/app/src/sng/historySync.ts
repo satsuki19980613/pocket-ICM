@@ -138,7 +138,7 @@ async function runSync(store: Store | null): Promise<SyncSngResult> {
     const recs: SngGameLocal[] = r.data.map(({ rec }) => rec);
     await putGames(recs);
     pulledGames += recs.length;
-    gamesCursor = r.data[r.data.length - 1]!.createdAt;
+    gamesCursor = r.data.at(-1)!.createdAt;
     writeCursor(store, GAMES_CURSOR_KEY, gamesCursor);
     if (r.data.length < PAGE) break;
   }
@@ -152,7 +152,7 @@ async function runSync(store: Store | null): Promise<SyncSngResult> {
     const recs: SngResultLocal[] = r.data.map(({ rec }) => rec);
     await putResults(recs);
     pulledResults += recs.length;
-    resultsCursor = r.data[r.data.length - 1]!.endedAt;
+    resultsCursor = r.data.at(-1)!.endedAt;
     writeCursor(store, RESULTS_CURSOR_KEY, resultsCursor);
     if (r.data.length < PAGE) break;
   }
@@ -178,7 +178,7 @@ async function runSync(store: Store | null): Promise<SyncSngResult> {
     }
     await putHands(toPut);
     pulledHands += toPut.length;
-    handsCursor = r.data[r.data.length - 1]!.createdAt;
+    handsCursor = r.data.at(-1)!.createdAt;
     writeCursor(store, HANDS_CURSOR_KEY, handsCursor);
     if (r.data.length < PAGE) break;
   }
@@ -200,7 +200,7 @@ async function runSync(store: Store | null): Promise<SyncSngResult> {
         },
       ]);
     }
-    holeCursor = r.data[r.data.length - 1]!.createdAt;
+    holeCursor = r.data.at(-1)!.createdAt;
     writeCursor(store, HOLE_CURSOR_KEY, holeCursor);
     if (r.data.length < PAGE) break;
   }

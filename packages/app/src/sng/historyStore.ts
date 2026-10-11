@@ -83,7 +83,7 @@ export function handKey(gameId: string, handNo: number): string {
 function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 }
 
@@ -106,7 +106,7 @@ function openDb(): Promise<IDBDatabase> {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 }
 
@@ -123,8 +123,8 @@ async function tx<T>(store: string, mode: IDBTransactionMode, fn: (os: IDBObject
 function waitDone(os: IDBObjectStore): Promise<void> {
   return new Promise((resolve, reject) => {
     os.transaction.oncomplete = () => resolve();
-    os.transaction.onerror = () => reject(os.transaction.error);
-    os.transaction.onabort = () => reject(os.transaction.error);
+    os.transaction.onerror = () => reject(os.transaction.error ?? new Error('IndexedDB transaction failed'));
+    os.transaction.onabort = () => reject(os.transaction.error ?? new Error('IndexedDB transaction failed'));
   });
 }
 

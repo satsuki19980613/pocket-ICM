@@ -5,7 +5,7 @@
 
 import { useMemo, useState, type PointerEvent } from 'react';
 
-import { niceTicks } from './HuChart';
+import { niceTicks, xTickAnchor } from './HuChart';
 import { pctLabel } from '../slumbot/stats';
 import { PERIODS, cumulativePt, filterByPeriod, recentPlaces, summarizeSng, type Period, type PtPoint } from '../sng/stats';
 import { useSngHands } from '../sng/useSngHands';
@@ -22,14 +22,23 @@ function fmtPt(v: number): string {
 }
 
 function toneOf(v: number): 'neg' | 'pos' | null {
-  return v < 0 ? 'neg' : v > 0 ? 'pos' : null;
+  if (v < 0) return 'neg';
+  if (v > 0) return 'pos';
+  return null;
 }
 
-function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: 'neg' | 'pos' | null }): JSX.Element {
+/** tone → 値の修飾クラス（先頭の空白込み）。 */
+function toneClass(tone: 'neg' | 'pos' | null | undefined): string {
+  if (tone === 'neg') return ' loss';
+  if (tone === 'pos') return ' gain';
+  return '';
+}
+
+function Stat(props: Readonly<{ label: string; value: string; unit?: string; sub?: string; tone?: 'neg' | 'pos' | null }>): JSX.Element {
   return (
     <div className="hs-stat">
       <span className="statlbl">{props.label}</span>
-      <b className={`hs-val${props.tone === 'neg' ? ' loss' : props.tone === 'pos' ? ' gain' : ''}`}>
+      <b className={`hs-val${toneClass(props.tone)}`}>
         {props.value}
         {props.unit && <span className="hs-unit">{props.unit}</span>}
       </b>
@@ -40,7 +49,7 @@ function Stat(props: { label: string; value: string; unit?: string; sub?: string
 
 const PLACE_LABEL = ['1位', '2位', '3位', '4位', '5位', '6位'];
 
-function PlaceDist(props: { dist: readonly number[]; maxPlayers: number }): JSX.Element {
+function PlaceDist(props: Readonly<{ dist: readonly number[]; maxPlayers: number }>): JSX.Element {
   const n = Math.min(6, Math.max(2, props.maxPlayers || 6));
   const rows = props.dist.slice(0, n);
   const max = Math.max(1, ...rows);
@@ -68,7 +77,7 @@ const CPB = 22;
 const CPW = CW - CPL - CPR;
 const CPH = CH - CPT - CPB;
 
-function PtChart(props: { points: readonly PtPoint[] }): JSX.Element {
+function PtChart(props: Readonly<{ points: readonly PtPoint[] }>): JSX.Element {
   const { points } = props;
   const n = points.length;
   const [hover, setHover] = useState<number | null>(null);
@@ -86,7 +95,7 @@ function PtChart(props: { points: readonly PtPoint[] }): JSX.Element {
     }
     const ticks = niceTicks(min, max);
     const lo = Math.min(min, ticks[0] ?? min);
-    const hi = Math.max(max, ticks[ticks.length - 1] ?? max);
+    const hi = Math.max(max, ticks.at(-1) ?? max);
     const x = (i: number): number => CPL + (n <= 1 ? CPW / 2 : (i / (n - 1)) * CPW);
     const y = (v: number): number => CPT + ((hi - v) / (hi - lo || 1)) * CPH;
     const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)} ${y(p.y).toFixed(1)}`).join(' ');
@@ -143,7 +152,7 @@ function PtChart(props: { points: readonly PtPoint[] }): JSX.Element {
             className="hc-xlbl"
             x={geo.x(i)}
             y={CH - 6}
-            textAnchor={k === 0 ? 'start' : k === geo.xTicks.length - 1 ? 'end' : 'middle'}
+            textAnchor={xTickAnchor(k, geo.xTicks.length)}
           >
             {i + 1}
           </text>
@@ -166,7 +175,7 @@ function PtChart(props: { points: readonly PtPoint[] }): JSX.Element {
   );
 }
 
-export function SngStatsView(props: { onOpenHistory: () => void }): JSX.Element {
+export function SngStatsView(props: Readonly<{ onOpenHistory: () => void }>): JSX.Element {
   const { results, note } = useSngHands();
   const [period, setPeriod] = useState<Period>('all');
 

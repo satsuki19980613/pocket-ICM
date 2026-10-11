@@ -106,13 +106,13 @@ describe('createSignedUrlResolver（署名 URL をまとめて取り、期限ま
     await run();
     expect(r.peek('avatars', 'p')).toBe(await first);
     await r.get('avatars', 'p');
-    expect(calls.length).toBe(1);
+    expect(calls).toHaveLength(1);
     advance(SIGN_TTL_SEC * 1000); // 期限切れ
     expect(r.peek('avatars', 'p')).toBeNull();
     const again = r.get('avatars', 'p');
     await run();
     await again;
-    expect(calls.length).toBe(2);
+    expect(calls).toHaveLength(2);
   });
 
   it('取り直しに失敗したときは、表示中の署名 URL を使い続ける（壊れた公開 URL に替えない）', async () => {

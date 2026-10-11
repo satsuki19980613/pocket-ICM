@@ -21,8 +21,8 @@ type WorkerMsg = { ok: true; res: McPoolResult } | { ok: false; error: string };
 class McPool {
   private workers: Worker[] = [];
   private idle: Worker[] = [];
-  private queue: { job: ShowdownMcJob; resolve: (r: McPoolResult) => void; reject: (e: Error) => void }[] = [];
-  private pending = new Map<Worker, { resolve: (r: McPoolResult) => void; reject: (e: Error) => void }>();
+  private readonly queue: { job: ShowdownMcJob; resolve: (r: McPoolResult) => void; reject: (e: Error) => void }[] = [];
+  private readonly pending = new Map<Worker, { resolve: (r: McPoolResult) => void; reject: (e: Error) => void }>();
 
   constructor(size: number) {
     for (let i = 0; i < size; i++) {
@@ -87,6 +87,6 @@ let shared: McPool | null = null;
 
 /** 共有 MC プール（遅延生成・使い回し）を使う McRunner。size は既定で CPU の 60%。 */
 export function getMcRunner(size = maxWorkerCap()): McRunner {
-  if (!shared) shared = new McPool(Math.max(1, size));
+  shared ??= new McPool(Math.max(1, size));
   return shared.runAll;
 }

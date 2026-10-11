@@ -947,7 +947,6 @@ select.inp { appearance: none; cursor: pointer; }
 /* ゲーム選択（2段セグメント・GameModeSelect.tsx） */
 .gmsel { display: flex; flex-direction: column; gap: var(--s1); }
 .gmsel-row { width: 100%; }
-.gmsel-row .segbtn { font-size: 14px; line-height: 1.5; }
 /*
  * 下段（ランクの STAGE・レジェンドの指標）はクラブ選択時も**中身を残したまま隠す**。段が出没すると
  * 下の「この内容で計算する」が上下に動き、押す瞬間にずれて誤タップになる（さつき指示）。
@@ -958,7 +957,7 @@ select.inp { appearance: none; cursor: pointer; }
  * 上段は3ゲーム、下段は最大3つ。狭い端末でも1行に収まるよう詰める。
  * 行高を明示するのは、ローマ数字（STAGE Ⅲ）と仮名で既定の行高が変わり、実測で 1px ずれたため。
  */
-.gmsel-row .segbtn { min-width: 0; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+.gmsel-row .segbtn { font-size: 14px; line-height: 1.5; min-width: 0; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
 @media (max-width: 380px) {
   .gmsel-row .segbtn { font-size: 12.5px; }
 }
@@ -1682,7 +1681,6 @@ button.cell { cursor: pointer; }
 }
 .statlbl { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
 .statval { font-size: 26px; font-weight: 700; font-family: var(--disp); font-variant-numeric: tabular-nums; }
-.statval.loss { color: var(--red); }
 
 .emptyrec { color: var(--dim); font-size: 13px; text-align: center; line-height: 1.8; }
 
@@ -1741,7 +1739,6 @@ button.cell { cursor: pointer; }
 }
 
 /* ==== Drill（トレーニング）==== */
-.drill-wrap { }
 
 /* HUD ステータスバー（HAND / CORRECT / ACC） */
 .drill-hud {
@@ -1877,7 +1874,6 @@ button.cell { cursor: pointer; }
 
 /* 出題・選択 */
 .drill-q { text-align: center; font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em; color: var(--dim); margin: 0 0 var(--s3); }
-.drill-choice { }
 /* FOLD 選択 = 赤アウトライン / ALL IN(PUSH) = 黄プレート */
 .drill-choice .drill-fold {
   background: rgba(255, 59, 59, 0.1);

@@ -9,10 +9,10 @@ type Mode = 'login' | 'signup';
  * サインアップは招待キー必須（サーバ側 signup Edge Function で最終検証）。
  * 成功すると supabase セッションが張られ、App の onAuthStateChange がゲートを解除する。
  */
-export function Auth(props: {
+export function Auth(props: Readonly<{
   /** バックエンド（Supabase）が設定済みか。false なら送信不可＋設定不足バナー。 */
   configured: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const [mode, setMode] = useState<Mode>('login');
   const [busy, setBusy] = useState(false);
 
@@ -173,12 +173,12 @@ export function Auth(props: {
  * 防ぐため、目のボタンで平文表示に切り替えられる。既定は隠す。
  * 押しても入力欄からフォーカスが外れないよう mousedown を止める。
  */
-function PasswordInput(props: {
+function PasswordInput(props: Readonly<{
   value: string;
   onChange: (v: string) => void;
   autoComplete: 'current-password' | 'new-password';
   placeholder?: string;
-}): JSX.Element {
+}>): JSX.Element {
   const [shown, setShown] = useState(false);
   return (
     <span className="pwwrap">
@@ -208,12 +208,12 @@ function PasswordInput(props: {
 }
 
 /** 認証フォームの1フィールド（ラベル＋入力＋エラー）。 */
-function Field(props: {
+function Field(props: Readonly<{
   label: string;
   err?: string | null;
   keyField?: boolean;
   children: React.ReactNode;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <label className={`afield${props.keyField ? ' key' : ''}`}>
       <b>{props.label}</b>

@@ -12,7 +12,7 @@ import { huHandView } from '../history/huHandView';
 import { signedBbLabel } from '../slumbot/rules';
 import { useHuHands } from '../slumbot/useHuHands';
 import type { HuHandRecord } from '../slumbot/history';
-import { Cards, HandDetailModal, fmtBb } from './HandDetailModal';
+import { Cards, HandDetailModal, fmtBb, signClass } from './HandDetailModal';
 
 const PAGE = 50;
 
@@ -22,7 +22,7 @@ function fmtTime(ms: number): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function HandRow(props: { rec: HuHandRecord; onOpen: (view: HandDetailView) => void }): JSX.Element {
+function HandRow(props: Readonly<{ rec: HuHandRecord; onOpen: (view: HandDetailView) => void }>): JSX.Element {
   const { rec: r, onOpen } = props;
   // 詳細ビューはここで一度だけ組み立て、行の POT タグとモーダル起動の両方に使う
   // （失敗しても一覧は壊さない。ビルダーが例外を投げても POT タグを出さないだけにする）。
@@ -49,7 +49,7 @@ function HandRow(props: { rec: HuHandRecord; onOpen: (view: HandDetailView) => v
       </span>
       <span className="hh-side">
         {view && <span className="hh-tag pot">POT {fmtBb(view.result.finalPotBb)}bb</span>}
-        <b className={`hh-net${r.winnings < 0 ? ' loss' : r.winnings > 0 ? ' gain' : ''}`}>
+        <b className={`hh-net${signClass(r.winnings)}`}>
           {signedBbLabel(r.winnings, 1)}
           <span className="hh-unit">bb</span>
         </b>

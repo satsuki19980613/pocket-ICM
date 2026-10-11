@@ -9,3 +9,9 @@ export function handLabel(row: number, col: number): string {
   if (row === col) return `${hi}${hi}`;
   return row < col ? `${hi}${lo}s` : `${hi}${lo}o`;
 }
+
+/** グリッドのセル (row, col) → セルの種類（CSS クラス名にそのまま使う）。 */
+export function cellKind(row: number, col: number): 'pair' | 'suited' | 'offsuit' {
+  if (row === col) return 'pair';
+  return row < col ? 'suited' : 'offsuit';
+}

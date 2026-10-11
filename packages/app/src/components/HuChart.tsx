@@ -29,13 +29,23 @@ const PB = 22;
 const PW = W - PL - PR;
 const PH = H - PT - PB;
 
+/** 横軸ラベルの寄せ（両端は内側へ寄せて見切れないように、間は中央）。 */
+export function xTickAnchor(k: number, count: number): 'start' | 'end' | 'middle' {
+  if (k === 0) return 'start';
+  if (k === count - 1) return 'end';
+  return 'middle';
+}
+
 /** 見やすい刻みの目盛（min〜max を 4〜6 分割）。 */
 export function niceTicks(min: number, max: number): number[] {
   const span = max - min || 1;
   const rough = span / 4;
   const pow = 10 ** Math.floor(Math.log10(rough));
   const norm = rough / pow;
-  const step = (norm >= 5 ? 5 : norm >= 2 ? 2 : 1) * pow;
+  let mult = 1;
+  if (norm >= 5) mult = 5;
+  else if (norm >= 2) mult = 2;
+  const step = mult * pow;
   const out: number[] = [];
   for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(Math.round(v * 1e6) / 1e6);
   return out;
@@ -47,10 +57,10 @@ function fmtTick(v: number): string {
   return String(v);
 }
 
-export function HuChart(props: {
+export function HuChart(props: Readonly<{
   series: Series;
   visible: Record<SeriesKey, boolean>;
-}): JSX.Element {
+}>): JSX.Element {
   const { series, visible } = props;
   const n = series.net.length;
   const [hover, setHover] = useState<number | null>(null);
@@ -72,7 +82,7 @@ export function HuChart(props: {
     }
     const ticks = niceTicks(min, max);
     const lo = Math.min(min, ticks[0] ?? min);
-    const hi = Math.max(max, ticks[ticks.length - 1] ?? max);
+    const hi = Math.max(max, ticks.at(-1) ?? max);
     const x = (i: number): number => PL + (n <= 1 ? PW / 2 : (i / (n - 1)) * PW);
     const y = (chips: number): number => PT + ((hi - chips / 100) / (hi - lo)) * PH;
     const path = (arr: readonly number[]): string =>
@@ -144,7 +154,7 @@ export function HuChart(props: {
             className="hc-xlbl"
             x={geo.x(i)}
             y={H - 6}
-            textAnchor={k === 0 ? 'start' : k === geo.xTicks.length - 1 ? 'end' : 'middle'}
+            textAnchor={xTickAnchor(k, geo.xTicks.length)}
           >
             {i + 1}
           </text>

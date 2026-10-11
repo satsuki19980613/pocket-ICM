@@ -84,7 +84,7 @@ async function runSync(store: Store | null): Promise<SyncResult> {
     const r = await fetchHandsAfter(cursor, PAGE);
     if (!r.ok) return { pushed, pulled, offline: true };
     if (r.data.length === 0) break;
-    if (!known) known = new Map((await listHands()).map((x) => [x.id, x]));
+    known ??= new Map((await listHands()).map((x) => [x.id, x]));
     const toPut: HuHandRecord[] = [];
     for (const { rec } of r.data) {
       const local = known.get(rec.id);
@@ -101,7 +101,7 @@ async function runSync(store: Store | null): Promise<SyncResult> {
       }
     }
     await putHands(toPut);
-    cursor = r.data[r.data.length - 1]!.createdAt;
+    cursor = r.data.at(-1)!.createdAt;
     writeCursor(store, cursor);
     if (r.data.length < PAGE) break;
   }

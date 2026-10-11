@@ -227,7 +227,7 @@ export function handClassOf(cards: readonly string[]): string | null {
 
 /** カード表記（例 `'Ah'`）としてランク・スートが読めるか。 */
 function isCard(c: string | undefined): c is string {
-  if (!c || c.length !== 2) return false;
+  if (c?.length !== 2) return false;
   return rankIndex(c[0]!) >= 0 && (SUITS as readonly string[]).includes(c[1]!);
 }
 

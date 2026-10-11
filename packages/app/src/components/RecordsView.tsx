@@ -14,14 +14,14 @@ function fmtDate(ms: number): string {
  * キャッシュを描き、サーバ取得が済み次第差し替える）。一覧の各行は3つの状態を持つ:
  * 計算中（スピナー・タップ不可）/ 完了（自分の選択・EV loss・公開タグ）/ 失敗・中断（理由＋再計算）。
  */
-export function RecordsView(props: {
+export function RecordsView(props: Readonly<{
   records: SpotRecord[];
   onOpen: (rec: SpotRecord) => void;
   onDelete: (rec: SpotRecord) => void;
   onRetry: (rec: SpotRecord) => void;
   /** 計算ジョブが進行中か。true の間は「再計算」を無効化する（同時1件の制約）。 */
   jobRunning: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const { records } = props;
   const stats = aggregate(records);
 
@@ -62,8 +62,7 @@ export function RecordsView(props: {
                       {r.heroPos}・{r.playersLeft} left
                     </span>
                     <span className="recspin">
-                      <span className="spinner sm" aria-hidden="true" />
-                      計算中…
+                      <span className="spinner sm" aria-hidden="true" />計算中…
                     </span>
                   </div>
                 </div>

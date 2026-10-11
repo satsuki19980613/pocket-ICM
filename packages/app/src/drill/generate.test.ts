@@ -13,7 +13,7 @@ describe('generateSpot', () => {
     for (let i = 0; i < 100; i++) {
       const s = generateSpot(rng);
       expect(DEFAULT_FILTER.counts).toContain(s.playersLeft);
-      expect(s.seats.length).toBe(s.playersLeft);
+      expect(s.seats).toHaveLength(s.playersLeft);
       expect(s.heroPos).not.toBe('BB');
       // hero 席が存在する
       expect(s.seats.some((seat) => seat.pos === s.heroPos)).toBe(true);

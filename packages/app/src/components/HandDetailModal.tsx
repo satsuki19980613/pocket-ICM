@@ -13,7 +13,7 @@
 
 import type { HandDetailView, HandPlayerView, HandStepView, HandStreetView } from '../history/handView';
 
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 
 const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 
@@ -26,11 +26,21 @@ const POS_CLASS: Record<string, string> = {
   BB: 'p-bb',
 };
 
+/** 末尾の 0 と、それで末尾に残った小数点を落とす（`/\.?0+$/` の置換と同じ結果を、
+ * 正規表現のバックトラックなしの線形時間で出す）。 */
+function trimTrailingZeros(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '0') end--;
+  if (end === s.length) return s;
+  if (s[end - 1] === '.') end--;
+  return s.slice(0, end);
+}
+
 /** bb 表示（末尾の 0 を落とす）。`handView.ts` はすでに bb 単位・小数第 2 位丸め済みなので、
  * ここではチップ換算はせず桁の整形だけする。 */
 export function fmtBb(n: number, digits = 2): string {
   const s = n.toFixed(digits);
-  return s.includes('.') ? s.replace(/\.?0+$/, '') : s;
+  return s.includes('.') ? trimTrailingZeros(s) : s;
 }
 
 /** 符号付き bb 表示（+3.5 / −1.2 / ±0）。 */
@@ -39,19 +49,26 @@ export function fmtSignedBb(n: number, digits = 2): string {
   return `${n > 0 ? '+' : '−'}${fmtBb(Math.abs(n), digits)}`;
 }
 
+/** 収支の符号に応じた修飾クラス（負＝` loss`・正＝` gain`・0＝なし。先頭の空白込み）。 */
+export function signClass(n: number): string {
+  if (n < 0) return ' loss';
+  if (n > 0) return ' gain';
+  return '';
+}
+
 /** ポジションバッジ（HU/SNG 共通）。未知のポジション（'?'）はグレー表示にする。 */
-export function PosBadge(props: { pos: string }): JSX.Element {
+export function PosBadge(props: Readonly<{ pos: string }>): JSX.Element {
   return <span className={`sh-pos ${POS_CLASS[props.pos] ?? 'p-unk'}`}>{props.pos}</span>;
 }
 
 /** 手札 / ボードの表示（`.hh-cards` / `.hh-card.suit-*` をそのまま使う）。
  * `highlight` は「今ここで新しくめくれた」札に付ける目印（ストリートブロックの新カード）。 */
-export function Cards(props: { cards: readonly string[]; dim?: boolean; highlight?: boolean }): JSX.Element {
+export function Cards(props: Readonly<{ cards: readonly string[]; dim?: boolean; highlight?: boolean }>): JSX.Element {
   return (
     <span className={`hh-cards${props.dim ? ' dim' : ''}`}>
       {props.cards.map((c, i) => {
         const suit = c[1]?.toLowerCase() ?? '';
-        const rank = c[0] === 'T' ? '10' : c[0];
+        const rank = c.startsWith('T') ? '10' : c[0];
         return (
           <span key={`${c}-${i}`} className={`hh-card suit-${suit}${props.highlight ? ' new' : ''}`}>
             {rank}
@@ -73,7 +90,7 @@ function HiddenCards(): JSX.Element {
   );
 }
 
-function PlayerRow(props: { p: HandPlayerView }): JSX.Element {
+function PlayerRow(props: Readonly<{ p: HandPlayerView }>): JSX.Element {
   const { p } = props;
   return (
     <li className={`hhd-prow${p.isHero ? ' me' : ''}`}>
@@ -83,7 +100,7 @@ function PlayerRow(props: { p: HandPlayerView }): JSX.Element {
       {p.netBb === null ? (
         <span className="hhd-pnet unk">?</span>
       ) : (
-        <span className={`hhd-pnet${p.netBb < 0 ? ' loss' : p.netBb > 0 ? ' gain' : ''}`}>
+        <span className={`hhd-pnet${signClass(p.netBb)}`}>
           {fmtSignedBb(p.netBb, 1)}
           <span className="hh-unit">bb</span>
         </span>
@@ -92,7 +109,7 @@ function PlayerRow(props: { p: HandPlayerView }): JSX.Element {
   );
 }
 
-function StepRow(props: { st: HandStepView }): JSX.Element {
+function StepRow(props: Readonly<{ st: HandStepView }>): JSX.Element {
   const { st } = props;
   return (
     <li className={st.isHero ? 'me' : ''}>
@@ -108,7 +125,7 @@ function StepRow(props: { st: HandStepView }): JSX.Element {
   );
 }
 
-function StreetBlock(props: { st: HandStreetView; board: readonly string[] }): JSX.Element {
+function StreetBlock(props: Readonly<{ st: HandStreetView; board: readonly string[] }>): JSX.Element {
   const { st, board } = props;
   // board は累積（前ストリートまでの分 + 今回めくれた分）。今回の分だけ強調し、
   // 前から続いているカードは沈める（tenfour の「新しい 1 枚だけ出す」見せ方と、
@@ -135,7 +152,7 @@ function StreetBlock(props: { st: HandStreetView; board: readonly string[] }): J
   );
 }
 
-export function HandDetailModal(props: { view: HandDetailView; onClose: () => void; actions?: React.ReactNode }): JSX.Element {
+export function HandDetailModal(props: Readonly<{ view: HandDetailView; onClose: () => void; actions?: React.ReactNode }>): JSX.Element {
   const { view, onClose, actions } = props;
   // 端末の戻る／Esc で閉じる（InfoModal と同じ作法）。
   useBackLayer(onClose);
@@ -143,7 +160,7 @@ export function HandDetailModal(props: { view: HandDetailView; onClose: () => vo
   // ストリートの board は「そのストリートで新たにめくれた分」だけなので、表示は積み上げる
   // （FLOP=3枚 → TURN=4枚 → RIVER=5枚。tenfour のハンド画像と同じ見え方にする）。
   const cumBoards: readonly string[][] = view.streets.reduce<string[][]>((acc, st) => {
-    const prev = acc[acc.length - 1] ?? [];
+    const prev = acc.at(-1) ?? [];
     acc.push([...prev, ...st.board]);
     return acc;
   }, []);
@@ -156,13 +173,10 @@ export function HandDetailModal(props: { view: HandDetailView; onClose: () => vo
   return (
     <div
       className="modal-backdrop"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
+      onClick={backdropClick(onClose, true)}
       role="presentation"
     >
-      <div className="modal hh-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={view.title}>
+      <div className="modal hh-modal" role="dialog" aria-modal="true" aria-label={view.title}>
         <div className="modal-head">
           <span className="modal-title">{view.title}</span>
           <button type="button" className="modal-x" aria-label="閉じる" onClick={onClose}>
@@ -199,8 +213,7 @@ export function HandDetailModal(props: { view: HandDetailView; onClose: () => vo
             )}
             {heroNet !== null && (
               <p className="hhd-result-line">
-                <span className="hhd-result-tag">収支</span> YOU
-                <b className={`hhd-mynet${heroNet < 0 ? ' loss' : heroNet > 0 ? ' gain' : ''}`}> {fmtSignedBb(heroNet, 1)}bb</b>
+                <span className="hhd-result-tag">収支</span> YOU<b className={`hhd-mynet${signClass(heroNet)}`}> {fmtSignedBb(heroNet, 1)}bb</b>
               </p>
             )}
             <p className="hhd-result-line sub">

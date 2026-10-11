@@ -1,8 +1,5 @@
-import { formatBbDisplay } from '@oshihiki/core';
+import { formatBbDisplay, gameModeLabel, type BoardState, type GameMode } from '@oshihiki/core';
 import { useState } from 'react';
-import type { BoardState } from '@oshihiki/core';
-import { gameModeLabel } from '@oshihiki/core';
-import type { GameMode } from '@oshihiki/core';
 import type { SolveResultDto } from '../solverProtocol';
 import { ActionTree } from './ActionTree';
 import { evLossOf, headlineNode, verdictOf, type HeroAction } from '../records/model';
@@ -26,6 +23,12 @@ function evClass(ev: number): 'pos' | 'neg' {
   return ev >= 0 ? 'pos' : 'neg';
 }
 
+/** 記録した自分の選択の表示（選んでいなければ「未選択」）。 */
+function savedActionLabel(a: HeroAction | null | undefined): string {
+  if (!a) return '未選択';
+  return a === 'PUSH' ? 'ALL IN' : 'FOLD';
+}
+
 /**
  * 結果画面（SPEC §5.3, v3 で挙動変更）。
  *
@@ -36,7 +39,7 @@ function evClass(ev: number): 'pos' | 'neg' {
  * の2つだけ。`record` を渡したとき（記録タブ経由の自分の記録）だけこの2つを編集可能にし、
  * `readOnly`（スレッド由来＝他人の公開結果や参照専用表示）のときは記録済みの値を静的に表示する。
  */
-export function Result(props: {
+export function Result(props: Readonly<{
   state: BoardState;
   result: SolveResultDto;
   onBack: () => void;
@@ -69,7 +72,7 @@ export function Result(props: {
    * 呼び出し側（App.tsx）が `publishRecord`/`unpublishRecord` を配線する。
    */
   onTogglePublish?: (on: boolean, comment: string) => Promise<Ack>;
-}): JSX.Element {
+}>): JSX.Element {
   const { result, state } = props;
   const headline = headlineNode(result);
   const heroSeat = state.seats.find((s) => s.pos === result.heroPos);
@@ -80,7 +83,10 @@ export function Result(props: {
   const [action, setAction] = useState<HeroAction | null>(props.record?.heroAction ?? null);
   const [actionPhase, setActionPhase] = useState<'idle' | 'saving' | 'error'>('idle');
   const [actionErr, setActionErr] = useState('');
-  const evLoss = action != null ? (headline ? evLossOf(headline.heroEv, action) : (props.savedEvLoss ?? null)) : null;
+  let evLoss: number | null = null;
+  if (action != null) evLoss = headline ? evLossOf(headline.heroEv, action) : (props.savedEvLoss ?? null);
+  // EV loss の注記に出す「最適」の行動。
+  const bestActionLabel = headline && verdictOf(headline) === 'PUSH' ? 'ALL IN' : 'FOLD';
 
   async function selectAction(a: HeroAction | null): Promise<void> {
     if (!props.onSelectAction || actionPhase === 'saving' || a === action) return;
@@ -207,7 +213,7 @@ export function Result(props: {
           {evLoss !== null && (
             <p className={`evloss-note ${evLoss > 0 ? 'loss' : 'ok'}`}>
               {evLoss > 0
-                ? `EV loss −${evLoss.toFixed(3)} pt（最適は ${headline && verdictOf(headline) === 'PUSH' ? 'ALL IN' : 'FOLD'}）`
+                ? `EV loss −${evLoss.toFixed(3)} pt（最適は ${bestActionLabel}）`
                 : 'EV loss 0（最適な選択）'}
             </p>
           )}
@@ -215,8 +221,7 @@ export function Result(props: {
 
           <div className="tog">
             <div>
-              ホームで公開する
-              <small>クラブのみんなが見られ、スレッドで話せます</small>
+              ホームで公開する<small>クラブのみんなが見られ、スレッドで話せます</small>
             </div>
             <button
               type="button"
@@ -260,7 +265,7 @@ export function Result(props: {
           <div className="scr-h sm">記録した選択</div>
           <div className="row">
             <span>自分の選択</span>
-            <b>{props.savedAction ? (props.savedAction === 'PUSH' ? 'ALL IN' : 'FOLD') : '未選択'}</b>
+            <b>{savedActionLabel(props.savedAction)}</b>
           </div>
           {props.savedAction && (
             <div className="row">

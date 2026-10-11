@@ -50,7 +50,7 @@ function safeStorage(): Storage | null {
   }
 }
 
-export function SlumbotView(props: { onExit: () => void }): JSX.Element {
+export function SlumbotView(props: Readonly<{ onExit: () => void }>): JSX.Element {
   const storeRef = useRef<Storage | null>(null);
   if (storeRef.current === null) storeRef.current = safeStorage();
   const store = storeRef.current;
@@ -172,16 +172,16 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
 
       const rec = buildRecord(v, Date.now(), newHandId());
       if (!rec) return;
-      void putHand(rec)
-        .then(() => {
-          if (rec.evWinnings !== null) return syncHands(store);
-          return new Promise<void>((resolve) => setTimeout(resolve, 0))
-            .then(() => putHand(withEv(rec)))
-            .then(() => syncHands(store));
-        })
-        .catch(() => {
-          /* 履歴に残せなくても対局は続ける（通算成績は別経路で加算済み）。 */
-        });
+      void (async () => {
+        await putHand(rec);
+        if (rec.evWinnings === null) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          await putHand(withEv(rec));
+        }
+        await syncHands(store);
+      })().catch(() => {
+        /* 履歴に残せなくても対局は続ける（通算成績は別経路で加算済み）。 */
+      });
     },
     [store],
   );
@@ -230,7 +230,7 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
       // 相手が動いた直後だけ、読む時間を取ってからボタンを有効化する（誤タップ防止も兼ねる）。
       const wait = prefsRef.current.revealMs;
       if (armTimer.current) clearTimeout(armTimer.current);
-      if (wait > 0 && la && la.seat === v.botSeat) {
+      if (wait > 0 && la?.seat === v.botSeat) {
         setArmed(false);
         armTimer.current = setTimeout(() => {
           if (mounted.current) setArmed(true);
@@ -551,8 +551,7 @@ export function SlumbotView(props: { onExit: () => void }): JSX.Element {
                 disabled={!canAct}
                 onClick={() => void send('c')}
               >
-                CALL
-                <span className="sb-act-sub">{bbLabel(legal.callAmount, 1)}bb</span>
+                CALL<span className="sb-act-sub">{bbLabel(legal.callAmount, 1)}bb</span>
               </button>
             )}
             {legal?.canBet && (

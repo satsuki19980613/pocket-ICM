@@ -21,7 +21,7 @@ import type { Template } from './match.js';
 import type { FracRect } from './layout.js';
 import { toPx } from './layout.js';
 import type { FrameProfile } from './frameProfile.js';
-import { recognizeAmount } from './numberField.js';
+import { recognizeAmount, grayFromRgba } from './numberField.js';
 import { readAmountBb, readAmountBbAnchored, detectDisplayMode } from './bbAmount.js';
 import { readBlinds } from './blinds.js';
 import { readStreetFromBoard } from './street.js';
@@ -30,9 +30,8 @@ import { isActiveHand } from './cardState.js';
 import { detectSeatPresence, detectYellowName } from './seatPresence.js';
 import { recognizeAction } from './actionTag.js';
 import { findCardRects, largestCardRects } from './detect.js';
-import { grayFromRgba } from './numberField.js';
 import { recognizeHeroHandColor } from './cards.js';
-import { mapProfile, detectContentRect, isFullFrame, type ContentRect } from './contentRect.js';
+import { mapProfile, detectContentRect, type ContentRect } from './contentRect.js';
 import { normalizeToCanonical } from './resize.js';
 
 export interface ExtractTemplates {
@@ -118,16 +117,17 @@ export function extractRawReads(
   //  - bb: readAmountBb（"20.2 BB"→20.2, 既に BB）→ 正規化しない。
   // scoreFloor: stack/bet の BB 読みで、飾り/端スリバー/アイコン片が低 NCC で数字化するのを弾く
   // （bbAmount 参照）。pot はセンター表示で縁ノイズが乗りにくく、既存の下流挙動維持のため渡さない。
-  const readTable = (rect: Rect, minCh?: number, scoreFloor?: number): Read<number> =>
-    mode === 'bb'
-      ? readAmountBb(
-          img,
-          rect,
-          templates.digits,
-          { ...(minCh !== undefined ? { minCh } : {}), ...(scoreFloor !== undefined ? { scoreFloor } : {}) },
-          templates.letters,
-        )
-      : norm(recognizeAmount(img, rect, templates.digits, minCh !== undefined ? { minCh } : {}), bbChips);
+  const readTable = (rect: Rect, minCh?: number, scoreFloor?: number): Read<number> => {
+    const minChOpt = minCh !== undefined ? { minCh } : {};
+    if (mode !== 'bb') return norm(recognizeAmount(img, rect, templates.digits, minChOpt), bbChips);
+    return readAmountBb(
+      img,
+      rect,
+      templates.digits,
+      { ...minChOpt, ...(scoreFloor !== undefined ? { scoreFloor } : {}) },
+      templates.letters,
+    );
+  };
   const BB_SCORE_FLOOR = 0.45;
 
   // ante は常に chips ヘッダ → recognizeAmount＋正規化。
@@ -188,8 +188,10 @@ export function extractRawReads(
     // 占有だが数字が読めない（presence のみ）席は低信頼にして確認画面で state を強調させる
     // （confidence.aggregateConfidence が occupancy.conf<threshold で `${pos}.state` を、
     //  stack.conf(=0)<threshold で `${pos}.stack` を lowConfidenceFields に載せる）。
+    let occupiedConf = 0.4;
+    if (stackParsed) occupiedConf = stack.conf > 0 ? 0.9 : 0.5;
     const occupancy: Read<Occupancy> = occupied
-      ? { value: 'occupied', conf: stackParsed ? (stack.conf > 0 ? 0.9 : 0.5) : 0.4 }
+      ? { value: 'occupied', conf: occupiedConf }
       : { value: 'empty', conf: 0.8 };
 
     // BB 表示は先頭 "0." が左端で切れる席（BC/BL/TC/TR）向けに betBb（左に余白）を使う。

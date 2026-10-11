@@ -6,6 +6,7 @@
 
 import type { BoardState, Position } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 
@@ -14,7 +15,7 @@ const STACKS: Record<string, number> = { UTG: 9.7, HJ: 15.7, CO: 17.8, BU: 15.9,
 function buildSpot(): BoardState {
   const sb = 0.5, bb = 1, ante = 0.25;
   const seats = (Object.keys(STACKS) as Position[]).map((pos) => {
-    const betBlind = pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+    const betBlind = blindBet(pos, sb, bb);
     return { pos, stack: STACKS[pos]! - betBlind - ante, state: 'live' as const, bet: betBlind };
   });
   return {
@@ -53,4 +54,4 @@ async function main(): Promise<void> {
     log(`  ${pos.padEnd(4)} ${e.pre.toFixed(3)} → ${e.post.toFixed(3)}`);
   }
 }
-void main();
+await main();

@@ -379,7 +379,7 @@ export function estimateHeroStratified(
   const bufs: number[][] = Array.from({ length: k }, () => [0, 0, 0, 0, 0, 0, 0]);
   const scores = new Array<number>(k);
   const scParts = new Array<number>(k);
-  const eq = new Float64Array(N_CLASSES).fill(NaN);
+  const eq = new Float64Array(N_CLASSES).fill(Number.NaN);
   const counts = new Int32Array(N_CLASSES);
 
   for (let ci = 0; ci < classes.length; ci++) {

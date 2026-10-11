@@ -107,7 +107,8 @@ async function purgeOrphans(svc: Svc, spotObjects: readonly StoredObject[]): Pro
     if (p) refs.avatars.add(p);
   }
   for (const r of images.rows) {
-    (refs[r.bucket] ??= new Set()).add(r.path);
+    refs[r.bucket] ??= new Set();
+    refs[r.bucket].add(r.path);
   }
 
   let removed = 0;

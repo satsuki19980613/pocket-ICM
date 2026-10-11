@@ -15,9 +15,9 @@ describe('wintie3Index: 基本定数', () => {
     expect(N_TRIPLES3).toBe(818_805);
   });
   it('PATTERNS は 13 種類、各要素は長さ3で値 0..2', () => {
-    expect(PATTERNS.length).toBe(13);
+    expect(PATTERNS).toHaveLength(13);
     for (const p of PATTERNS) {
-      expect(p.length).toBe(3);
+      expect(p).toHaveLength(3);
       for (const v of p) {
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(2);
@@ -141,7 +141,7 @@ describe('permuteProbs13: パターン確率のプレイヤー順への並べ替
 
   it('確率の総和は並べ替えても保存される', () => {
     const probs = [0.5, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.03, 0.03, 0.03, 0.03, 0.02, 0.06];
-    expect(probs.length).toBe(13);
+    expect(probs).toHaveLength(13);
     const sum = probs.reduce((a, b) => a + b, 0);
     for (const perm of allPerms3()) {
       const out = permuteProbs13(probs, perm);

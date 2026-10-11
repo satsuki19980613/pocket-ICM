@@ -61,10 +61,14 @@ for (const slot of slots) {
     : zone0;
   const plate = locateMarkPlate(nimg, zone);
   const nb = seat?.nameBox;
+  const nbStr = nb ? `${nb.cx.toFixed(0)},${nb.cy.toFixed(0)}` : 'none';
+  const plateStr = plate
+    ? `${plate.rect.x},${plate.rect.y} ${plate.rect.w}x${plate.rect.h} sat=${plate.meanSat.toFixed(1)}`
+    : 'NOT LOCATED';
   console.log(
-    `  ${slot}: occupied=${seat?.occupied} nameBox=${nb ? `${nb.cx.toFixed(0)},${nb.cy.toFixed(0)}` : 'none'}` +
+    `  ${slot}: occupied=${seat?.occupied} nameBox=${nbStr}` +
       ` zone=${zone.x},${zone.y} ${zone.w}x${zone.h}` +
-      ` plate=${plate ? `${plate.rect.x},${plate.rect.y} ${plate.rect.w}x${plate.rect.h} sat=${plate.meanSat.toFixed(1)}` : 'NOT LOCATED'}`,
+      ` plate=${plateStr}`,
   );
   // 枠線候補行の一覧（帯幅比のラン長）。
   const mask = whiteMask(nimg, zone, { minCh: 100, maxSat: 90 });

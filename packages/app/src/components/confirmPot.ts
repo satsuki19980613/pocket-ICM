@@ -26,6 +26,7 @@
 
 import { formatBbDisplay, potChecksumDelta, roundBbDisplay, type BoardState } from '@oshihiki/core';
 import type { OcrReadout } from '@oshihiki/ocr';
+import { blindFor } from '../formModel';
 
 export interface PotRowView {
   /** ポット欄に出す文言。 */
@@ -67,7 +68,7 @@ export function potRowView(state: BoardState, readout?: PotReadout): PotRowView 
     if (!(Number.isFinite(bet) && bet > 0)) {
       return { text: `画面 ${formatBbDisplay(readPot)}bb（オールイン額が読めず照合できません）`, ok: false };
     }
-    const blind = s.pos === 'SB' ? state.blinds.sb : s.pos === 'BB' ? state.blinds.bb : 0;
+    const blind = blindFor(s.pos, state.blinds.sb, state.blinds.bb);
     raised += bet - blind;
     voluntarySeats++;
   }

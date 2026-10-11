@@ -30,7 +30,7 @@ function rangeOf(...classes: number[]): Float64Array {
 }
 
 function expectArraysClose(a: ArrayLike<number>, b: ArrayLike<number>, digits = 9): void {
-  expect(a.length).toBe(b.length);
+  expect(a).toHaveLength(b.length);
   for (let i = 0; i < a.length; i++) expect(a[i]).toBeCloseTo(b[i]!, digits);
 }
 

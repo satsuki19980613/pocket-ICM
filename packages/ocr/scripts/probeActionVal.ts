@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
 import { CHIPS_6MAX, type ScreenSeat } from '../src/frameProfile.js';
 import { toPx } from '../src/layout.js';
-import { recognizeAction, ACTION_WORDS } from '../src/actionTag.js';
+import { recognizeAction } from '../src/actionTag.js';
 import type { Template } from '../src/match.js';
 import type { Rgba } from '../src/color.js';
 import type { SeatAction } from '../src/types.js';

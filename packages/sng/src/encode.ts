@@ -62,28 +62,27 @@ export function encodeHand(rec: SngHandRecord): string {
   const reached = reachedStreetsFromBoardLen(rec.board.length);
   if (reached === null) throw new Error(`encodeHand: bad board length ${rec.board.length}`);
 
-  const parts: string[] = ['1'];
-  parts.push(`L${rec.level}`);
-  parts.push(`B${rec.btn},${rec.sbSeat === null ? '-' : rec.sbSeat},${rec.bbSeat}`);
-  parts.push(`S${rec.startStacks.join(',')}`);
-
   const shownEntries = Object.entries(rec.shown).map(([seat, cards]) => `${seat}=${cards[0]}${cards[1]}`);
-  parts.push(`C${shownEntries.join(';')}`);
-
-  parts.push(`D${rec.board.join('')}`);
 
   const streets: string[] = [];
   for (let s = 0; s < reached; s++) {
     const tokens = rec.actions.filter((a) => a.street === s).map(encodeAction);
     streets.push(tokens.join('.'));
   }
-  parts.push(`A${streets.join('/')}`);
-
-  parts.push(`W${rec.won.join(',')}`);
 
   const elimEntries = rec.eliminated.map((e) => `${e.seat}:${e.place}`);
-  parts.push(`E${elimEntries.join(';')}`);
 
+  const parts: string[] = [
+    '1',
+    `L${rec.level}`,
+    `B${rec.btn},${rec.sbSeat ?? '-'},${rec.bbSeat}`,
+    `S${rec.startStacks.join(',')}`,
+    `C${shownEntries.join(';')}`,
+    `D${rec.board.join('')}`,
+    `A${streets.join('/')}`,
+    `W${rec.won.join(',')}`,
+    `E${elimEntries.join(';')}`,
+  ];
   return parts.join('|');
 }
 
@@ -96,7 +95,7 @@ function parseUint(s: string): number | null {
 }
 
 function stripPrefix(part: string | undefined, letter: string): string | null {
-  if (part === undefined || part.length === 0 || part[0] !== letter) return null;
+  if (part === undefined || !part.startsWith(letter)) return null;
   return part.slice(1);
 }
 
@@ -129,7 +128,7 @@ export function decodeHand(encoded: string, meta: HandMeta): SngHandRecord | nul
     const sContent = stripPrefix(sPart, 'S');
     if (sContent === null) return null;
     const startStacks = sContent.split(',').map(parseUint);
-    if (startStacks.length === 0 || startStacks.some((v) => v === null)) return null;
+    if (startStacks.length === 0 || startStacks.includes(null)) return null;
 
     // --- C ---
     const cContent = stripPrefix(cPart, 'C');
@@ -196,7 +195,7 @@ export function decodeHand(encoded: string, meta: HandMeta): SngHandRecord | nul
     const wContent = stripPrefix(wPart, 'W');
     if (wContent === null) return null;
     const won = wContent.split(',').map(parseUint);
-    if (won.length === 0 || won.some((v) => v === null)) return null;
+    if (won.length === 0 || won.includes(null)) return null;
 
     // --- E ---
     const eContent = stripPrefix(ePart, 'E');

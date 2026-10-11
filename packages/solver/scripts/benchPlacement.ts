@@ -127,7 +127,6 @@ function nodeLevelRangeMC(): void {
       rangeCombos.push(combos);
     }
     const bufs = Array.from({ length: k }, () => new Array<number>(7).fill(0));
-    const scores = new Array<number>(k);
     const used = new Uint8Array(52);
     const board = new Array<number>(5);
     let done = 0;
@@ -165,7 +164,7 @@ function nodeLevelRangeMC(): void {
       }
       for (let p = 0; p < k; p++) {
         for (let i = 0; i < 5; i++) bufs[p]![2 + i] = board[i]!;
-        scores[p] = eval7(bufs[p]!);
+        eval7(bufs[p]!); // 計測対象（評価コストのみを測る。結果は使わない）
       }
       done++;
     }

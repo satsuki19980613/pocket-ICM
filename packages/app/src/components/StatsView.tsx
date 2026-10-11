@@ -32,7 +32,7 @@ function writeTab(tab: Tab): void {
   }
 }
 
-export function StatsView(props: { onOpenHuHistory: () => void; onOpenSngHistory: () => void }): JSX.Element {
+export function StatsView(props: Readonly<{ onOpenHuHistory: () => void; onOpenSngHistory: () => void }>): JSX.Element {
   const [tab, setTab] = useState<Tab>(readTab);
 
   function pick(next: Tab): void {

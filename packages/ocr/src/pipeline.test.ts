@@ -125,7 +125,7 @@ describe('pipeline — 正常系（root spot 復元）', () => {
     );
     expect(r.ok).toBe(true);
     expect(r.state!.playersLeft).toBe(4);
-    expect(r.state!.seats.length).toBe(4);
+    expect(r.state!.seats).toHaveLength(4);
   });
 
   it('ante all を含む root（solver 入力に ante を素通し）', () => {

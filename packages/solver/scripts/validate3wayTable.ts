@@ -6,12 +6,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { BoardState, Position } from '@oshihiki/core';
+import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import {
   buildPf3wayTable, lookupPf3way, pf3wayInRange, type Pf3wayMeta,
   solveMultiway, evaluateMultiwayStrategy, maxWorkerCap, type MultiwayNSolveOptions,
 } from '../src/index.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +22,7 @@ const ORDER = positionsForPlayersLeft(3);
 
 function buildState(st: [number, number, number]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    const bet = blindBet(pos, SB, BB);
     return { pos, stack: st[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {
@@ -42,7 +43,7 @@ async function main(): Promise<void> {
   log(`  test点(BU/SB/BB) | 範囲内 | レンジ%差 平均/最大 || expl: 直接 / テーブル (pt) | 超過損`);
 
   // オフグリッドのランダム点（軸中間を狙う）+ 代表点
-  const rng = (() => { let s = 12345; return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; })();
+  const rng = (() => { let s = 12345; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
   const tests: [number, number, number][] = [
     [9, 9, 9], [7, 15, 11], [13, 5, 20], [17, 23, 8], [3, 12, 24],
   ];
@@ -73,4 +74,4 @@ async function main(): Promise<void> {
   log(`\n総合: 直接解 expl 平均${avg(exD).toFixed(3)}pt / テーブル expl 平均${avg(exT).toFixed(3)}pt`);
   log(`      → テーブルの最適比 超過損 = ${(avg(exT) - avg(exD)).toFixed(3)}pt（プール10ptの${(((avg(exT) - avg(exD)) / 10) * 100).toFixed(2)}%）`);
 }
-void main();
+await main();

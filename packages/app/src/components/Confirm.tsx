@@ -7,13 +7,22 @@ import { potRowView } from './confirmPot';
 import { InfoMark, InfoModal } from './InfoModal';
 import { GameModeSelect, type GameSel } from './GameModeSelect';
 
+/** 各行の「修正」ボタン（手入力モーダルを開く）。 */
+function EditButton(props: Readonly<{ onClick: () => void }>): JSX.Element {
+  return (
+    <button type="button" className="edit" onClick={props.onClick}>
+      修正
+    </button>
+  );
+}
+
 /**
  * 条件確認（3-1c・M3）。読み取った内容を項目別に読み上げ、各行の「修正」で手入力
  * モーダルを開く。OCR 低信頼フィールドは CHECK バッジで強調。ポット検算も表示。
  * 写真経由（imageUrl あり）のときは「元画像を確認」で原寸照合できる（readout があれば
  * SPEC §5.2.3 の元画像×OCR出力の照合表も一緒に出す）。
  */
-export function Confirm(props: {
+export function Confirm(props: Readonly<{
   state: BoardState;
   /** OCR 由来の低信頼フィールド（"UTG.stack" / "UTG.bet"）。強調表示する。 */
   lowConfidenceFields?: string[];
@@ -48,13 +57,12 @@ export function Confirm(props: {
   /** スタックを読めないまま残った席。2 席以上は保存則でも埋められず仮値 0bb が入っている。 */
   unresolvedStacks?: string[];
   onSolve: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const { state } = props;
   const [showImage, setShowImage] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const low = new Set(props.lowConfidenceFields ?? []);
   const hasLow = low.size > 0;
-  const anteText = state.ante.scheme === 'none' ? 'なし' : `${state.ante.scheme} ${state.ante.amount}bb`;
   // ポット欄: ゲームと同じ丸め（小数第 2 位を四捨五入）で出し、スクショから読んだポットが
   // あればそれと照合する（オールイン等の上乗せ分も読み取り結果から足す・confirmPot.ts）。
   const pot = potRowView(state, props.readout);
@@ -62,12 +70,6 @@ export function Confirm(props: {
   const stacksLow = state.seats.some((s) => low.has(`${s.pos}.stack`));
   // 写真取り込みのときは「検出人数」を大きく確認させ、その場で人数を直せるようにする（安全網）。
   const showPlayersCheck = !!props.onFixPlayers && !!props.imageUrl;
-
-  const Edit = (): JSX.Element => (
-    <button type="button" className="edit" onClick={props.onEdit}>
-      修正
-    </button>
-  );
 
   return (
     <div className="panel confirm">
@@ -143,29 +145,29 @@ export function Confirm(props: {
             {state.blinds.sb} / {state.blinds.bb}
             {state.ante.scheme !== 'none' && <>　ante {state.ante.amount}</>}
           </span>
-          <Edit />
+          <EditButton onClick={props.onEdit} />
         </div>
         <div className="row">
           <span className="lb">Hand</span>
           <span className="vl">{state.heroHand}</span>
-          <Edit />
+          <EditButton onClick={props.onEdit} />
         </div>
         <div className="row">
           <span className="lb">Hero</span>
           <span className="vl">{state.heroPos}</span>
-          <Edit />
+          <EditButton onClick={props.onEdit} />
         </div>
         {!showPlayersCheck && (
           <div className={`row${stacksLow ? ' low' : ''}`}>
             <span className="lb">Players</span>
             <span className="vl">{state.playersLeft}</span>
-            <Edit />
+            <EditButton onClick={props.onEdit} />
           </div>
         )}
         <div className="row">
           <span className="lb">Pot</span>
           <span className={`vl ${pot.ok ? 'ok' : 'warn'}`}>{pot.text}</span>
-          <Edit />
+          <EditButton onClick={props.onEdit} />
         </div>
       </div>
 
@@ -173,16 +175,18 @@ export function Confirm(props: {
         Stacks
       </h2>
       <div className="seats-ro">
-        {state.seats.map((s) => (
-          <div key={s.pos} className={`seatrow-ro${s.pos === state.heroPos ? ' hero' : ''}`}>
-            <span className={`posbadge sm pos-${s.pos}`}>{s.pos}</span>
-            <span className={`stk${low.has(`${s.pos}.stack`) ? ' lowconf' : ''}`}>{formatBbDisplay(s.stack)}bb</span>
-            {s.bet > 0 && (
-              <span className={`betchip${low.has(`${s.pos}.bet`) ? ' lowconf' : ''}`}>bet {formatBbDisplay(s.bet)}</span>
-            )}
-            {s.pos === state.heroPos && <span className="herotag">hero</span>}
-          </div>
-        ))}
+        {state.seats.map((s) => {
+          const stackLow = low.has(`${s.pos}.stack`);
+          const betLow = low.has(`${s.pos}.bet`);
+          return (
+            <div key={s.pos} className={`seatrow-ro${s.pos === state.heroPos ? ' hero' : ''}`}>
+              <span className={`posbadge sm pos-${s.pos}`}>{s.pos}</span>
+              <span className={`stk${stackLow ? ' lowconf' : ''}`}>{formatBbDisplay(s.stack)}bb</span>
+              {s.bet > 0 && <span className={`betchip${betLow ? ' lowconf' : ''}`}>bet {formatBbDisplay(s.bet)}</span>}
+              {s.pos === state.heroPos && <span className="herotag">hero</span>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="btnrow">

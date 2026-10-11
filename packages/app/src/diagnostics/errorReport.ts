@@ -40,7 +40,10 @@ function stringify(v: unknown): string {
 /** 何が投げられても（Error・文字列・Supabase のエラーオブジェクト・その他）文面と詳細に直す。 */
 export function describeError(err: unknown): DescribedError {
   if (err instanceof Error) {
-    const head = err.message ? (err.name && err.name !== 'Error' ? `${err.name}: ${err.message}` : err.message) : err.name || 'Error';
+    let head: string;
+    if (!err.message) head = err.name || 'Error';
+    else if (err.name && err.name !== 'Error') head = `${err.name}: ${err.message}`;
+    else head = err.message;
     return { message: clip(head, MESSAGE_MAX), detail: err.stack ? clip(err.stack, DETAIL_MAX) : null };
   }
   if (typeof err === 'string') {

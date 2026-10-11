@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { MAX_POST_BODY } from '../supabase/feed';
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 import { CameraIcon } from './feedShared';
 
 type Ack = { ok: boolean; message?: string };
@@ -13,10 +13,10 @@ type Ack = { ok: boolean; message?: string };
  * 本文・画像とも空なら送信不可。送信は親（App）の `createPost` を叩き、成功したら自分を閉じる
  * （失敗時はエラーを表示したまま開いておく＝入力を失わない）。
  */
-export function PostComposer(props: {
+export function PostComposer(props: Readonly<{
   onSubmit: (input: { body: string; imageFile: File | null }) => Promise<Ack>;
   onClose: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const [body, setBody] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -51,8 +51,8 @@ export function PostComposer(props: {
   useBackLayer(props.onClose);
 
   return (
-    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="投稿する">
+    <div className="modal-backdrop" onClick={backdropClick(props.onClose)} role="presentation">
+      <div className="modal" role="dialog" aria-modal="true" aria-label="投稿する">
         <div className="modal-head">
           <span className="modal-title">投稿する</span>
           <button type="button" className="modal-x" aria-label="閉じる" onClick={props.onClose}>

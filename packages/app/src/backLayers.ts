@@ -52,7 +52,7 @@ export function createBackLayerStore(): BackLayerStore {
     },
 
     closeTop(): boolean {
-      const top = layers[layers.length - 1];
+      const top = layers.at(-1);
       if (!top) return false;
       // 登録解除は閉じたコンポーネント側の effect cleanup に任せる（二重解除を避ける）。
       top.onClose();

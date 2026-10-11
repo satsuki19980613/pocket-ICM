@@ -8,6 +8,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { bestMatch, matchConfidence, type Template } from '../src/match.js';
 import type { Gray } from '../src/types.js';
 
@@ -30,7 +31,7 @@ if (!tplPath || !input || specs.length === 0) {
   console.error('usage: recognize.ts <templates.json> <input.png> <true:x,y,w,h> ...');
   process.exit(1);
 }
-const tplRaw = JSON.parse(readFileSync(tplPath, 'utf8')) as {
+const tplRaw = JSON.parse(readFileSync(safePath(tplPath, 'templates.json'), 'utf8')) as {
   templates: Record<string, { w: number; h: number; data: number[] }>;
 };
 const templates: Template[] = Object.entries(tplRaw.templates).map(([label, g]) => ({
@@ -38,7 +39,7 @@ const templates: Template[] = Object.entries(tplRaw.templates).map(([label, g]) 
   img: { w: g.w, h: g.h, data: Uint8Array.from(g.data) },
 }));
 
-const img = decodePng(readFileSync(input));
+const img = decodePng(readFileSync(safePath(input, 'input')));
 let correct = 0;
 let total = 0;
 for (const spec of specs) {

@@ -52,7 +52,7 @@ const LOCKED_SPECIAL = [
  * 特別枠は管理者付与（`special_frame`）が無いとロック表示のみで選べない。バッジのオン/オフ
  * トグルは無い（付与されたら常に出す。さつき指示）。選択は即時反映（楽観更新→失敗なら戻す）。
  */
-function FramePicker(props: { profile: MyProfile; onChanged: (patch: { frame_color: FrameColor }) => void }): JSX.Element {
+function FramePicker(props: Readonly<{ profile: MyProfile; onChanged: (patch: { frame_color: FrameColor }) => void }>): JSX.Element {
   const [busy, setBusy] = useState<FrameColor | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // MyProfile.frame_color は DB 由来の string（防御的に広く持つ）。ここでは表示・送信用に
@@ -125,6 +125,12 @@ function FramePicker(props: { profile: MyProfile; onChanged: (patch: { frame_col
 }
 
 /** 「アップデートを確認」ボタンの文言。 */
+/** アイコン変更ボタンの文言（変更中 → 既にあれば「変える」、無ければ「設定する」）。 */
+function avatarButtonLabel(busy: boolean, hasAvatar: boolean): string {
+  if (busy) return '変更中…';
+  return hasAvatar ? 'アイコンを変える' : 'アイコンを設定する';
+}
+
 function updateButtonLabel(phase: UpdatePhase): string {
   switch (phase) {
     case 'checking':
@@ -154,12 +160,12 @@ function updateNote(phase: UpdatePhase, blocked: boolean): string | null {
  * ※ handle 変更（synthetic email 付け替え・Edge Function 要）は対象外＝読み取り専用。
  *   ログイン成功/削除後は App の onAuthStateChange がゲート（認証画面）へ戻す。
  */
-export function Settings(props: {
+export function Settings(props: Readonly<{
   onBack: () => void;
   onOpenAdmin: () => void;
   /** 計算中（入れ替えると計算が止まるので、アップデートのボタンを押せなくする）。 */
   updateBlocked: boolean;
-}): JSX.Element {
+}>): JSX.Element {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const upd = useAppUpdate();
@@ -321,7 +327,7 @@ export function Settings(props: {
         <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => void onPickAvatar(e)} />
         <div className="avpick-actions">
           <button type="button" className="edit" disabled={!profile || avatarBusy} onClick={() => avatarRef.current?.click()}>
-            {avatarBusy ? '変更中…' : profile?.avatar_url ? 'アイコンを変える' : 'アイコンを設定する'}
+            {avatarButtonLabel(avatarBusy, !!profile?.avatar_url)}
           </button>
           {profile?.avatar_url && (
             <button type="button" className="edit dim" disabled={avatarBusy} onClick={() => void onRemoveAvatar()}>

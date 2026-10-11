@@ -14,6 +14,7 @@
  * （`SngTable.tsx`/`SlumbotTable.tsx`）の責務にして、ここは「整形済みの値を並べるだけ」に徹する。
  */
 
+import type { CSSProperties } from 'react';
 import { useStorageImage } from '../supabase/storageUrls';
 import { AvatarBadge, resolveAvatarDeco, type AvatarDecoInput } from '../avatarDeco';
 
@@ -23,7 +24,7 @@ const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '�
  * "Ah" / "Td" のような表記を 1 枚のカードに描く。
  * SIT & GO・Slumbot HU 両方の卓（このファイル）で使うため export する（重複実装を避ける）。
  */
-export function Card(props: { code: string; big?: boolean }): JSX.Element | null {
+export function Card(props: Readonly<{ code: string; big?: boolean }>): JSX.Element | null {
   const rank = props.code[0];
   const suit = props.code[1]?.toLowerCase();
   if (!rank || !suit || !SUIT_GLYPH[suit]) return null;
@@ -35,7 +36,7 @@ export function Card(props: { code: string; big?: boolean }): JSX.Element | null
   );
 }
 
-export function Hand(props: { cards: readonly string[]; big?: boolean }): JSX.Element {
+export function Hand(props: Readonly<{ cards: readonly string[]; big?: boolean }>): JSX.Element {
   return (
     <div className="pt-hand">
       {props.cards.map((c, i) => (
@@ -184,9 +185,17 @@ function FeltSeatView(props: FeltSeatViewProps): JSX.Element {
   // 上端・下端の席は「％で中心を置く」と、カード＋プレート＋タイマーの高さぶん卓の外へ
   // はみ出す（縦に余裕が無い端末ほど顕著）。端の席だけは % を使わず CSS 側で上下端に
   // 貼り付ける（`.sgt-seat.edge-top` / `.edge-bottom`）。
-  const edge = y <= 12 ? ' edge-top' : y >= 88 ? ' edge-bottom' : '';
-  const style =
-    edge !== '' ? (anchor === 'anchor-c' ? { left: `${x}%` } : {}) : anchor === 'anchor-c' ? { top: `${y}%`, left: `${x}%` } : { top: `${y}%` };
+  let edge = '';
+  if (y <= 12) edge = ' edge-top';
+  else if (y >= 88) edge = ' edge-bottom';
+  const center = anchor === 'anchor-c';
+  let style: CSSProperties;
+  if (edge === '') style = center ? { top: `${y}%`, left: `${x}%` } : { top: `${y}%` };
+  else style = center ? { left: `${x}%` } : {};
+  // 手札: 見えている札 → 表、伏せ札あり → 裏、どちらも無ければ場所だけ確保（飛んだ席は何も出さない）。
+  let cards: JSX.Element | null = null;
+  if (seat.cards) cards = <Hand cards={seat.cards} big={seat.hero} />;
+  else if (!seat.out) cards = seat.backs ? <Backs /> : <div className="sgt-cardsp" />;
 
   return (
     <div
@@ -194,7 +203,7 @@ function FeltSeatView(props: FeltSeatViewProps): JSX.Element {
       style={style}
     >
       <div className="sgt-cards">
-        {seat.cards ? <Hand cards={seat.cards} big={seat.hero} /> : !seat.out && (seat.backs ? <Backs /> : <div className="sgt-cardsp" />)}
+        {cards}
       </div>
       {/* .sgt-plate には clip-path（面取り）が掛かっており、子孫もろとも切り取る。
           プレートの左辺からはみ出す丸アイコン（さつき指定）をそのまま .sgt-plate の
@@ -261,6 +270,12 @@ function FeltSeatView(props: FeltSeatViewProps): JSX.Element {
       )}
     </div>
   );
+}
+
+/** 卓中央の SPR 表示（100 未満は小数 1 桁、それ以上は整数に丸める）。 */
+export function sprLabel(spr: number): string {
+  const v = spr < 100 ? spr.toFixed(1) : Math.round(spr);
+  return `SPR ${v}`;
 }
 
 export function GlassTable(props: {

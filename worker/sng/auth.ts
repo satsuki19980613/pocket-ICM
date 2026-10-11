@@ -43,7 +43,7 @@ export async function verifyToken(env: Env, token: string): Promise<AuthedUser |
   const authHeaders = { apikey: env.SUPABASE_ANON_KEY, authorization: `Bearer ${token}` };
 
   const userRes = await fetchWithTimeout(`${env.SUPABASE_URL}/auth/v1/user`, authHeaders, TIMEOUT_MS);
-  if (!userRes || !userRes.ok) return null;
+  if (!userRes?.ok) return null;
 
   let userId: string;
   try {
@@ -59,7 +59,7 @@ export async function verifyToken(env: Env, token: string): Promise<AuthedUser |
     authHeaders,
     TIMEOUT_MS,
   );
-  if (!profileRes || !profileRes.ok) return null;
+  if (!profileRes?.ok) return null;
 
   try {
     const rows = (await profileRes.json()) as ReadonlyArray<{

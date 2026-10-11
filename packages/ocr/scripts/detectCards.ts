@@ -5,6 +5,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng, encodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { findCardRects } from '../src/detect.js';
 import type { Gray, Rect } from '../src/types.js';
 
@@ -46,7 +47,7 @@ if (!input || !overlay || !zoneStr) {
   process.exit(1);
 }
 const [zx, zy, zw, zh] = zoneStr.split(',').map(Number);
-const img = decodePng(readFileSync(input));
+const img = decodePng(readFileSync(safePath(input, 'input')));
 const { sub, x0, y0 } = cropRaster(img, zx!, zy!, zw!, zh!);
 const gray = toGray(sub);
 const threshold = thStr ? Number(thStr) : 200;
@@ -54,7 +55,7 @@ const minFill = minFillStr ? Number(minFillStr) : 0.3;
 const closeRadius = closeStr ? Number(closeStr) : 0;
 const rects = findCardRects(gray, { threshold, minAreaFrac: 0.008, aspectRange: [0.4, 0.78], minFill, closeRadius });
 for (const r of rects) drawRect(sub, r);
-writeFileSync(overlay, encodePng(sub));
+writeFileSync(safePath(overlay, 'overlay'), encodePng(sub));
 console.log(`zone ${sub.width}x${sub.height} @(${x0},${y0}) threshold=${threshold} → ${rects.length} cards`);
 for (const r of rects) {
   const fx = (x0 + r.x) / img.width, fy = (y0 + r.y) / img.height;

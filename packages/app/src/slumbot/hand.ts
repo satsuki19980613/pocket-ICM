@@ -139,7 +139,8 @@ export function describeLastAction(action: string): LastAction | null {
     const facing = before.state.streetLastBetTo > 0;
     const allIn = betTo >= before.state.streetLastBetTo + (STACK - before.state.totalLastBetTo);
     const kind: ActionKind = facing ? 'raise' : 'bet';
-    const head = allIn ? 'ALL IN' : facing ? 'RAISE' : 'BET';
+    let head = facing ? 'RAISE' : 'BET';
+    if (allIn) head = 'ALL IN';
     return { seat, kind, betTo, label: `${head} ${bbLabel(betTo)}bb` };
   }
   return null;

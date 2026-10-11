@@ -103,13 +103,13 @@ describe('binaryComponents', () => {
   it('中空の 0 を 1 成分として返す（縦投影のように割らない）', () => {
     const { img } = renderRow([ZERO]);
     const mask = whiteMask(img, { x: 0, y: 0, w: img.w, h: img.h });
-    expect(binaryComponents(mask).length).toBe(1);
+    expect(binaryComponents(mask)).toHaveLength(1);
   });
   it('2 つのグリフを左→右で 2 成分に分ける', () => {
     const { img } = renderRow([ONE, ZERO]);
     const mask = whiteMask(img, { x: 0, y: 0, w: img.w, h: img.h });
     const cc = binaryComponents(mask);
-    expect(cc.length).toBe(2);
+    expect(cc).toHaveLength(2);
     expect(cc[0]!.x).toBeLessThan(cc[1]!.x);
   });
 });
@@ -120,8 +120,8 @@ describe('digitComponents', () => {
     const { img } = renderRow([ONE, comma, ZERO]);
     const mask = whiteMask(img, { x: 0, y: 0, w: img.w, h: img.h });
     // 連結成分は 3 個だが、数字成分は 2 個。
-    expect(binaryComponents(mask).length).toBe(3);
-    expect(digitComponents(mask).length).toBe(2);
+    expect(binaryComponents(mask)).toHaveLength(3);
+    expect(digitComponents(mask)).toHaveLength(2);
   });
 });
 

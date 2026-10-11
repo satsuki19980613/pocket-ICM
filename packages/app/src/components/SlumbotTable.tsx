@@ -10,11 +10,10 @@
  * なのでそのまま残す。
  */
 
-import { GlassTable, type FeltSeat, type PillTag } from './GlassTable';
+import { GlassTable, sprLabel, type FeltSeat, type PillTag } from './GlassTable';
 import type { AvatarDecoInput } from '../avatarDeco';
 import { bbLabel } from '../slumbot/rules';
-import type { LastAction } from '../slumbot/hand';
-import type { HandView } from '../slumbot/hand';
+import type { HandView, LastAction } from '../slumbot/hand';
 import { lastActionsOnStreet, type StreetAction } from '../slumbot/streetActions';
 
 /** 席のポジション表記。HU は SB(=BTN) と BB の 2 つだけ。 */
@@ -67,7 +66,7 @@ function pillLabel(a: StreetAction): string {
   }
 }
 
-export function SlumbotTable(props: {
+export function SlumbotTable(props: Readonly<{
   view: HandView;
   /** アーミング（revealMs の間ボタンを止める）判定に SlumbotView.tsx 側で使うので、
       表示に使わなくなった今も props からは外さない。 */
@@ -83,7 +82,7 @@ export function SlumbotTable(props: {
    * 見た目になるだけでレイアウトは動かない）。
    */
   heroAvatar?: { readonly src: string | null; readonly initial: string; readonly deco?: AvatarDecoInput | null };
-}): JSX.Element {
+}>): JSX.Element {
   const { view } = props;
   const { state } = view;
   const hero = view.heroSeat;
@@ -152,20 +151,24 @@ export function SlumbotTable(props: {
       seats={seats}
       street={props.streetLabel}
       potText={`${bbLabel(view.pot, 1)}bb`}
-      sprText={view.pot > 0 && !view.over ? `SPR ${spr < 100 ? spr.toFixed(1) : Math.round(spr)}` : null}
+      sprText={view.pot > 0 && !view.over ? sprLabel(spr) : null}
       board={view.board}
     />
   );
 }
 
 /** ハンド終了時の収支バナー。 */
-export function HandResult(props: { winnings: number; showdown: boolean }): JSX.Element {
+export function HandResult(props: Readonly<{ winnings: number; showdown: boolean }>): JSX.Element {
   const won = props.winnings > 0;
+  let tone = 'even';
+  if (won) tone = 'win';
+  else if (props.winnings < 0) tone = 'lose';
+  const sign = won ? '+' : '−';
   return (
-    <div className={`sb-result ${won ? 'win' : props.winnings < 0 ? 'lose' : 'even'}`}>
+    <div className={`sb-result ${tone}`}>
       <span className="sb-result-lbl">{props.showdown ? 'SHOWDOWN' : 'HAND OVER'}</span>
       <b className="sb-result-val">
-        {props.winnings === 0 ? '±0' : `${won ? '+' : '−'}${bbLabel(Math.abs(props.winnings), 1)}`}
+        {props.winnings === 0 ? '±0' : `${sign}${bbLabel(Math.abs(props.winnings), 1)}`}
         <span className="sb-result-unit">bb</span>
       </b>
     </div>

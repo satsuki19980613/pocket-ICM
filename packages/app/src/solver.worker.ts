@@ -30,7 +30,6 @@ import {
   type McRunner,
   type ShowdownMcResult,
   type Exact3DenseChunk,
-  type MultiwayNSolveOptions,
 } from '@oshihiki/solver';
 // HU equity テーブルは静的アセットとして同梱（?url でハッシュ付き URL に解決）。
 import huBinUrl from '../../solver/artifacts/hu-equity-169.f32.bin?url';

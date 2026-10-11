@@ -190,7 +190,7 @@ function readStackAnchored(
     const r = readAmountBbAnchored(img, sr, digits, { scoreFloor, minCh }, letters, cx);
     if (Number.isFinite(r.value)) return r;
   }
-  return { value: NaN, conf: 0 };
+  return { value: Number.NaN, conf: 0 };
 }
 
 /**
@@ -512,13 +512,13 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
         isButton: false,
         occupancy: { value: 'empty' as Occupancy, conf: 0.8 },
         action: { value: 'none' as SeatAction, conf: 0.8 },
-        stack: { value: NaN, conf: 0 },
+        stack: { value: Number.NaN, conf: 0 },
         bet: { value: 0, conf: 0.6 },
       };
     }
 
     // stack（名前直上 BB アンカー）。
-    let stack: Read<number> = { value: NaN, conf: 0 };
+    let stack: Read<number> = { value: Number.NaN, conf: 0 };
     const sr = stackRectOf(s);
     if (sr && s.nameBox) {
       if (mode === 'bb') {
@@ -538,9 +538,11 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
     const stackParsed = Number.isFinite(stack.value);
 
     // occupancy（席は seatEnum が確定＝ここで落とさない, b2153df 継承）。
+    let occupiedConf = 0.4;
+    if (stackParsed) occupiedConf = stack.conf > 0 ? 0.9 : 0.5;
     const occupancy: Read<Occupancy> = {
       value: 'occupied',
-      conf: stackParsed ? (stack.conf > 0 ? 0.9 : 0.5) : 0.4,
+      conf: occupiedConf,
     };
 
     // action（本番 extract.ts のセマンティクスを踏襲・§B/§6.5）:
@@ -586,7 +588,7 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
     // −0.5/−1.0 ずれ、allin は root 潰れ）。チップ無し席は NaN → bet=0（幻レイズ棄却を避ける, §B8）。
     // 折れ済み席は投函チップが場に無い前提（未オープン局面）なので読まない＝bet 0（＝下流で dead blind
     // のみ putIn）。hero も SB/BB になりうるので読む。
-    let betRead: Read<number> = { value: NaN, conf: 0 };
+    let betRead: Read<number> = { value: Number.NaN, conf: 0 };
     if (s.nameBox && action.value !== 'fold') {
       betRead = readBetAnchored(nimg, s.slot, s.nameBox, digits, letters, scoreFloor);
     }
@@ -617,11 +619,10 @@ export function extractAnchored(img: Rgba, templates: AnchorTemplates, opts: Anc
   // BB 表示でヘッダが解決できなかった（誤読して総チップを超える BB 等で rb=null）ときも、BB 換算の
   // ブラインドは SB=0.5 / BB=1 で確定している（読み値に依存しない不変）。ヘッダの生値で正規化すると、
   // 実測 Pixel 装飾卓の SB「3」/ BB「8,828,054」から SB ≈ 0 が出てしまうので使わない。
-  const blinds = rb
-    ? { sb: { value: rb.sb / rb.bb, conf: 0.9 }, bb: { value: 1, conf: 0.9 } }
-    : mode === 'bb'
-      ? { sb: { value: 0.5, conf: 0.8 }, bb: { value: 1, conf: 0.8 } }
-      : sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips));
+  let blinds: { sb: Read<number>; bb: Read<number> };
+  if (rb) blinds = { sb: { value: rb.sb / rb.bb, conf: 0.9 }, bb: { value: 1, conf: 0.9 } };
+  else if (mode === 'bb') blinds = { sb: { value: 0.5, conf: 0.8 }, bb: { value: 1, conf: 0.8 } };
+  else blinds = sanitizeBlinds(norm(blindsRaw.sb, bbChips), norm(blindsRaw.bb, bbChips));
 
   // アンティ（BB 換算）。クラブマッチは全員 0.25 BB（さつき確定 2026-09-11）。ヘッダの読みが
   // 妥当域（0.15〜0.35）なら読み値のまま（公式表に 170/660 = 0.2576 のような微変動があり、

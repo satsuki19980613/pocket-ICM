@@ -8,13 +8,13 @@ const T = 60_000; // 盤面全列挙は 1 マッチアップ ~0.3s。余裕を�
 
 describe('handClassToCombos', () => {
   it('生成コンボ数（ペア6・スーテッド4・オフスート12）', () => {
-    expect(handClassToCombos('AA').length).toBe(6);
-    expect(handClassToCombos('AKs').length).toBe(4);
-    expect(handClassToCombos('AKo').length).toBe(12);
+    expect(handClassToCombos('AA')).toHaveLength(6);
+    expect(handClassToCombos('AKs')).toHaveLength(4);
+    expect(handClassToCombos('AKo')).toHaveLength(12);
   });
   it('スーテッドは同 suit、オフスートは異 suit', () => {
-    for (const [a, b] of handClassToCombos('AKs')) expect((a & 3) === (b & 3)).toBe(true);
-    for (const [a, b] of handClassToCombos('AKo')) expect((a & 3) !== (b & 3)).toBe(true);
+    for (const [a, b] of handClassToCombos('AKs')) expect(a & 3).toBe(b & 3);
+    for (const [a, b] of handClassToCombos('AKo')) expect(a & 3).not.toBe(b & 3);
   });
 });
 

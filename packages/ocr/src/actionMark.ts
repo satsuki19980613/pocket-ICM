@@ -187,7 +187,7 @@ export function locateMarkPlate(img: Rgba, searchRect: Rect, opts: ActionMarkOpt
   // 2. 縦に連続する行を固まりにまとめる（枠線は数 px の厚みを持つ）。
   const groups: { y0: number; y1: number; xs: number; xe: number }[] = [];
   for (const r of rows) {
-    const last = groups[groups.length - 1];
+    const last = groups.at(-1);
     if (last && r.y - last.y1 <= 2) {
       last.y1 = r.y;
       last.xs = Math.min(last.xs, r.start);
@@ -253,7 +253,7 @@ export function markInkMask(img: Rgba, plateRect: Rect): Gray {
 /** インクマスクの前景率。 */
 function inkFraction(mask: Gray): number {
   let on = 0;
-  for (let i = 0; i < mask.data.length; i++) if (mask.data[i]! > 0) on++;
+  for (const v of mask.data) if (v > 0) on++;
   return mask.data.length === 0 ? 0 : on / mask.data.length;
 }
 

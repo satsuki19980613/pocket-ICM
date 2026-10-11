@@ -275,10 +275,20 @@ export function chipsToBb(chips: number): number {
   return chips / BB;
 }
 
+/** 末尾の 0 と、それで末尾に残った小数点を落とす（`/\.?0+$/` の置換と同じ結果を、
+ * 正規表現のバックトラックなしの線形時間で出す）。 */
+function trimTrailingZeros(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '0') end--;
+  if (end === s.length) return s;
+  if (s[end - 1] === '.') end--;
+  return s.slice(0, end);
+}
+
 /** bb 表示（末尾の 0 を落とす。1.5 / 2 / 12.25 のように出す）。 */
 export function bbLabel(chips: number, digits = 2): string {
   const s = chipsToBb(chips).toFixed(digits);
-  return s.includes('.') ? s.replace(/\.?0+$/, '') : s;
+  return s.includes('.') ? trimTrailingZeros(s) : s;
 }
 
 /** 符号付き bb 表示（+3.5 / -1.2 / ±0）。成績表示用。 */

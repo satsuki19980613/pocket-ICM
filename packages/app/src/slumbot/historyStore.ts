@@ -17,7 +17,7 @@ const VERSION = 1;
 function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 }
 
@@ -32,7 +32,7 @@ function openDb(): Promise<IDBDatabase> {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 }
 
@@ -60,8 +60,8 @@ export function putHands(recs: readonly HuHandRecord[]): Promise<void> {
     for (const r of recs) os.put(r);
     await new Promise<void>((resolve, reject) => {
       os.transaction.oncomplete = () => resolve();
-      os.transaction.onerror = () => reject(os.transaction.error);
-      os.transaction.onabort = () => reject(os.transaction.error);
+      os.transaction.onerror = () => reject(os.transaction.error ?? new Error('IndexedDB transaction failed'));
+      os.transaction.onabort = () => reject(os.transaction.error ?? new Error('IndexedDB transaction failed'));
     });
   });
 }
@@ -91,8 +91,8 @@ export function markSynced(ids: readonly string[]): Promise<void> {
     }
     await new Promise<void>((resolve, reject) => {
       os.transaction.oncomplete = () => resolve();
-      os.transaction.onerror = () => reject(os.transaction.error);
-      os.transaction.onabort = () => reject(os.transaction.error);
+      os.transaction.onerror = () => reject(os.transaction.error ?? new Error('IndexedDB transaction failed'));
+      os.transaction.onabort = () => reject(os.transaction.error ?? new Error('IndexedDB transaction failed'));
     });
   });
 }

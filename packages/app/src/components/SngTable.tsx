@@ -23,7 +23,7 @@ import {
 } from '@oshihiki/sng';
 import { formatBbDisplay } from '@oshihiki/core';
 
-import { GlassTable, type FeltSeat, type SeatTag } from './GlassTable';
+import { GlassTable, sprLabel, type FeltSeat, type SeatTag } from './GlassTable';
 import { STREET_LABEL } from '../slumbot/rules';
 import type { AvatarDecoInput } from '../avatarDeco';
 
@@ -107,7 +107,9 @@ export function computeResultBanner(table: PublicTable, hand: PublicHand, mySeat
   const involved = mySeat != null && hand.folded[mySeat] === false;
   if (involved) {
     const net = won[mySeat!]! - hand.commits[mySeat!]!;
-    const kind: ResultBannerKind = net > 0 ? 'win' : net < 0 ? 'lose' : 'push';
+    let kind: ResultBannerKind = 'push';
+    if (net > 0) kind = 'win';
+    else if (net < 0) kind = 'lose';
     return { kind, text: signedBb(net, bb), showdown: true };
   }
   const winners = table.players
@@ -130,7 +132,7 @@ export function computeResultBanner(table: PublicTable, hand: PublicHand, mySeat
  * props（数値 1 つ）では表現できない。そのため見た目のクラスだけ揃えた専用コンポーネントに
  * している（SngRoom.tsx が `<SngTable/>` の下に置く）。
  */
-export function SgHandResult(props: { banner: ResultBanner }): JSX.Element {
+export function SgHandResult(props: Readonly<{ banner: ResultBanner }>): JSX.Element {
   const { banner } = props;
   const cls = banner.kind === 'other' ? 'sb-result' : `sb-result ${banner.kind}`;
   return (
@@ -141,12 +143,12 @@ export function SgHandResult(props: { banner: ResultBanner }): JSX.Element {
   );
 }
 
-export function SngTable(props: {
+export function SngTable(props: Readonly<{
   table: PublicTable;
   you: You;
   heroCards: readonly [string, string] | null;
   now: number;
-}): JSX.Element {
+}>): JSX.Element {
   const { table, you } = props;
   const hand = table.hand;
   const n = table.players.length;
@@ -203,7 +205,7 @@ export function SngTable(props: {
       : player.stack;
     const streetBet = hand?.streetBet[seat] ?? 0;
 
-    const isActing = hand != null && hand.toAct === seat && hand.phase === 'betting';
+    const isActing = hand?.toAct === seat && hand.phase === 'betting';
     // acting 中はタイマーを見せる方が読みやすいのでピルを出さない。settled（精算後）も
     // 結果バナーと混ざるため出さない。
     const lastAction = !isActing && hand?.phase !== 'settled' ? lastActionsByStreet.get(seat) ?? null : null;
@@ -256,7 +258,7 @@ export function SngTable(props: {
       seats={seats}
       street={hand ? STREET_LABEL[hand.street] ?? 'PREFLOP' : null}
       potText={`${formatBbDisplay(pot / bb)}bb`}
-      sprText={pot > 0 && hand?.phase !== 'settled' ? `SPR ${spr < 100 ? spr.toFixed(1) : Math.round(spr)}` : null}
+      sprText={pot > 0 && hand?.phase !== 'settled' ? sprLabel(spr) : null}
       board={hand?.board ?? []}
     />
   );

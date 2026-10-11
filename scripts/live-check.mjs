@@ -16,7 +16,16 @@
 //   MIN_GRADE      5 で求める等級（既定 A+）
 import { readFileSync } from 'node:fs';
 
-const SITE = (process.env.SITE || 'https://pocket-icm.wsk641.workers.dev').replace(/\/+$/, '');
+/** 末尾の `/` を落とす（正規表現の後戻りを避けて 1 文字ずつ見る）。 */
+function trimTrailingSlashes(s) {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '/') end--;
+  return s.slice(0, end);
+}
+/** ログに外から来た文字列を出すとき、改行で行を偽装されないよう 1 行にする。 */
+const oneLine = (s) => String(s).replaceAll(/[\r\n]+/g, ' ');
+
+const SITE = trimTrailingSlashes(process.env.SITE || 'https://pocket-icm.wsk641.workers.dev');
 const ENFORCE = process.env.ENFORCE === '1';
 const WAIT_SECONDS = Number(process.env.WAIT_SECONDS || 0);
 const MIN_GRADE = process.env.MIN_GRADE || 'A+';
@@ -25,10 +34,13 @@ const GRADES = ['F', 'D-', 'D', 'D+', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A
 let failed = 0;
 const summary = [];
 function check(name, ok, detail = '', { soft = false } = {}) {
-  const mark = ok ? 'PASS' : soft ? 'WARN' : 'FAIL';
+  let mark = 'PASS';
+  if (!ok) mark = soft ? 'WARN' : 'FAIL';
   if (!ok && !soft) failed++;
-  console.log(`${mark}  ${name}${detail ? `  — ${detail}` : ''}`);
-  summary.push(`| ${mark} | ${name} | ${detail.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')} |`);
+  const line = oneLine(detail);
+  const suffix = line ? `  — ${line}` : '';
+  console.log(`${mark}  ${name}${suffix}`);
+  summary.push(`| ${mark} | ${name} | ${line.replaceAll('\\', String.raw`\\`).replaceAll('|', String.raw`\|`)} |`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -109,8 +121,8 @@ async function findSupabase(home) {
     if (seen.has(path)) continue;
     seen.add(path);
     const js = await req(`${SITE}/${path}`);
-    url ??= js.text.match(/https:\/\/[a-z0-9]{20}\.supabase\.co/)?.[0] ?? null;
-    key ??= js.text.match(/sb_publishable_[\w-]+|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/)?.[0] ?? null;
+    url ??= /https:\/\/[a-z0-9]{20}\.supabase\.co/.exec(js.text)?.[0] ?? null;
+    key ??= /sb_publishable_[\w-]+|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/.exec(js.text)?.[0] ?? null;
     for (const m of js.text.matchAll(/[\w.-]+\.js/g)) {
       if (/^[\w-]+-[\w-]{8}\.js$/.test(m[0]) && !seen.has(`assets/${m[0]}`)) queue.push(m[0]);
     }
@@ -191,7 +203,8 @@ async function checkObservatory() {
     } catch {}
   }
   if (!j?.grade) {
-    check('Mozilla HTTP Observatory', false, `結果を取れなかった${j?.error ? `: ${j.error}` : ''}`, { soft: !ENFORCE });
+    const reason = j?.error ? `: ${j.error}` : '';
+    check('Mozilla HTTP Observatory', false, `結果を取れなかった${reason}`, { soft: !ENFORCE });
     return;
   }
   const detail = `${j.grade}（${j.score} 点、${j.tests_passed}/${j.tests_quantity} 項目合格）${j.details_url ?? ''}`;

@@ -41,6 +41,9 @@ if (!url || !anon) {
   process.exit(1);
 }
 
+// 応答をログに出すとき、改行で行を偽装されないよう 1 行にする（JSON.stringify 済みでも念のため）。
+const oneLine = (v) => JSON.stringify(v).replaceAll(/[\r\n]+/g, ' ');
+
 const EMAIL_DOMAIN = 'users.pocket-icm.app';
 const email = `${handle.trim().toLowerCase()}@${EMAIL_DOMAIN}`;
 
@@ -58,11 +61,11 @@ async function main() {
   });
   const signupBody = await signupRes.json().catch(() => ({}));
   if (!signupRes.ok || signupBody.error) {
-    console.error(`  ✗ signup 失敗 (HTTP ${signupRes.status}):`, JSON.stringify(signupBody));
+    console.error(`  ✗ signup 失敗 (HTTP ${signupRes.status}):`, oneLine(signupBody));
     console.error('    → 招待キー/handle/パスワードを確認してください。');
     process.exit(1);
   }
-  console.log('  ✓ アカウント作成:', JSON.stringify(signupBody));
+  console.log('  ✓ アカウント作成:', oneLine(signupBody));
 
   // 2) ログイン確認（GoTrue password grant）
   console.log('[2/2] ログイン確認中…');
@@ -73,7 +76,7 @@ async function main() {
   });
   const loginBody = await loginRes.json().catch(() => ({}));
   if (!loginRes.ok || !loginBody.access_token) {
-    console.error(`  ✗ ログイン失敗 (HTTP ${loginRes.status}):`, JSON.stringify(loginBody));
+    console.error(`  ✗ ログイン失敗 (HTTP ${loginRes.status}):`, oneLine(loginBody));
     process.exit(1);
   }
   console.log('  ✓ ログイン成功（access_token 取得）\n');
@@ -84,7 +87,9 @@ async function main() {
   console.log(`  update public.profiles set is_admin = true where handle = '${handle}';\n`);
 }
 
-main().catch((e) => {
+try {
+  await main();
+} catch (e) {
   console.error('予期しないエラー:', e);
   process.exit(1);
-});
+}

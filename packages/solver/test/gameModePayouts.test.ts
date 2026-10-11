@@ -88,7 +88,7 @@ describe('モードが戦略に効く', () => {
     const club = (await solveMultiway(spot3('club'), opts)) as { nodes: { pct: number }[] };
     const legend = (await solveMultiway(spot3('legend-avg'), opts)) as { nodes: { pct: number }[] };
     expect(club.nodes.length).toBeGreaterThan(0);
-    expect(legend.nodes.length).toBe(club.nodes.length);
+    expect(legend.nodes).toHaveLength(club.nodes.length);
     // 同一局面・同一シードでも、ペイアウトが別物なので先頭ノードのレンジ幅は一致しない。
     const diff = Math.abs(club.nodes[0]!.pct - legend.nodes[0]!.pct);
     expect(diff).toBeGreaterThan(0.1);

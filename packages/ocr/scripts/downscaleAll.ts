@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { decodePng, encodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 
 function downscale(r: Raster, s: number): Raster {
   const w = Math.round(r.width / s);
@@ -28,12 +29,14 @@ function downscale(r: Raster, s: number): Raster {
 const [, , indir, outdir, scaleStr] = process.argv;
 if (!indir || !outdir) { console.error('usage: downscaleAll.ts <indir> <outdir> [scale]'); process.exit(1); }
 const scale = Number(scaleStr ?? '2');
-mkdirSync(outdir, { recursive: true });
-for (const f of readdirSync(indir)) {
+const inDir = safePath(indir, 'indir');
+const outDir = safePath(outdir, 'outdir');
+mkdirSync(outDir, { recursive: true });
+for (const f of readdirSync(inDir)) {
   if (!f.toLowerCase().endsWith('.png')) continue;
-  const img = decodePng(readFileSync(join(indir, f)));
+  const img = decodePng(readFileSync(join(inDir, f)));
   const out = downscale(img, scale);
   const short = f.replace(/^Screenshot_\d{8}-/, '').replace(/\.png$/, '');
-  writeFileSync(join(outdir, `${short}.png`), encodePng(out));
+  writeFileSync(join(outDir, `${short}.png`), encodePng(out));
   console.log(`${short}.png ${out.width}x${out.height}`);
 }

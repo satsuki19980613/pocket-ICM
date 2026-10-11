@@ -40,7 +40,13 @@ export function pctToPt(pct: number, poolPt: number): number {
 }
 
 export function resolveTolerances(overrides?: Partial<Tolerances>): Tolerances {
-  return { ...DEFAULT_TOLERANCES, ...(overrides ?? {}) };
+  return { ...DEFAULT_TOLERANCES, ...overrides };
+}
+
+/** 既定 sort と同じ UTF-16 コード単位順の比較関数（ハンドラベルの並び順を固定するため）。 */
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
 }
 
 /** EQ（pre/post）の絶対誤差が許容内か。 */
@@ -101,7 +107,7 @@ export function compareRange(
     }
   }
   return {
-    boundaryHands: [...new Set(boundaryHands)].sort(),
-    hardMismatchHands: [...new Set(hardMismatchHands)].sort(),
+    boundaryHands: [...new Set(boundaryHands)].sort(byCodeUnit),
+    hardMismatchHands: [...new Set(hardMismatchHands)].sort(byCodeUnit),
   };
 }

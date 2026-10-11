@@ -40,7 +40,7 @@ describe('toPx', () => {
 describe('resolveRegions', () => {
   it('全席を解決し、座標はフレーム内', () => {
     const res = resolveRegions(profile(5), 1280, 720);
-    expect(res.seats.length).toBe(5);
+    expect(res.seats).toHaveLength(5);
     for (const s of res.seats) {
       for (const rect of [s.stack, s.bet, s.button, s.presence]) {
         expect(rect.x).toBeGreaterThanOrEqual(0);

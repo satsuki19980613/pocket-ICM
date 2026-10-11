@@ -25,7 +25,8 @@ function json(body: unknown, status: number): Response {
 function bearerToken(request: Request): string | null {
   const h = request.headers.get('authorization');
   if (!h) return null;
-  const m = /^Bearer\s+(.+)$/i.exec(h);
+  // 空白の後は空白以外で始める（\s+ と .+ が重なると後戻りが二乗になる）。
+  const m = /^Bearer\s+(\S.*)$/i.exec(h);
   return m?.[1] ? m[1].trim() : null;
 }
 

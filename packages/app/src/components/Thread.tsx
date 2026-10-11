@@ -11,7 +11,7 @@ type Ack = { ok: boolean; message?: string };
  * 添付画像（タップで別タブに原寸表示）。このアプリの Storage の参照だけを署名 URL にして出す。
  * 形の不正な参照（javascript: や外部 URL）はリンクにも画像にもしない（storageUrls.ts）。
  */
-function AttachedImage(props: { refUrl: string | null }): JSX.Element | null {
+function AttachedImage(props: Readonly<{ refUrl: string | null }>): JSX.Element | null {
   const src = useStorageImage(props.refUrl, 'thread-images');
   if (!src) return null;
   return (
@@ -77,7 +77,7 @@ function useKeyboardInset(ref: RefObject<HTMLElement>): void {
  * 自分のコメントに加え、自分の通常投稿も本文の編集/削除ができる（PostHead）。
  * ミューテーション後は親（App）が再取得して反映する。
  */
-export function Thread(props: {
+export function Thread(props: Readonly<{
   detail: ThreadDetail;
   onOpenResult: () => void;
   onOpenAuthor: (author: FeedAuthor) => void;
@@ -89,7 +89,7 @@ export function Thread(props: {
   onEditPost: (body: string) => Promise<Ack>;
   /** 自分の通常投稿の削除（削除後は呼び出し側=App がホームへ戻す）。 */
   onDeletePost: () => Promise<Ack>;
-}): JSX.Element {
+}>): JSX.Element {
   const d = props.detail;
   const rootRef = useRef<HTMLDivElement>(null);
   useResizesContentKeyboard();
@@ -157,13 +157,13 @@ export function Thread(props: {
  * 画像はコメント添付画像と同じ「タップで別タブに原寸表示」（SPEC §5.1.3 の「既存コメント画像と
  * 同じ作法」）。
  */
-function PostHead(props: {
+function PostHead(props: Readonly<{
   body: string | null;
   imageUrl: string | null;
   mine: boolean;
   onEdit: (body: string) => Promise<Ack>;
   onDelete: () => Promise<Ack>;
-}): JSX.Element {
+}>): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(props.body ?? '');
   const [busy, setBusy] = useState(false);
@@ -235,12 +235,12 @@ function PostHead(props: {
   );
 }
 
-function CommentRow(props: {
+function CommentRow(props: Readonly<{
   comment: ThreadComment;
   onOpenAuthor: () => void;
   onEdit: (body: string) => Promise<Ack>;
   onDelete: () => Promise<Ack>;
-}): JSX.Element {
+}>): JSX.Element {
   const c = props.comment;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(c.body ?? '');
@@ -347,9 +347,9 @@ function fitReplyHeight(el: HTMLTextAreaElement | null): void {
   el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
 }
 
-function Composer(props: {
+function Composer(props: Readonly<{
   onReply: (input: { body: string; imageFile: File | null }) => Promise<Ack>;
-}): JSX.Element {
+}>): JSX.Element {
   const [body, setBody] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);

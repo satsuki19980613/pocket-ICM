@@ -20,6 +20,7 @@ import {
   type MultiwayNSolveOptions,
   type MultiwayNSolveResult,
 } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 
@@ -29,7 +30,7 @@ const ORDER = positionsForPlayersLeft(3); // ['BU','SB','BB']
 
 function buildState(stacks: Record<Position, number>): BoardState {
   const seats = ORDER.map((pos) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    const bet = blindBet(pos, SB, BB);
     const total = stacks[pos]!;
     return { pos, stack: total - bet - ANTE, state: 'live' as const, bet };
   });
@@ -215,4 +216,4 @@ async function main(): Promise<void> {
   log(`  補間     = ${(avg(exI) - avg(exD)).toFixed(3)}pt  （直接解 expl ${avg(exD).toFixed(3)} → 補間 ${avg(exI).toFixed(3)}）`);
   log(`  最寄り点 = ${(avg(exN) - avg(exD)).toFixed(3)}pt  （補間なし ${avg(exN).toFixed(3)}）← 補間がこれより小さければ補間が効いている`);
 }
-void main();
+await main();

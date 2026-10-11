@@ -76,12 +76,9 @@ export interface DiagClientError {
 
 function fail(error: { code?: string } | null, what: string): { ok: false; error: string; message: string } {
   const code = error?.code ?? '';
-  const message =
-    code === '42501'
-      ? '管理者だけが見られます'
-      : code === 'PGRST202' || code === '42883'
-        ? 'サーバの準備（0009 の SQL）がまだです'
-        : `${what}を読み込めませんでした`;
+  let message = `${what}を読み込めませんでした`;
+  if (code === '42501') message = '管理者だけが見られます';
+  else if (code === 'PGRST202' || code === '42883') message = 'サーバの準備（0009 の SQL）がまだです';
   return { ok: false, error: 'diag_error', message };
 }
 

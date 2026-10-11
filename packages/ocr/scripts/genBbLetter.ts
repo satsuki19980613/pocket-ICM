@@ -1,36 +1,15 @@
 /** dev: BB frame の hero スタック末尾2つの背高成分（"B","B"）を "B" テンプレとして生成。 */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { rawComponents as rawComps } from '../src/bbAmount.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
 import { toPx } from '../src/layout.js';
 import { grayFromRgba, whiteMask } from '../src/numberField.js';
 import { crop, resize } from '../src/raster.js';
 import type { Rgba } from '../src/color.js';
-import type { Gray, Rect } from '../src/types.js';
 
 const DIR = 'local-fixtures';
 const NORM_H = 32;
-
-function rawComps(bin: Gray): Array<Rect & { area: number }> {
-  const { w, h, data } = bin;
-  const label = new Int32Array(w * h).fill(-1);
-  const boxes: { x0: number; y0: number; x1: number; y1: number; area: number }[] = [];
-  const st: number[] = [];
-  for (let i = 0; i < w * h; i++) {
-    if (data[i] === 0 || label[i] !== -1) continue;
-    const id = boxes.length; boxes.push({ x0: w, y0: h, x1: -1, y1: -1, area: 0 });
-    st.length = 0; st.push(i); label[i] = id;
-    while (st.length) {
-      const p = st.pop()!; const px = p % w, py = (p / w) | 0; const b = boxes[id]!; b.area++;
-      if (px < b.x0) b.x0 = px; if (px > b.x1) b.x1 = px; if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
-      if (px > 0 && data[p - 1]! > 0 && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
-      if (px < w - 1 && data[p + 1]! > 0 && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
-      if (py > 0 && data[p - w]! > 0 && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }
-      if (py < h - 1 && data[p + w]! > 0 && label[p + w] === -1) { label[p + w] = id; st.push(p + w); }
-    }
-  }
-  return boxes.map((b) => ({ x: b.x0, y: b.y0, w: b.x1 - b.x0 + 1, h: b.y1 - b.y0 + 1, area: b.area })).sort((a, b) => a.x - b.x);
-}
 
 const hero = CHIPS_6MAX.seats.find((s) => s.isHero)!;
 const templates: Array<{ label: string; w: number; h: number; data: number[] }> = [];

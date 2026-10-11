@@ -73,6 +73,20 @@ export interface BuildResult {
   potDelta: number | null;
 }
 
+/** そのポジションが最初に置くブラインド（SB/BB 以外は 0）。 */
+export function blindFor(pos: string | undefined, sb: number, bb: number): number {
+  if (pos === 'SB') return sb;
+  if (pos === 'BB') return bb;
+  return 0;
+}
+
+/** アンティ方式 → ポットに入るアンティの合計（all=全員分、bb=BB の 1 人分、none=0）。 */
+function anteTotal(scheme: AnteScheme, amount: number, seatCount: number): number {
+  if (scheme === 'all') return amount * seatCount;
+  if (scheme === 'bb') return amount;
+  return 0;
+}
+
 /** フォーム → BoardState 組み立て + zod/意味論/ハンド/ポット検算。 */
 export function buildBoardState(form: BoardForm): BuildResult {
   const issues: string[] = [];
@@ -92,7 +106,7 @@ export function buildBoardState(form: BoardForm): BuildResult {
   const seats = positions.map((pos) => {
     const stack = num(form.stacks[pos] ?? '');
     if (!Number.isFinite(stack) || stack <= 0) issues.push(`${pos} のスタックを正の数で入力してください`);
-    const bet = pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+    const bet = blindFor(pos, sb, bb);
     return { pos, stack, state: 'live' as const, bet };
   });
 
@@ -101,7 +115,7 @@ export function buildBoardState(form: BoardForm): BuildResult {
       ? { scheme: 'none' as const, amount: 0 }
       : { scheme: form.anteScheme, amount: anteAmount };
 
-  const anteContribution = ante.scheme === 'all' ? ante.amount * seats.length : ante.scheme === 'bb' ? ante.amount : 0;
+  const anteContribution = anteTotal(ante.scheme, ante.amount, seats.length);
   const potBets = seats.reduce((a, s) => a + s.bet, 0);
 
   const candidate = {

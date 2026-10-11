@@ -18,7 +18,7 @@ import {
  * レンジ表・頻度・記法を連動表示する。hero の行では自分の手札を強調。BB のウォーク
  * （上流に push 無し）は「no decision」でロック。
  */
-export function ActionTree(props: { result: SolveResultDto; stacks?: Record<string, number> }): JSX.Element {
+export function ActionTree(props: Readonly<{ result: SolveResultDto; stacks?: Record<string, number> }>): JSX.Element {
   const { result, stacks } = props;
   const [state, setState] = useState<TreeState>(() => defaultState(result));
 
@@ -49,7 +49,7 @@ export function ActionTree(props: { result: SolveResultDto; stacks?: Record<stri
         {rows.map((row) => (
           <div key={row.pos} className="arow" data-active={String(state.active === row.seatIdx)} data-locked={String(row.walk)}>
             <span className={`posbadge sm pos-${row.pos}`}>{row.pos}</span>
-            <span className="arow-stack">{stacks && stacks[row.pos] != null ? `${formatBbDisplay(stacks[row.pos]!)}bb` : ''}</span>
+            <span className="arow-stack">{stacks?.[row.pos] != null ? `${formatBbDisplay(stacks[row.pos]!)}bb` : ''}</span>
             {row.walk ? (
               <span className="term">no decision</span>
             ) : (
@@ -101,17 +101,14 @@ export function ActionTree(props: { result: SolveResultDto; stacks?: Record<stri
           <RangeGrid hands={node.hands} heroHand={state.active === heroIdx ? result.heroHand : ''} />
           <div className="legend">
             <span>
-              <i style={{ background: 'var(--yellow)' }} />
-              取るハンド
+              <i style={{ background: 'var(--yellow)' }} />取るハンド
             </span>
             <span>
-              <i style={{ background: 'var(--cell-off)' }} />
-              取らない
+              <i style={{ background: 'var(--cell-off)' }} />取らない
             </span>
             {state.active === heroIdx && (
               <span style={{ color: 'var(--cyan)' }}>
-                <i style={{ background: 'transparent', border: '2px solid var(--cyan)' }} />
-                自分の手
+                <i style={{ background: 'transparent', border: '2px solid var(--cyan)' }} />自分の手
               </span>
             )}
           </div>

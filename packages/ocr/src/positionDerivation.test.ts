@@ -23,7 +23,7 @@ describe('clockwiseFromButton', () => {
   it('各人数で正規ポジション集合と一致する', () => {
     for (let n = 2; n <= 6; n++) {
       const set = clockwiseFromButton(n);
-      expect(set.length).toBe(n);
+      expect(set).toHaveLength(n);
       expect(positionsMatchPlayersLeft(set, n)).toBe(true);
     }
   });

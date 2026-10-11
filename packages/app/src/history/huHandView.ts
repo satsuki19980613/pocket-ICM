@@ -52,6 +52,11 @@ function stepView(st: ActionStep, heroSeat: number): HandStepView {
   };
 }
 
+/** 相手の手札（見えていれば複製、伏せたままなら null）。 */
+function botCardsOf(rec: HuHandRecord): string[] | null {
+  return rec.botCards ? [...rec.botCards] : null;
+}
+
 function p2(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -74,7 +79,7 @@ export function huHandView(rec: HuHandRecord): HandDetailView | null {
     name: seat === heroSeat ? 'YOU' : VILLAIN_NAME,
     isHero: seat === heroSeat,
     netBb: toBbView(seat === heroSeat ? rec.winnings : -rec.winnings, BB),
-    cards: seat === heroSeat ? [...rec.heroCards] : rec.botCards ? [...rec.botCards] : null,
+    cards: seat === heroSeat ? [...rec.heroCards] : botCardsOf(rec),
   }));
 
   // 到達したストリート（オールインならリバーまで走る）。
@@ -98,8 +103,10 @@ export function huHandView(rec: HuHandRecord): HandDetailView | null {
   if (rec.evWinnings !== null && rec.evWinnings !== rec.winnings) {
     notes.push(`ALL-IN EV ${signedBbLabel(rec.evWinnings - rec.winnings)}bb`);
   }
-  const winners: string[] =
-    rec.winnings > 0 ? ['YOU'] : rec.winnings < 0 ? [VILLAIN_NAME] : ['YOU', VILLAIN_NAME];
+  // 勝ち＝自分、負け＝相手、引き分け（チョップ）は両者。
+  let winners: string[] = ['YOU', VILLAIN_NAME];
+  if (rec.winnings > 0) winners = ['YOU'];
+  else if (rec.winnings < 0) winners = [VILLAIN_NAME];
 
   // 実際に奪い合われた額（コールされなかった上乗せは元の持ち主に戻るので数えない。
   // ポーカーのハンドヒストリーの慣習＝tenfour の result_won_bb と同じ考え方）。SNG 版と

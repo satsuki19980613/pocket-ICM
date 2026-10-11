@@ -16,6 +16,7 @@ import {
   buildNnTable, lookupNn, nnInRange, type NnMeta,
   solveMultiway, evaluateMultiwayStrategy, maxWorkerCap, type MultiwayNSolveOptions,
 } from '../src/index.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -36,7 +37,7 @@ async function main(): Promise<void> {
 
   const buildState = (st: number[]): BoardState => {
     const seats = ORDER.map((pos, i) => {
-      const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+      const bet = blindBet(pos, SB, BB);
       return { pos, stack: st[i]! - bet - ANTE, state: 'live' as const, bet };
     });
     return {
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
   log(`  test点(${ORDER.join('/')}) | 範囲内 | レンジ%差 平均/最大 || expl: 直接 / NN (pt) | 超過損`);
 
   // オフグリッドのランダム点（学習格子の隙間を狙う）
-  const rng = (() => { let s = 6789; return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; })();
+  const rng = (() => { let s = 6789; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
   const tests: number[][] = [];
   for (let n = 0; n < nTests; n++) {
     tests.push(Array.from({ length: D }, () => Math.round((2 + rng() * (hi - 2)) * 10) / 10));
@@ -87,4 +88,4 @@ async function main(): Promise<void> {
   log(`      合格ゲート: 超過損 < 0.05pt → ${excess < 0.05 ? 'PASS ✅' : 'FAIL ❌'}`);
   log(`推奨 interpExplBound（NN expl 最大の切り上げ, 表示用の保守的上限）= ${(Math.ceil(maxN * 100) / 100).toFixed(2)}`);
 }
-void main();
+await main();

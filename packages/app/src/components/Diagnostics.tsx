@@ -45,7 +45,7 @@ const TABS: { key: Tab; label: string }[] = [
  * アプリのエラー（利用者の画面では気づかれにくいもの）を1か所で確かめる。
  * データはすべて管理者専用のサーバ関数から読む（管理者以外にはサーバが中身を渡さない）。
  */
-export function Diagnostics(props: { onBack: () => void }): JSX.Element {
+export function Diagnostics(props: Readonly<{ onBack: () => void }>): JSX.Element {
   const [tab, setTab] = useState<Tab>('runs');
   const [summary, setSummary] = useState<DiagSummary | null>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
@@ -98,7 +98,7 @@ export function Diagnostics(props: { onBack: () => void }): JSX.Element {
   );
 }
 
-function SummaryView(props: { s: DiagSummary }): JSX.Element {
+function SummaryView(props: Readonly<{ s: DiagSummary }>): JSX.Element {
   const s = props.s;
   const failed = s.runs_failed + s.runs_aborted;
   return (
@@ -124,7 +124,7 @@ function SummaryView(props: { s: DiagSummary }): JSX.Element {
   );
 }
 
-function Stat(props: { label: string; value: ReactNode; warn?: boolean }): JSX.Element {
+function Stat(props: Readonly<{ label: string; value: ReactNode; warn?: boolean }>): JSX.Element {
   return (
     <div className="stat">
       <span className="statlbl">{props.label}</span>
@@ -195,7 +195,7 @@ function usePaged<T extends { created_at: string }>(
   };
 }
 
-function ListFooter(props: { list: Paged<unknown>; empty: string }): JSX.Element {
+function ListFooter(props: Readonly<{ list: Paged<unknown>; empty: string }>): JSX.Element {
   const { list } = props;
   return (
     <>
@@ -211,12 +211,11 @@ function ListFooter(props: { list: Paged<unknown>; empty: string }): JSX.Element
   );
 }
 
-function ProblemsToggle(props: { on: boolean; onChange: (on: boolean) => void; hint: string }): JSX.Element {
+function ProblemsToggle(props: Readonly<{ on: boolean; onChange: (on: boolean) => void; hint: string }>): JSX.Element {
   return (
     <div className="tog">
       <div>
-        問題ありだけ
-        <small>{props.hint}</small>
+        問題ありだけ<small>{props.hint}</small>
       </div>
       <button
         type="button"
@@ -251,7 +250,7 @@ function RunsPanel(): JSX.Element {
   );
 }
 
-function RunRow(props: { run: DiagRun; open: boolean; onToggle: () => void }): JSX.Element {
+function RunRow(props: Readonly<{ run: DiagRun; open: boolean; onToggle: () => void }>): JSX.Element {
   const r = props.run;
   const st = runState(r.status, r.updated_at);
   const corrected = hasCorrections(r.corrections);
@@ -337,7 +336,7 @@ function OcrFailureCounts(): JSX.Element {
     <div className="diag-counts">
       <span className="lbl">OCR 失敗の内訳（直近{OCR_FAILURE_WINDOW_DAYS}日）</span>
       {err && <p className="auth-err">{err}</p>}
-      {sum && sum.total === 0 && <p className="note">失敗はありません。</p>}
+      {sum?.total === 0 && <p className="note">失敗はありません。</p>}
       {sum && sum.total > 0 && (
         <div className="readout">
           <div className="row">
@@ -360,7 +359,7 @@ function OcrFailureCounts(): JSX.Element {
   );
 }
 
-function OcrRow(props: { read: DiagOcrRead; open: boolean; onToggle: () => void }): JSX.Element {
+function OcrRow(props: Readonly<{ read: DiagOcrRead; open: boolean; onToggle: () => void }>): JSX.Element {
   const o = props.read;
   const corrected = hasCorrections(o.corrections);
   const issues = stringList(o.issues);
@@ -425,7 +424,7 @@ function ErrorsPanel(): JSX.Element {
   );
 }
 
-function ErrorRow(props: { err: DiagClientError; open: boolean; onToggle: () => void }): JSX.Element {
+function ErrorRow(props: Readonly<{ err: DiagClientError; open: boolean; onToggle: () => void }>): JSX.Element {
   const e = props.err;
   return (
     <li className="diag-row">
@@ -459,7 +458,7 @@ function ErrorRow(props: { err: DiagClientError; open: boolean; onToggle: () => 
 // 共通の部品
 // ---------------------------------------------------------------------------
 
-function DetailBlock(props: { title: string; children: ReactNode }): JSX.Element {
+function DetailBlock(props: Readonly<{ title: string; children: ReactNode }>): JSX.Element {
   return (
     <div className="diag-block">
       <span className="lbl">{props.title}</span>
@@ -468,7 +467,7 @@ function DetailBlock(props: { title: string; children: ReactNode }): JSX.Element
   );
 }
 
-function Lines(props: { lines: string[] }): JSX.Element {
+function Lines(props: Readonly<{ lines: string[] }>): JSX.Element {
   return (
     <ul className="diag-lines">
       {props.lines.map((l, i) => (
@@ -482,7 +481,7 @@ function Lines(props: { lines: string[] }): JSX.Element {
  * 解析に使ったスクショ（端末内で圧縮した版）。private バケットなので署名 URL で出す
  * （Storage のポリシーで本人か管理者しか発行できない）。タップで別タブに原寸表示。
  */
-function Shot(props: { path: string | null }): JSX.Element {
+function Shot(props: Readonly<{ path: string | null }>): JSX.Element {
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 

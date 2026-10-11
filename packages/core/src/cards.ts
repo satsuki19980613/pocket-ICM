@@ -32,7 +32,7 @@ export interface HandClass {
   readonly label: string;
 }
 
-const HAND_CLASS_RE = /^([AKQJT2-9])([AKQJT2-9])(s|o)?$/;
+const HAND_CLASS_RE = /^([AKQJT2-9])([AKQJT2-9])([so])?$/;
 
 /**
  * ハンドクラス表記をパースする。不正なら null。
@@ -75,8 +75,10 @@ export function allHandClasses(): HandClass[] {
         out.push({ hi, lo, kind: 'pair', label: `${hi}${lo}` });
       } else if (i < j) {
         // i が高ランク（強い）
-        out.push({ hi, lo, kind: 's', label: `${hi}${lo}s` });
-        out.push({ hi, lo, kind: 'o', label: `${hi}${lo}o` });
+        out.push(
+          { hi, lo, kind: 's', label: `${hi}${lo}s` },
+          { hi, lo, kind: 'o', label: `${hi}${lo}o` },
+        );
       }
     }
   }

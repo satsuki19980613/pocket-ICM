@@ -25,7 +25,7 @@ export function relTime(iso: string, now: number = Date.now()): string {
  * （既存コメントの編集 UI と同じ作法に合わせるため、こちらでは持たない）。
  * 画像はこのアプリの Storage の参照だけを、署名 URL にして出す（storageUrls.ts）。
  */
-export function PostBody(props: { body: string | null; imageUrl: string | null; onOpen?: () => void }): JSX.Element {
+export function PostBody(props: Readonly<{ body: string | null; imageUrl: string | null; onOpen?: () => void }>): JSX.Element {
   const src = useStorageImage(props.imageUrl, 'thread-images');
   const inner = (
     <>
@@ -77,7 +77,7 @@ export function CameraIcon(): JSX.Element {
  * 枠の色＋バッジは `author` の frame_color/special_frame/badge（`avatarDeco.ts` 参照）から
  * 解決する。フィード・スレッド・コメント・userpub すべてここを通る（唯一の実装）。
  */
-export function Avatar(props: { author: FeedAuthor; onClick?: () => void }): JSX.Element {
+export function Avatar(props: Readonly<{ author: FeedAuthor; onClick?: () => void }>): JSX.Element {
   const initial = props.author.handle.trim().charAt(0).toUpperCase() || '?';
   const src = useStorageImage(props.author.avatar_url, 'avatars');
   const deco = resolveAvatarDeco(props.author);

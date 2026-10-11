@@ -211,7 +211,7 @@ export function runOcrPipeline(reads: RawReads, opts: OcrPipelineOptions = {}): 
     ? facts.find((f) => f.id === chipCheck.correctedSeatId)?.pos
     : undefined;
   const low = correctedPos
-    ? [...new Set([...conf.lowConfidenceFields, `${correctedPos}.stack`])].sort()
+    ? [...new Set([...conf.lowConfidenceFields, `${correctedPos}.stack`])].sort((a, b) => (a < b ? -1 : 1)) // 一意・既定 sort と同順
     : conf.lowConfidenceFields;
 
   // 復元後もスタックが数値にならなかった席（＝仮値 0bb が入った席）。

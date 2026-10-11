@@ -144,7 +144,10 @@ export function detectYellowName(img: Rgba, stackRect: Rect, opts: YellowNameOpt
   for (let y = nyTop; y < nyBot; y++)
     for (let x = x0; x < x1; x++) {
       const s = (y * img.w + x) * 4;
-      if (isYellowNamePixel(img.data[s]!, img.data[s + 1]!, img.data[s + 2]!)) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+      if (isYellowNamePixel(img.data[s]!, img.data[s + 1]!, img.data[s + 2]!)) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
     }
   if (maxX < minX) return base;
   return { ...base, box: { cx: (minX + maxX) / 2, top: nyTop, bottom: nyBot, h: bestLen } };

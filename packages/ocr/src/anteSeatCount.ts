@@ -64,7 +64,8 @@ export interface SeatCountCheck {
 const VOLUNTARY: ReadonlySet<SeatAction> = new Set<SeatAction>(['allin', 'call', 'raise']);
 
 function blindOf(pos: Position, sb: number, bb: number): number {
-  return pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+  if (pos === 'SB') return sb;
+  return pos === 'BB' ? bb : 0;
 }
 
 /** 仮説（空席にする席の集合）で予想されるポットと人数。評価できなければ null。 */
@@ -137,7 +138,7 @@ export function resolveStacklessSeats(reads: RawReads): { reads: RawReads; resul
           ...s,
           occupancy: { value: 'empty' as const, conf },
           action: { value: 'none' as const, conf },
-          stack: { value: NaN, conf: 0 },
+          stack: { value: Number.NaN, conf: 0 },
           bet: { value: 0, conf },
         }
       : s,

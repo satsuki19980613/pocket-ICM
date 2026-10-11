@@ -23,10 +23,41 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SOLVER_DIR = join(HERE, '..');
 const OUT_DIR = join(SOLVER_DIR, 'artifacts');
 
-const PLAYERS = Number(process.argv[2] ?? 5);
-const SAMPLES = Number(process.argv[3] ?? 40_000);
-const AXIS = process.argv[4] ?? '2,8,14,20,25';
-const CKPT = Number(process.argv[5] ?? 10);
+// 子プロセス（genNwayTrainData.ts）へ渡す引数は起動前に検証する（引数インジェクション対策）。
+//  players は genNwayTrainData の対応範囲 3..6、samples/ckpt は正の整数、
+//  axis は「正の数（bb）のカンマ区切り」だけを許可する。
+const PLAYERS_ALLOWED = [3, 4, 5, 6] as const;
+const AXIS_CSV_RE = /^\d+(?:\.\d+)?(?:,\d+(?:\.\d+)?)*$/;
+
+function failArg(name: string, raw: string | undefined): never {
+  process.stderr.write(`  引数 ${name} が不正です（受領: ${raw}）\n`);
+  process.exit(1);
+}
+
+function positiveIntArg(index: number, name: string, def: number): number {
+  const raw = process.argv[index];
+  const v = Number(raw ?? def);
+  if (!Number.isSafeInteger(v) || v <= 0) failArg(name, raw);
+  return v;
+}
+
+function playersArg(): number {
+  const v = positiveIntArg(2, 'players', 5);
+  if (!(PLAYERS_ALLOWED as readonly number[]).includes(v)) failArg('players', process.argv[2]);
+  return v;
+}
+
+function axisArg(): string {
+  const raw = process.argv[4];
+  const v = raw ?? '2,8,14,20,25';
+  if (!AXIS_CSV_RE.test(v) || v.split(',').some((x) => !(Number(x) > 0))) failArg('axis', raw);
+  return v;
+}
+
+const PLAYERS = playersArg();
+const SAMPLES = positiveIntArg(3, 'samples', 40_000);
+const AXIS = axisArg();
+const CKPT = positiveIntArg(5, 'ckpt', 10);
 let PORT = Number(process.argv[6] ?? 4577);
 const PORT_TRIES = 20; // ポート使用中なら +1 しながら空きを探す（最大 20 個）
 const TAG = `nn${PLAYERS}way`;
@@ -249,7 +280,9 @@ function onListening(): void {
   // ブラウザ自動起動（Windows）。失敗しても上のURLを手で開けばよい。
   if (process.platform === 'win32') {
     try {
-      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+      // PATH 探索を避け、cmd.exe は絶対パスで起動する
+      const cmdExe = `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`;
+      spawn(cmdExe, ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
     } catch {
       /* 自動起動できなくてもURLを表示済みなので致命的でない */
     }

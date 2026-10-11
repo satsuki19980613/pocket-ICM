@@ -7,7 +7,7 @@ const SUIT_SYM: Record<Suit, string> = { spade: '♠', heart: '♥', diamond: '�
  * 公開結果のサマリーカード（Home フィード・Thread 見出し・userpub 共通）。
  * 解（solution）から判定/レンジ/EV/bb/手札を導いて描く。onOpen 指定でタップ可能。
  */
-export function ResultCard(props: { result: FeedResult; onOpen?: () => void }): JSX.Element {
+export function ResultCard(props: Readonly<{ result: FeedResult; onOpen?: () => void }>): JSX.Element {
   const c = feedCardOf(props.result);
   const cls = `rescard${c.verdict === 'FOLD' ? ' fold' : ''}`;
   const inner = (
@@ -42,7 +42,7 @@ export function ResultCard(props: { result: FeedResult; onOpen?: () => void }): 
   return <div className={cls}>{inner}</div>;
 }
 
-function Card(props: { card: SampleCard }): JSX.Element {
+function Card(props: Readonly<{ card: SampleCard }>): JSX.Element {
   return (
     <span className={`fcard ${props.card.s}`}>
       {props.card.r}

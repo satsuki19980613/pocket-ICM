@@ -10,14 +10,14 @@ import {
 describe('hand classes', () => {
   it('enumerates exactly 169 classes', () => {
     const all = allHandClasses();
-    expect(all.length).toBe(169);
+    expect(all).toHaveLength(169);
   });
 
   it('has 13 pairs, 78 suited, 78 offsuit', () => {
     const all = allHandClasses();
-    expect(all.filter((h) => h.kind === 'pair').length).toBe(13);
-    expect(all.filter((h) => h.kind === 's').length).toBe(78);
-    expect(all.filter((h) => h.kind === 'o').length).toBe(78);
+    expect(all.filter((h) => h.kind === 'pair')).toHaveLength(13);
+    expect(all.filter((h) => h.kind === 's')).toHaveLength(78);
+    expect(all.filter((h) => h.kind === 'o')).toHaveLength(78);
   });
 
   it('labels are unique', () => {

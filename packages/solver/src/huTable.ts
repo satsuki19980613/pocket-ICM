@@ -45,7 +45,6 @@ export function villainGroups(
   villainClass: string,
 ): { groups: VillainGroup[]; totalValid: number } {
   const heroSuits = new Set<number>([cardSuit(heroCombo[0]), cardSuit(heroCombo[1])]);
-  const freeSuits: number[] = [0, 1, 2, 3].filter((s) => !heroSuits.has(s));
 
   const heroCardSet = new Set<number>([heroCombo[0], heroCombo[1]]);
   const groups = new Map<string, VillainGroup>();
@@ -95,7 +94,7 @@ export function villainGroups(
 export function classEquityCanonical(heroClass: string, villainClass: string): number {
   const hero = canonicalHeroCombo(heroClass);
   const { groups, totalValid } = villainGroups(hero, villainClass);
-  if (totalValid === 0) return NaN;
+  if (totalValid === 0) return Number.NaN;
   let sum = 0;
   for (const g of groups) {
     const r = exactEquityVsHands(hero, g.rep);
@@ -121,7 +120,7 @@ export function classWinTieCanonical(
 ): { win: number; tie: number; validCombos: number } {
   const hero = canonicalHeroCombo(heroClass);
   const { groups, totalValid } = villainGroups(hero, villainClass);
-  if (totalValid === 0) return { win: NaN, tie: NaN, validCombos: 0 };
+  if (totalValid === 0) return { win: Number.NaN, tie: Number.NaN, validCombos: 0 };
   let w = 0;
   let t = 0;
   for (const g of groups) {
@@ -132,9 +131,7 @@ export function classWinTieCanonical(
   return { win: w / totalValid, tie: t / totalValid, validCombos: totalValid };
 }
 
-export interface HuTableProgress {
-  (done: number, total: number, label: string): void;
-}
+export type HuTableProgress = (done: number, total: number, label: string) => void;
 
 export interface HuTable {
   order: string[];

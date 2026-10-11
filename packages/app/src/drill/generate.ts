@@ -12,7 +12,7 @@
 import type { BoardState } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { RANKS, handLabel } from '../handGrid';
-import { buildBoardState, type BoardForm } from '../formModel';
+import { blindFor, buildBoardState, type BoardForm } from '../formModel';
 import type { SolveOpts } from '../solverProtocol';
 
 /** 0..1 の擬似乱数。テストでは seed 固定で決定的にする。 */
@@ -79,7 +79,7 @@ export function generateSpot(rng: Rng, filter: DrillFilter = DEFAULT_FILTER): Bo
     const stacks: BoardForm['stacks'] = {};
     for (const p of positions) {
       const total = randInt(rng, lo, hi); // 合計スタック（bb）
-      const blind = p === 'SB' ? 0.5 : p === 'BB' ? 1 : 0;
+      const blind = blindFor(p, 0.5, 1);
       // フォーム stack は「ベット差引後（後ろの持ち）」＝ total − blind。
       stacks[p] = String(total - blind);
     }

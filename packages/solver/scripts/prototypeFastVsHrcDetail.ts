@@ -7,10 +7,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { BoardState, Position } from '@oshihiki/core';
+import type { BoardState, Position, ActionChar } from '@oshihiki/core';
 import { positionsForPlayersLeft, normalizeKey, parseRangeToSet } from '@oshihiki/core';
-import type { ActionChar } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +37,7 @@ function keyOf(order: Position[], s: RefStrategy): string {
 function buildState(ref: RefFile): BoardState {
   const { sb, bb } = ref.setup.blinds; const ante = ref.setup.ante.amount;
   const seats = ref.players.map((p) => {
-    const bet = p.pos === 'SB' ? sb : p.pos === 'BB' ? bb : 0;
+    const bet = blindBet(p.pos, sb, bb);
     return { pos: p.pos, stack: p.stack - bet - ante, state: 'live' as const, bet };
   });
   const potBets = seats.reduce((a, s) => a + s.bet, 0);
@@ -82,4 +82,4 @@ async function main(): Promise<void> {
   await detail(state, ref, order, '基準（最重・最も正確） 80k/800', { samples: 80_000, maxIters: 800, refreshEvery: 100, workers });
   await detail(state, ref, order, '一番速い設定 4k/200', { samples: 4_000, maxIters: 200, refreshEvery: 100, workers });
 }
-void main();
+await main();

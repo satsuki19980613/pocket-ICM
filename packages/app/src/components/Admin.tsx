@@ -24,7 +24,7 @@ import { insertSngSamples, removeSngSamples } from '../sng/sampleHands';
  * 発行された生キーは一度だけ表示（DB はハッシュのみ）。
  * 計算の記録・OCR の失敗とスクショ・アプリのエラーは「診断ログ」（Diagnostics.tsx）で見る。
  */
-export function Admin(props: { onBack: () => void; onOpenDiagnostics: () => void }): JSX.Element {
+export function Admin(props: Readonly<{ onBack: () => void; onOpenDiagnostics: () => void }>): JSX.Element {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);

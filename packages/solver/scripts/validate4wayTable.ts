@@ -13,6 +13,7 @@ import {
   buildPfTable, decodePfData, lookupPf, pfInRange, type PfMeta,
   solveMultiway, evaluateMultiwayStrategy, maxWorkerCap, type MultiwayNSolveOptions,
 } from '../src/index.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +24,7 @@ const D = ORDER.length;
 
 function buildState(st: number[]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    const bet = blindBet(pos, SB, BB);
     return { pos, stack: st[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {
@@ -47,7 +48,7 @@ async function main(): Promise<void> {
   log(`  test点(CO/BU/SB/BB) | 範囲内 | レンジ%差 平均/最大 || expl: 直接 / テーブル (pt) | 超過損`);
 
   // オフグリッドのランダム点（軸中間を狙う）+ 代表点
-  const rng = (() => { let s = 12345; return () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; })();
+  const rng = (() => { let s = 12345; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; })();
   const tests: number[][] = [
     [9, 9, 9, 9], [7, 15, 11, 5], [13, 5, 20, 8], [17, 23, 8, 12], [3, 12, 24, 16],
     [8, 8, 8, 8], [11, 14, 6, 19],
@@ -83,4 +84,4 @@ async function main(): Promise<void> {
   log(`      → テーブルの最適比 超過損 = ${(avg(exT) - avg(exD)).toFixed(3)}pt（プール${poolPt.toFixed(0)}ptの${(((avg(exT) - avg(exD)) / poolPt) * 100).toFixed(2)}%）`);
   log(`推奨 interpExplBound（テーブル expl 最大の切り上げ, 表示用の保守的上限）= ${(Math.ceil(maxT * 100) / 100).toFixed(2)}`);
 }
-void main();
+await main();

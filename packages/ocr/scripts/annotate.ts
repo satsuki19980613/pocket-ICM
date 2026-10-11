@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng, encodePng, type Raster } from './pngCodec.js';
+import { safePath } from './safePath.js';
 
 interface FR { x: number; y: number; w: number; h: number }
 interface Named { name: string; rect: FR; color: [number, number, number] }
@@ -86,9 +87,9 @@ const argvRegions: Named[] = specs.map((s, i) => {
   return { name: name!, rect: { x: x!, y: y!, w: w!, h: h! }, color: palette[i % 4]! };
 });
 const active = argvRegions.length > 0 ? argvRegions : regions;
-const img = decodePng(readFileSync(input));
+const img = decodePng(readFileSync(safePath(input, 'input')));
 console.log(`decoded ${img.width}x${img.height}`);
 for (const rg of active) drawRect(img, rg.rect, rg.color);
 const out = downscale(img, scale);
-writeFileSync(output, encodePng(out));
+writeFileSync(safePath(output, 'output'), encodePng(out));
 console.log(`wrote ${output} (${out.width}x${out.height}) with ${active.length} regions`);

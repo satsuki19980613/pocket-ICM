@@ -41,6 +41,6 @@ describe('harness × 3-way ソルバー（プラミング統合）', () => {
     const c = cases.find((x) => x.name === 'synthetic-3way-bubble')!;
     const nodes = threeWaySolver({ ...c.input });
     expect(Array.isArray(nodes)).toBe(true);
-    expect(nodes.length).toBe(6);
+    expect(nodes).toHaveLength(6);
   }, 120_000);
 });

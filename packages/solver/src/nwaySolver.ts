@@ -37,7 +37,7 @@
  * - per-class equity は epoch MC のクラス別バケットで、サンプル数に応じたノイズ床を持つ。
  */
 
-import type { BoardState, SolutionNode, Position } from '@oshihiki/core';
+import type { BoardState, SolutionNode, Position, ActionChar } from '@oshihiki/core';
 import {
   normalizeKey,
   formatRange,
@@ -45,7 +45,6 @@ import {
   parseHandClass,
   positionsForPlayersLeft,
 } from '@oshihiki/core';
-import type { ActionChar } from '@oshihiki/core';
 import { icmEquities, payoutsForPlayers } from './icm.js';
 import { finalStacksFromShowdown } from './sidepot.js';
 import { HAND_CLASS_ORDER } from './huEquity.js';
@@ -56,7 +55,6 @@ import { computeShowdownMc, DEFAULT_STRAT, type ShowdownMcResult, type StratSpec
 import {
   computeShowdown2Exact,
   computeShowdown3Exact,
-  computeShowdown3ExactDenseChunk,
   mergeShowdown3ExactDenseChunks,
   rankClassesByEquityVs,
   exact3LookupCost,
@@ -160,13 +158,16 @@ function mix(a: number, b: number, c: number): number {
   return h;
 }
 
+/** 決定ノードのアクション種別（PU=最初のオールイン / CA=1 人に対するコール / OC=オーバーコール）。 */
+type NodeActionType = 'PU' | 'CA' | 'OC';
+
 /** 決定ノード記述子。 */
 interface NodeDesc {
   i: number; // actor 席インデックス（order 内）
   S: number; // 前方オールイン集合（bitmask over 0..i-1）
   id: number; // i*64 + S
   actor: Position;
-  actionType: 'PU' | 'CA' | 'OC';
+  actionType: NodeActionType;
   key: string;
   /** 同時オールイン上限（maxActive）到達で「決定なし＝強制フォールド」のノード。 */
   truncated: boolean;
@@ -438,7 +439,10 @@ function makeRefreshSchedule(refreshEvery: number, mode: 'fixed' | 'geometric'):
   let next = refreshEvery;
   return (t: number): boolean => {
     if (t < next) return false;
-    const step = next < 1000 ? refreshEvery : next < 3000 ? refreshEvery * 2 : refreshEvery * 4;
+    let step: number;
+    if (next < 1000) step = refreshEvery;
+    else if (next < 3000) step = refreshEvery * 2;
+    else step = refreshEvery * 4;
     next += step;
     return true;
   };
@@ -456,6 +460,19 @@ function defaultSamples(n: number): number {
     default:
       return 30_000; // 6-way
   }
+}
+
+/** [0,total) をほぼ均等な k 個の [lo,hi) に分割する（item1: dense sweep の 'a' 範囲分割）。 */
+function chunkBounds(total: number, k: number): { lo: number; hi: number }[] {
+  const n = Math.max(1, Math.min(k, total));
+  const out: { lo: number; hi: number }[] = [];
+  let lo = 0;
+  for (let i = 0; i < n; i++) {
+    const hi = Math.round(((i + 1) * total) / n);
+    if (hi > lo) out.push({ lo, hi });
+    lo = hi;
+  }
+  return out;
 }
 
 /**
@@ -511,13 +528,15 @@ function buildEngine(
 
   // --- 決定ノードの列挙 ---
   const nodes: NodeDesc[] = [];
-  const nodeById = new Map<number, NodeDesc>();
   for (let i = 0; i < n; i++) {
     for (let S = 0; S < 1 << i; S++) {
       if (i === last && S === 0) continue; // ウォーク（決定でない）
       const id = i * 64 + S;
       const pc = popcount(S);
-      const actionType: 'PU' | 'CA' | 'OC' = pc === 0 ? 'PU' : pc === 1 ? 'CA' : 'OC';
+      let actionType: NodeActionType;
+      if (pc === 0) actionType = 'PU';
+      else if (pc === 1) actionType = 'CA';
+      else actionType = 'OC';
       // key: 前方 S の最小席=P（最初のオールイン）, 他の S 席=C, フォールド席=F, actor と後方=-
       const actions: Partial<Record<Position, ActionChar>> = {};
       const firstAggr = S === 0 ? -1 : 31 - Math.clz32(S & -S); // 最小ビット位置
@@ -528,7 +547,6 @@ function buildEngine(
       const key = normalizeKey(n, actions);
       const node: NodeDesc = { i, S, id, actor: order[i]!, actionType, key, truncated: pc >= maxActive };
       nodes.push(node);
-      nodeById.set(id, node);
     }
   }
   const nodeId = (i: number, S: number): number => i * 64 + S;
@@ -601,19 +619,6 @@ function buildEngine(
   // 参照（worker プールのタスクキューが自然に負荷分散するため、同時に dense 判定される
   // 集合数によらず一律この上限で割る）。
   const EXACT3_MAX_CHUNKS_PER_SET = 8;
-
-  /** [0,total) をほぼ均等な k 個の [lo,hi) に分割する（item1: dense sweep の 'a' 範囲分割）。 */
-  function chunkBounds(total: number, k: number): { lo: number; hi: number }[] {
-    const n = Math.max(1, Math.min(k, total));
-    const out: { lo: number; hi: number }[] = [];
-    let lo = 0;
-    for (let i = 0; i < n; i++) {
-      const hi = Math.round(((i + 1) * total) / n);
-      if (hi > lo) out.push({ lo, hi });
-      lo = hi;
-    }
-    return out;
-  }
 
   const refresh = async (strat: Map<number, F64>, epoch: number, full = false): Promise<void> => {
     const store = (A: number, participants: number[], res: ShowdownMcResult): void => {
@@ -1082,7 +1087,7 @@ function initStrategies(eng: Engine, warm?: Map<string, F64>): Map<number, F64> 
       continue;
     }
     const w = warm?.get(nd.key);
-    strat.set(nd.id, w && w.length === N_CLASSES ? Float64Array.from(w) : new Float64Array(N_CLASSES).fill(0.5));
+    strat.set(nd.id, w?.length === N_CLASSES ? Float64Array.from(w) : new Float64Array(N_CLASSES).fill(0.5));
   }
   return strat;
 }
@@ -1305,7 +1310,7 @@ export interface MultiwayStrategyEval {
  */
 export async function evaluateMultiwayStrategy(
   state: BoardState,
-  produce: (key: string, actionType: 'PU' | 'CA' | 'OC') => F64,
+  produce: (key: string, actionType: NodeActionType) => F64,
   opts: MultiwayNSolveOptions = {},
 ): Promise<MultiwayStrategyEval> {
   const n = state.playersLeft;

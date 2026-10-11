@@ -7,7 +7,7 @@ import { rankGlyph } from '../src/cards.js';
 import type { Rgba } from '../src/color.js';
 import type { Rect } from '../src/types.js';
 const DIR='local-fixtures';
-function file(ts:string){for(const p of [`${DIR}/Screenshot_20260901-${ts}.png`,`${DIR}/Screenshot_20260902-${ts}.png`])if(existsSync(p))return p;throw new Error(ts);}
+function file(ts:string){for(const p of [`${DIR}/Screenshot_20260901-${ts}.png`,`${DIR}/Screenshot_20260902-${ts}.png`]){if(existsSync(p))return p;}throw new Error(ts);}
 const toRgba=(r:Raster):Rgba=>({w:r.width,h:r.height,data:r.rgba});
 const px=(r:Raster,fr:readonly number[]):Rect=>({x:Math.round(fr[0]!*r.width),y:Math.round(fr[1]!*r.height),w:Math.round(fr[2]!*r.width),h:Math.round(fr[3]!*r.height)});
 const HERO=[0.425,0.655,0.105,0.150] as const;

@@ -107,10 +107,12 @@ function inkComponents(bin: Uint8Array, w: number, h: number): InkComp[] {
     st.length = 0; st.push(i); label[i] = id;
     while (st.length) {
       const p = st.pop()!;
-      const px = p % w, py = (p / w) | 0;
+      const px = p % w, py = Math.trunc(p / w);
       const b = boxes[id]!; b.a++;
-      if (px < b.x0) b.x0 = px; if (px > b.x1) b.x1 = px;
-      if (py < b.y0) b.y0 = py; if (py > b.y1) b.y1 = py;
+      if (px < b.x0) b.x0 = px;
+      if (px > b.x1) b.x1 = px;
+      if (py < b.y0) b.y0 = py;
+      if (py > b.y1) b.y1 = py;
       if (px > 0 && bin[p - 1] && label[p - 1] === -1) { label[p - 1] = id; st.push(p - 1); }
       if (px < w - 1 && bin[p + 1] && label[p + 1] === -1) { label[p + 1] = id; st.push(p + 1); }
       if (py > 0 && bin[p - w] && label[p - w] === -1) { label[p - w] = id; st.push(p - w); }
@@ -147,7 +149,12 @@ export function rankGlyph(img: Rgba, card: Rect): Gray {
     return Math.abs(c2 - cy) <= 0.6 * band || (c.y0 <= top.y1 && c.y1 >= top.y0);
   });
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
-  for (const c of grp) { if (c.x0 < x0) x0 = c.x0; if (c.y0 < y0) y0 = c.y0; if (c.x1 > x1) x1 = c.x1; if (c.y1 > y1) y1 = c.y1; }
+  for (const c of grp) {
+    if (c.x0 < x0) x0 = c.x0;
+    if (c.y0 < y0) y0 = c.y0;
+    if (c.x1 > x1) x1 = c.x1;
+    if (c.y1 > y1) y1 = c.y1;
+  }
   const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
   const cr: Gray = { w: cw, h: ch, data: new Uint8Array(cw * ch) };
   for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) cr.data[y * cw + x] = data[(y0 + y) * w + (x0 + x)]!;

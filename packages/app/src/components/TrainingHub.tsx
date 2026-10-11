@@ -33,11 +33,11 @@ function MenuCard(props: MenuProps): JSX.Element {
   );
 }
 
-export function TrainingHub(props: {
+export function TrainingHub(props: Readonly<{
   onOpenSlumbot: () => void;
   onOpenSng: () => void;
   onOpenStats: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <div className="tr-wrap">
       <div className="tr-menu">

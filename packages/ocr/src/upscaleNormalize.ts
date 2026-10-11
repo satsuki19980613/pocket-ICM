@@ -101,9 +101,10 @@ function yellowWordHeights(img: Rgba): number[] {
     st.length = 0; st.push(i); seen[i] = 1;
     let y0 = h, y1 = -1, ink = 0;
     while (st.length) {
-      const p = st.pop()!; const px = p % w, py = (p / w) | 0;
+      const p = st.pop()!; const px = p % w, py = Math.trunc(p / w);
       if (mask[p]) ink++;
-      if (py < y0) y0 = py; if (py > y1) y1 = py;
+      if (py < y0) y0 = py;
+      if (py > y1) y1 = py;
       const nb = [p - 1, p + 1, p - w, p + w];
       for (const q of nb) {
         if (q < 0 || q >= w * h || !dil[q] || seen[q]) continue;

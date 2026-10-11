@@ -10,10 +10,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { BoardState, Position } from '@oshihiki/core';
-import { positionsForPlayersLeft, normalizeKey, parseRangeToSet } from '@oshihiki/core';
-import type { ActionChar } from '@oshihiki/core';
+import type { BoardState, Position, ActionChar } from '@oshihiki/core';
+import { positionsForPlayersLeft, normalizeKey } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions, type MultiwayNSolveResult } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -27,13 +27,18 @@ function keyOf(order: Position[], s: RefStrategy): string {
   const aggressors = s.vs ? s.vs.split(',').map((x) => x.trim()) : [];
   const actions: Partial<Record<Position, ActionChar>> = {};
   const ai = order.indexOf(s.actor);
-  for (let j = 0; j < ai; j++) { const p = order[j]!; actions[p] = aggressors.includes(p) ? (p === aggressors[0] ? 'P' : 'C') : 'F'; }
+  for (let j = 0; j < ai; j++) {
+    const p = order[j]!;
+    let act: ActionChar = 'F';
+    if (aggressors.includes(p)) act = p === aggressors[0] ? 'P' : 'C';
+    actions[p] = act;
+  }
   return normalizeKey(order.length, actions);
 }
 function buildState(ref: RefFile, bump = 0): BoardState {
   const { sb, bb } = ref.setup.blinds; const ante = ref.setup.ante.amount;
   const seats = ref.players.map((p, i) => {
-    const bet = p.pos === 'SB' ? sb : p.pos === 'BB' ? bb : 0;
+    const bet = blindBet(p.pos, sb, bb);
     const stackTotal = p.stack + (i === 0 ? bump : 0); // player0 を +bump bb
     return { pos: p.pos, stack: stackTotal - bet - ante, state: 'live' as const, bet };
   });
@@ -45,13 +50,23 @@ function buildState(ref: RefFile, bump = 0): BoardState {
 function hrcDiff(res: MultiwayNSolveResult, ref: RefFile, order: Position[]): number {
   const byKey = Object.fromEntries(res.nodes.map((n) => [n.key, n]));
   let sum = 0, cnt = 0;
-  for (const s of ref.strategies) { const nd = byKey[keyOf(order, s)]; if (!nd) continue; sum += Math.abs(nd.pct - s.freqPct); cnt++; }
+  for (const s of ref.strategies) {
+    const nd = byKey[keyOf(order, s)];
+    if (!nd) continue;
+    sum += Math.abs(nd.pct - s.freqPct);
+    cnt++;
+  }
   return sum / cnt;
 }
 function selfDiff(a: MultiwayNSolveResult, b: MultiwayNSolveResult): number {
   const bm = new Map(b.nodes.map((n) => [n.key, n.pct]));
   let sum = 0, cnt = 0;
-  for (const n of a.nodes) { const o = bm.get(n.key); if (o === undefined) continue; sum += Math.abs(n.pct - o); cnt++; }
+  for (const n of a.nodes) {
+    const o = bm.get(n.key);
+    if (o === undefined) continue;
+    sum += Math.abs(n.pct - o);
+    cnt++;
+  }
   return sum / cnt;
 }
 async function timed(state: BoardState, opts: MultiwayNSolveOptions) {
@@ -85,4 +100,4 @@ async function main(): Promise<void> {
   log(`   ウォーム vs コールド 戦略差 = ${selfDiff(Cw.res, Cc.res).toFixed(2)}pt（小さいほど「温めても同じ答え」）`);
   log(`   速度: ウォームは コールド比 ${(Cc.ms/Cw.ms).toFixed(1)}x  （反復 ${Cc.res.iterations}→${Cw.res.iterations}）`);
 }
-void main();
+await main();

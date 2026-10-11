@@ -13,5 +13,5 @@ const cases:[string,string,keyof typeof C,boolean][]=[
   ['142844 TL','142844','TL',true],['142844 TC','142844','TC',false],['142844 TR','142844','TR',false],['142844 BR','142844','BR',false],
 ];
 let ok=0,tot=0;
-for(const [name,fr,seat,truth] of cases){const img=decodePng(readFileSync(f(fr)));const r=isActiveHand(toRgba(img),px(img,C[seat]));const good=r.value===truth;if(good)ok++;tot++;console.log(`${good?'OK':'XX'} ${name} truth=${truth?'active':'folded'} got=${r.value?'active':'folded'} conf=${r.conf.toFixed(2)}`);}
+for(const [name,fr,seat,truth] of cases){const img=decodePng(readFileSync(f(fr)));const r=isActiveHand(toRgba(img),px(img,C[seat]));const good=r.value===truth;if(good){ok++;}tot++;console.log(`${good?'OK':'XX'} ${name} truth=${truth?'active':'folded'} got=${r.value?'active':'folded'} conf=${r.conf.toFixed(2)}`);}
 console.log(`\nactive/folded 一致: ${ok}/${tot}`);

@@ -67,7 +67,7 @@ export function makeAttempt(spot: SolvedSpot, action: HeroAction, id?: string): 
   const j = judge(spot.result, action);
   const stamp = Date.now();
   return {
-    id: id ?? `drill-${stamp}-${Math.random().toString(36).slice(2, 7)}`,
+    id: id ?? `drill-${stamp}-${crypto.randomUUID().slice(0, 5)}`,
     heroHand: spot.result.heroHand,
     heroPos: spot.result.heroPos,
     playersLeft: spot.result.playersLeft,

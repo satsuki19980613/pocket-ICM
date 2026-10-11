@@ -8,13 +8,15 @@
  *   multi : tsx digitsTool.ts multi <templates.json> <input.png> <name=x,y,w,h=truth> ...
  * x,y,w,h は [0,1] の割合矩形。truth は "13,491" 等（コンマは自動で無視）。
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { parseAmount } from '../src/digits.js';
 import { loadTemplates, recognizeField, fieldGlyphRects, normGlyph, type TplStore } from './digitsCore.js';
 
-const [, , mode, tplPath, input] = process.argv;
-const img = decodePng(readFileSync(input!));
+const [, , mode, tplPathArg, input] = process.argv;
+const img = decodePng(readFileSync(safePath(input!, 'input')));
+const tplPath = safePath(tplPathArg!, 'templates.json');
 
 function parseFrac(s: string): [number, number, number, number] {
   const [x, y, w, h] = s.split(',').map(Number);
@@ -25,33 +27,38 @@ if (mode === 'build') {
   const [, , , , , zoneStr, truth] = process.argv;
   const frac = parseFrac(zoneStr!);
   const { rects, strip } = fieldGlyphRects(img, frac);
-  const chars = [...truth!.replace(/[^0-9]/g, '')];
+  const chars = [...truth!.replace(/\D/g, '')];
   console.log(`detected ${rects.length} glyphs; truth chars ${chars.length} (${truth})`);
   if (rects.length !== chars.length) {
     console.error('グリフ数と真値文字数が不一致。領域を見直す。');
     rects.forEach((r, i) => console.error(`  glyph[${i}] x=${r.x} w=${r.w} h=${r.h}`));
     process.exit(1);
   }
-  const store: TplStore = existsSync(tplPath!)
-    ? (JSON.parse(readFileSync(tplPath!, 'utf8')).templates ?? {})
-    : {};
+  // 存在確認と読み込みの間に差し替えられないよう、読んでみて無ければ空にする。
+  let store: TplStore = {};
+  try {
+    store = JSON.parse(readFileSync(tplPath, 'utf8')).templates ?? {};
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
   rects.forEach((r, i) => {
     const g = normGlyph(strip, r);
     store[chars[i]!] = { w: g.w, h: g.h, data: [...g.data] };
   });
-  writeFileSync(tplPath!, JSON.stringify({ templates: store }));
-  console.log(`built/merged → ${Object.keys(store).length} templates: ${Object.keys(store).sort().join(' ')}`);
+  writeFileSync(tplPath, JSON.stringify({ templates: store }));
+  console.log(`built/merged → ${Object.keys(store).length} templates: ${Object.keys(store).sort((a, b) => (a < b ? -1 : 1)).join(' ')}`);
 } else if (mode === 'recog') {
   const [, , , , , zoneStr, truth] = process.argv;
-  const templates = loadTemplates(tplPath!);
+  const templates = loadTemplates(tplPath);
   const r = recognizeField(img, parseFrac(zoneStr!), templates);
   const ok = r.value !== null && r.value === parseAmount(truth!);
   console.log(`${ok ? 'OK ' : 'XX '} truth=${truth} → read="${r.text}" (${r.value}) minScore=${r.minScore.toFixed(3)}`);
-  console.log(`  glyphs: ${r.glyphs.map((g) => `${g.label}:${g.score.toFixed(2)}`).join(' ')}`);
+  const fmtGlyph = (g: { label: string; score: number }) => `${g.label}:${g.score.toFixed(2)}`;
+  console.log(`  glyphs: ${r.glyphs.map(fmtGlyph).join(' ')}`);
   process.exit(ok ? 0 : 2);
 } else if (mode === 'multi') {
   const specs = process.argv.slice(5);
-  const templates = loadTemplates(tplPath!);
+  const templates = loadTemplates(tplPath);
   let ok = 0, total = 0;
   for (const spec of specs) {
     const [name, zoneStr, truth] = spec.split('=');

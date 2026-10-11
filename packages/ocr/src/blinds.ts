@@ -21,7 +21,7 @@ export interface Blinds {
 
 function toRead(part: string | undefined, conf: number): Read<number> {
   const v = part ? parseAmount(part) : null;
-  if (v === null) return { value: NaN, conf: 0 };
+  if (v === null) return { value: Number.NaN, conf: 0 };
   return { value: v, conf };
 }
 
@@ -39,7 +39,7 @@ export function readBlinds(
   const slash = g.text.indexOf('/');
   if (slash < 0) {
     // 区切りが読めない: 分割できないので両方低信頼。
-    return { sb: { value: NaN, conf: 0 }, bb: { value: NaN, conf: 0 } };
+    return { sb: { value: Number.NaN, conf: 0 }, bb: { value: Number.NaN, conf: 0 } };
   }
   const left = g.text.slice(0, slash);
   const right = g.text.slice(slash + 1);

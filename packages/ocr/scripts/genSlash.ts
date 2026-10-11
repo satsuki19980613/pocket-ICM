@@ -3,7 +3,8 @@
  * 使い方: tsx genSlash.ts <frame.png> <x,y,w,h(blindsnum割合)> <compIndex>
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { decodePng, type Raster } from './pngCodec.js';
+import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { whiteMask, digitComponents, grayFromRgba, DIGIT_NORM_H } from '../src/numberField.js';
 import { crop, resize } from '../src/raster.js';
 import type { Rgba } from '../src/color.js';
@@ -14,7 +15,7 @@ const [, , frame, rectStr, idxStr] = process.argv;
 const fr = (rectStr ?? '0.172,0.012,0.084,0.044').split(',').map(Number);
 const idx = Number(idxStr ?? '3');
 
-const img = decodePng(readFileSync(frame ?? 'local-fixtures/Screenshot_20260901-142820.png'));
+const img = decodePng(readFileSync(safePath(frame ?? 'local-fixtures/Screenshot_20260901-142820.png', 'frame')));
 const rgba: Rgba = { w: img.width, h: img.height, data: img.rgba };
 const rect: Rect = { x: Math.round(fr[0]! * img.width), y: Math.round(fr[1]! * img.height), w: Math.round(fr[2]! * img.width), h: Math.round(fr[3]! * img.height) };
 const strip = grayFromRgba(rgba, rect);

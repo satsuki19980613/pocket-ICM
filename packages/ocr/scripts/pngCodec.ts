@@ -32,7 +32,7 @@ const CRC_TABLE = makeCrcTable();
 
 function crc32(buf: Uint8Array): number {
   let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]!) & 0xff]! ^ (c >>> 8);
+  for (const v of buf) c = CRC_TABLE[(c ^ v) & 0xff]! ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
@@ -58,7 +58,7 @@ export function decodePng(buf: Uint8Array): Raster {
   const idat: Uint8Array[] = [];
   while (off < buf.length) {
     const len = dv.getUint32(off);
-    const type = String.fromCharCode(buf[off + 4]!, buf[off + 5]!, buf[off + 6]!, buf[off + 7]!);
+    const type = String.fromCodePoint(buf[off + 4]!, buf[off + 5]!, buf[off + 6]!, buf[off + 7]!);
     const data = buf.subarray(off + 8, off + 8 + len);
     if (type === 'IHDR') {
       width = dv.getUint32(off + 8);
@@ -118,10 +118,10 @@ function chunk(type: string, data: Uint8Array): Uint8Array {
   const out = new Uint8Array(12 + data.length);
   const dv = new DataView(out.buffer);
   dv.setUint32(0, data.length);
-  out[4] = type.charCodeAt(0);
-  out[5] = type.charCodeAt(1);
-  out[6] = type.charCodeAt(2);
-  out[7] = type.charCodeAt(3);
+  out[4] = type.codePointAt(0)!;
+  out[5] = type.codePointAt(1)!;
+  out[6] = type.codePointAt(2)!;
+  out[7] = type.codePointAt(3)!;
   out.set(data, 8);
   const crc = crc32(out.subarray(4, 8 + data.length));
   dv.setUint32(8 + data.length, crc);

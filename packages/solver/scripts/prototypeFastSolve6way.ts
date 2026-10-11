@@ -8,6 +8,7 @@
 
 import type { BoardState } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 
@@ -17,7 +18,7 @@ function state6(): BoardState {
   const chips = [10, 15, 20, 25, 12, 8]; // UTG..BB の総チップ(T)
   const order = ['UTG', 'HJ', 'CO', 'BU', 'SB', 'BB'] as const;
   const seats = order.map((pos, i) => {
-    const bet = pos === 'SB' ? sb : pos === 'BB' ? bb : 0;
+    const bet = blindBet(pos, sb, bb);
     return { pos, stack: chips[i]! - bet - ante, state: 'live' as const, bet };
   });
   return {
@@ -83,4 +84,4 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+await main();

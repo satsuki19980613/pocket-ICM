@@ -8,13 +8,13 @@ import { ErrorBoundary } from './ErrorBoundary';
  * 他人の公開一覧（M6 userpub・v3 で通常投稿も混在）。
  * 投稿者ヘッダ＋公開結果カード / 通常投稿（→スレッド）。
  */
-export function UserPub(props: {
+export function UserPub(props: Readonly<{
   author: FeedAuthor | null;
   state: FeedState;
   posts: FeedPost[];
   onOpenThread: (threadId: string) => void;
   onRetry: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   return (
     <div className="userpub">
       {props.author && (

@@ -1,6 +1,7 @@
 /** dev: フレーム → RawReads → runOcrPipeline を end-to-end 実行して表示。 */
 import { readFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 import { extractRawReads, extractRawReadsAuto, type ExtractTemplates } from '../src/extract.js';
 import { CHIPS_6MAX } from '../src/frameProfile.js';
 import { runOcrPipeline } from '../src/pipeline.js';
@@ -14,12 +15,12 @@ const load=(path:string)=>templatesFromJson(JSON.parse(readFileSync(path,'utf8')
 const templates:ExtractTemplates={digits:load(`${A}/digits.json`),ranks:load(`${A}/ranks_hero.json`),actions:load(`${A}/actions.json`),letters:load(`${A}/letters_bb.json`)};
 
 const frame=process.argv[2]??'Screenshot_20260901-142820.png';
-const img=decodePng(readFileSync(`${DIR}/${frame}`));
+const img=decodePng(readFileSync(safePath(`${DIR}/${frame}`,'frame')));
 const rgba:Rgba={w:img.width,h:img.height,data:img.rgba};
 const arg3=process.argv[3]??'';
 let reads, contentRect={x:0,y:0,w:1,h:1};
 if(arg3==='auto'){({reads,contentRect}=extractRawReadsAuto(rgba,CHIPS_6MAX,templates,{betMinCh:125}));}
-else if(arg3.startsWith('cr:')){const[x,y,w,h]=arg3.slice(3).split(',').map(Number);contentRect={x,y,w,h};const dm=process.argv[4]==='bb'?'bb':process.argv[4]==='chips'?'chips':undefined;reads=extractRawReads(rgba,CHIPS_6MAX,templates,{betMinCh:125,contentRect,...(dm?{displayMode:dm}:{})});}
+else if(arg3.startsWith('cr:')){const[x,y,w,h]=arg3.slice(3).split(',').map(Number);contentRect={x,y,w,h};const dm=(['bb','chips'] as const).find((m)=>m===process.argv[4]);reads=extractRawReads(rgba,CHIPS_6MAX,templates,{betMinCh:125,contentRect,...(dm?{displayMode:dm}:{})});}
 else{reads=extractRawReads(rgba,CHIPS_6MAX,templates,{betMinCh:125});}
 console.log(`contentRect=x${contentRect.x} y${contentRect.y} w${contentRect.w} h${contentRect.h}`);
 

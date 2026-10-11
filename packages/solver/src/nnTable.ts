@@ -74,10 +74,13 @@ export function decodeNnModel(meta: NnMeta, buf: ArrayBuffer): MlpModel {
   }
   const norm = new Float32Array(buf, 0, normFloats);
   let p = 0;
-  const inMean = norm.subarray(p, (p += inDim));
-  const inStd = norm.subarray(p, (p += inDim));
-  const outMean = norm.subarray(p, (p += outDim));
-  const outStd = norm.subarray(p, (p += outDim));
+  const inMean = norm.subarray(p, p + inDim);
+  p += inDim;
+  const inStd = norm.subarray(p, p + inDim);
+  p += inDim;
+  const outMean = norm.subarray(p, p + outDim);
+  p += outDim;
+  const outStd = norm.subarray(p, p + outDim);
 
   const wBytesOffset = normFloats * 4;
   const wf16 = new Uint16Array(buf, wBytesOffset, weightCount);
@@ -123,7 +126,7 @@ export function nnInRange(table: NnTable, state: BoardState): boolean {
   const { blinds, ante, axis } = table.meta;
   if (state.blinds.sb !== blinds.sb || state.blinds.bb !== blinds.bb) return false;
   if (state.ante.scheme !== ante.scheme || state.ante.amount !== ante.amount) return false;
-  const hi = axis[axis.length - 1]!;
+  const hi = axis.at(-1)!;
   const totals = stackTotals(table.meta.order, ante, state);
   // 下限はクランプ可（超短スタックは自明）。上限超えは AOF が妥当でない領域＝フォールバック。
   return totals.every((t) => t <= hi + 1e-6);
@@ -141,7 +144,7 @@ export function lookupNn(table: NnTable, state: BoardState): MultiwayNSolveResul
 
   const totals = stackTotals(order, meta.ante, state);
   // 学習は格子範囲で行うため、範囲下限へクランプしてから前進（外挿を避ける）。
-  const hi = meta.axis[meta.axis.length - 1]!;
+  const hi = meta.axis.at(-1)!;
   const lo = meta.axis[0]!;
   const input = Float32Array.from(totals, (t) => Math.min(hi, Math.max(lo, t)));
 

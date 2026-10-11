@@ -23,6 +23,7 @@ import { HAND_CLASS_ORDER } from '../src/huEquity.js';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions } from '../src/nwaySolver.js';
 import { loadHuWinTieTable } from '../src/huWinTieLoader.js';
 import { loadWinTie3Table } from '../src/wintie3Loader.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -42,7 +43,7 @@ const G = AXIS.length;
 
 function buildState(stacks: number[]): BoardState {
   const seats = ORDER.map((pos, i) => {
-    const bet = pos === 'SB' ? SB : pos === 'BB' ? BB : 0;
+    const bet = blindBet(pos, SB, BB);
     return { pos, stack: stacks[i]! - bet - ANTE, state: 'live' as const, bet };
   });
   return {
@@ -245,4 +246,4 @@ async function main(): Promise<void> {
   log(`\n生成完了: ${total}点 / ${((Date.now() - t0) / 1000 / 60).toFixed(1)}分`);
   log(`保存: artifacts/${TAG}.train.f32.bin = ${(buf!.byteLength / 1024 / 1024).toFixed(2)}MB (gzip ${(gz / 1024 / 1024).toFixed(2)}MB) + meta.json`);
 }
-void main();
+await main();

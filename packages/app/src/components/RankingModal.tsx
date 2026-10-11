@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 import { signedBbLabel } from '../slumbot/rules';
 import { fetchRanking, flushPending, type RankRow } from '../supabase/huStats';
 import { useStorageImage } from '../supabase/storageUrls';
@@ -17,7 +17,7 @@ import { AvatarBadge, resolveAvatarDeco } from '../avatarDeco';
 
 type State = 'loading' | 'ready' | 'error';
 
-function Avatar(props: { row: RankRow }): JSX.Element {
+function Avatar(props: Readonly<{ row: RankRow }>): JSX.Element {
   const initial = props.row.handle.trim().charAt(0).toUpperCase() || '?';
   // アイコンはこのアプリの Storage の参照だけを署名 URL にして出す（storageUrls.ts）。
   const src = useStorageImage(props.row.avatarUrl, 'avatars');
@@ -34,7 +34,7 @@ function Avatar(props: { row: RankRow }): JSX.Element {
   );
 }
 
-function Body(props: { state: State; rows: RankRow[]; onReload: () => void }): JSX.Element {
+function Body(props: Readonly<{ state: State; rows: RankRow[]; onReload: () => void }>): JSX.Element {
   if (props.state === 'loading') {
     return (
       <div className="panel solving">
@@ -104,7 +104,7 @@ function Body(props: { state: State; rows: RankRow[]; onReload: () => void }): J
   );
 }
 
-export function RankingModal(props: { onClose: () => void }): JSX.Element {
+export function RankingModal(props: Readonly<{ onClose: () => void }>): JSX.Element {
   useBackLayer(props.onClose);
   const [state, setState] = useState<State>('loading');
   const [rows, setRows] = useState<RankRow[]>([]);
@@ -137,10 +137,9 @@ export function RankingModal(props: { onClose: () => void }): JSX.Element {
   }, [load]);
 
   return (
-    <div className="modal-backdrop" onClick={props.onClose} role="presentation">
+    <div className="modal-backdrop" onClick={backdropClick(props.onClose)} role="presentation">
       <div
         className="modal rk-modal"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="ランキング"

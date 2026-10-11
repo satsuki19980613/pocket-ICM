@@ -327,7 +327,9 @@ export function addPreset(
   if (!CATEGORY_UNITS[cat].includes(unit)) return { ok: false, message: 'この項目では使えない単位です' };
   if (!Number.isFinite(value) || value <= 0) return { ok: false, message: '0 より大きい数を入れてください' };
   const v = Number(value.toFixed(2));
-  const limit = unit === 'pct' ? 2000 : unit === 'x' ? 100 : 200;
+  let limit = 200;
+  if (unit === 'pct') limit = 2000;
+  else if (unit === 'x') limit = 100;
   if (v > limit) return { ok: false, message: `大きすぎます（${limit} まで）` };
   const list = cfg[cat];
   if (list.length >= MAX_PRESETS) return { ok: false, message: `登録できるのは ${MAX_PRESETS} 個までです` };

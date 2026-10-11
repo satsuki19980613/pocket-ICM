@@ -29,7 +29,7 @@ interface TrainMeta {
   inDim: number; outDim: number; rowStride: number; floatsPerNode: number; rows: number; samples: number;
 }
 
-async function main(): Promise<void> {
+function main(): void {
   const N = Number(process.argv[2] ?? 5);
   const epochs = Number(process.argv[3] ?? 400);
   const hidden = (process.argv[4] ?? '256,256').split(',').map(Number);
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   norm.set(model.inputNorm.mean, p); p += inDim;
   norm.set(model.inputNorm.std, p); p += inDim;
   norm.set(model.outputNorm.mean, p); p += outDim;
-  norm.set(model.outputNorm.std, p); p += outDim;
+  norm.set(model.outputNorm.std, p);
 
   // weights セクション（f16）: 各層 weight, bias を順に連結
   const layerShapes = model.layers.map((l) => ({ inDim: l.inDim, outDim: l.outDim, activation: l.activation }));
@@ -113,4 +113,4 @@ async function main(): Promise<void> {
   writeFileSync(join(OUT_DIR, `${TAG}.model.bin`), buf);
   log(`保存: artifacts/${TAG}.model.bin = ${(buf.byteLength / 1024 / 1024).toFixed(2)}MB + meta.json`);
 }
-void main();
+main();

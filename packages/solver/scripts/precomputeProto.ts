@@ -8,12 +8,11 @@
 import { eval7 } from '../src/evaluator.js';
 import { exactEquityVsHands, handClassToCombos } from '../src/huEquity.js';
 
-type Card = number;
-type Hand = readonly [Card, Card];
+type Hand = readonly [number, number];
 
 /** クラス表記の配列 → 衝突しない具体コンボ（各クラスの先頭側から総当たりで確保）。 */
 function pickHands(labels: string[]): Hand[] {
-  const used = new Set<Card>();
+  const used = new Set<number>();
   const hands: Hand[] = [];
   for (const lab of labels) {
     let picked: Hand | null = null;
@@ -30,9 +29,9 @@ function pickHands(labels: string[]): Hand[] {
 /** k 人の厳密 all-in equity（全ボード列挙, 単一ポット・分けは均等割）と、strict win 率。 */
 function exactMultiway(hands: Hand[]): { equity: number[]; strictWin: number[] } {
   const k = hands.length;
-  const used = new Set<Card>();
+  const used = new Set<number>();
   for (const [a, b] of hands) { used.add(a); used.add(b); }
-  const deck: Card[] = [];
+  const deck: number[] = [];
   for (let c = 0; c < 52; c++) if (!used.has(c)) deck.push(c);
   const bufs = hands.map(([a, b]) => [a, b, 0, 0, 0, 0, 0]);
   const scores = new Array<number>(k);
@@ -93,7 +92,11 @@ function approxFromPairwise(pw: { win: number[][]; eq: number[][] }): { strictWi
 }
 
 function fmt(a: number[]): string { return a.map((x) => (x * 100).toFixed(1).padStart(5)).join(' '); }
-function maxErr(a: number[], b: number[]): number { let m = 0; for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i]! - b[i]!)); return m; }
+function maxErr(a: number[], b: number[]): number {
+  let m = 0;
+  for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i]! - b[i]!));
+  return m;
+}
 
 const SETS: { name: string; labels: string[] }[] = [
   { name: '3way 高ペア(相関大)', labels: ['AA', 'KK', 'QQ'] },

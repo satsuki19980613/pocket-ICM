@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { OcrReadout } from '@oshihiki/ocr';
 import { buildOcrReadoutView } from './ocrReadoutView';
-import { useBackLayer } from './BackLayer';
+import { backdropClick, useBackLayer } from './BackLayer';
 
 /**
  * 元画像の確認モーダル（M3 補助 → SPEC §5.2.3 で「元画像 × OCR 出力」の照合ビューへ拡張）。
@@ -14,7 +14,7 @@ import { useBackLayer } from './BackLayer';
  * （ストリート/ブラインド等）と信頼度（conf）の % 表記は出さない。数値の桁揃え・CHECK 判定は
  * `ocrReadoutView.ts`（純関数）に追い出し、ここでは表示するだけにする。
  */
-export function ImageModal(props: {
+export function ImageModal(props: Readonly<{
   src: string;
   onClose: () => void;
   /** OCR 出力（SPEC §5.2.3）。渡されたときだけ照合表を出す。 */
@@ -24,7 +24,7 @@ export function ImageModal(props: {
    * ヘッダ自体を廃止したため現在は未使用（呼び出し側 props との互換のためだけ残す）。
    */
   imageSize?: { w: number; h: number };
-}): JSX.Element {
+}>): JSX.Element {
   const [zoom, setZoom] = useState(false);
   const view = props.readout ? buildOcrReadoutView(props.readout) : null;
 
@@ -34,16 +34,12 @@ export function ImageModal(props: {
   return (
     <div
       className="imgmodal-backdrop"
-      onClick={(e) => {
-        // 親（手入力モーダルの backdrop）へバブリングして一緒に閉じるのを防ぐ。
-        e.stopPropagation();
-        props.onClose();
-      }}
+      // 親（手入力モーダルの backdrop）へバブリングして一緒に閉じるのを防ぐ（stopSelf）。
+      onClick={backdropClick(props.onClose, true)}
       role="presentation"
     >
       <div
         className="imgmodal"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={view ? '元画像とOCR結果' : '元画像'}
@@ -64,7 +60,16 @@ export function ImageModal(props: {
             <img
               src={props.src}
               alt="読み取り元のスクリーンショット"
+              // タップ／Enter・Space で原寸 ⇔ 全体表示を切り替える（キーボードでも操作できるように）。
+              role="button"
+              tabIndex={0}
+              aria-pressed={zoom}
               onClick={() => setZoom((z) => !z)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                setZoom((z) => !z);
+              }}
             />
           </div>
 

@@ -10,26 +10,33 @@ import {
   mulberry32,
   type Rng,
 } from '../drill/generate';
-import { judge, makeAttempt, summarize, type DrillAttempt, type SolvedSpot } from '../drill/model';
+import { makeAttempt, summarize, type DrillAttempt, type SolvedSpot } from '../drill/model';
 import { headlineNode, type HeroAction } from '../records/model';
 
 type Phase = 'config' | 'loading' | 'answering' | 'revealed' | 'summary';
 
 const ACT_JA: Record<HeroAction, string> = { PUSH: 'ALL IN', FOLD: 'FOLD' };
 
+/** 開示バナーの判定（推奨と一致＝正解、許容範囲内＝ほぼ最適、それ以外＝不正解）。 */
+function verdictMark(a: DrillAttempt): string {
+  if (a.action === a.verdict) return '✓ 正解';
+  if (a.correct) return '≈ ほぼ最適';
+  return '✕ 不正解';
+}
+
 /**
  * Training（§7.4 トレーニング）画面。ドリル（AOF 出題）モード。ランタイム出題→ポーカーテーブル→FOLD/ALL IN→開示→次へ。
  * 求解は単一 Worker が直列化するので、回答中に「次の手札」を裏で先読み求解しておく
  * （さつき承認: 速い卓 2〜4 人に限定＋パイプライン）。
  */
-export function DrillView(props: { onExit: () => void }): JSX.Element {
+export function DrillView(props: Readonly<{ onExit: () => void }>): JSX.Element {
   const rngRef = useRef<Rng>(mulberry32((Date.now() ^ 0x9e3779b9) >>> 0));
   const nextRef = useRef<Promise<SolvedSpot> | null>(null);
 
   const [phase, setPhase] = useState<Phase>('config');
   const [counts, setCounts] = useState<number[]>([...DEFAULT_FILTER.counts]);
   const [current, setCurrent] = useState<SolvedSpot | null>(null);
-  const [answer, setAnswer] = useState<HeroAction | null>(null);
+  const [, setAnswer] = useState<HeroAction | null>(null);
   const [attempts, setAttempts] = useState<DrillAttempt[]>([]);
   const [reviewing, setReviewing] = useState<DrillAttempt | null>(null);
   const [failed, setFailed] = useState(false);
@@ -85,7 +92,7 @@ export function DrillView(props: { onExit: () => void }): JSX.Element {
   }
 
   function toggleCount(n: number): void {
-    setCounts((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort()));
+    setCounts((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort((a, b) => a - b)));
   }
 
   // ---- config（開始前）----
@@ -94,7 +101,7 @@ export function DrillView(props: { onExit: () => void }): JSX.Element {
       <div className="drill-wrap">
         <div className="panel">
           <div className="scr-h sm">トレーニング設定</div>
-          <label className="lbl">出題する残り人数</label>
+          <div className="lbl">出題する残り人数</div>
           <div className="seg">
             {[2, 3, 4].map((n) => (
               <button
@@ -227,7 +234,7 @@ export function DrillView(props: { onExit: () => void }): JSX.Element {
           <div className={`panel drill-reveal ${last.correct ? 'ok' : 'ng'}`}>
             <div className="dr-banner">
               <span className="dr-mark">
-                {last.action === last.verdict ? '✓ 正解' : last.correct ? '≈ ほぼ最適' : '✕ 不正解'}
+                {verdictMark(last)}
               </span>
               <span className="dr-detail">
                 推奨 <b className={last.verdict === 'PUSH' ? 'push' : 'fold'}>{ACT_JA[last.verdict]}</b>

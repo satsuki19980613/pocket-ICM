@@ -131,7 +131,7 @@ function computeShowdownStratified(
     let mn = Number.POSITIVE_INFINITY;
     for (let c = 0; c < N_CLASSES; c++) if (counts[c]! > 0 && eq[c]! < mn) mn = eq[c]!;
     if (!Number.isFinite(mn)) mn = 0;
-    for (let c = 0; c < N_CLASSES; c++) if (counts[c]! === 0) eq[c] = mn;
+    for (let c = 0; c < N_CLASSES; c++) if (counts[c] === 0) eq[c] = mn;
     pcEq.push(eq);
   }
   const rngS = new DeterministicRng(mix2(seed, 0xbeef));

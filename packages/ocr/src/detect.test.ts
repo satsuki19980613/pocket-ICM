@@ -23,7 +23,7 @@ describe('connectedComponents', () => {
     paint(g, 2, 3, 8, 12, 255);
     paint(g, 18, 3, 8, 12, 255);
     const comps = connectedComponents(brightMask(g, 190), g.w, g.h);
-    expect(comps.length).toBe(2);
+    expect(comps).toHaveLength(2);
     const byX = comps.sort((a, b) => a.x - b.x);
     expect({ x: byX[0]!.x, y: byX[0]!.y, w: byX[0]!.w, h: byX[0]!.h }).toEqual({ x: 2, y: 3, w: 8, h: 12 });
   });
@@ -33,7 +33,7 @@ describe('connectedComponents', () => {
     paint(g, 4, 4, 10, 12, 255);
     paint(g, 7, 8, 3, 3, 0); // 内部の暗い穴
     const comps = connectedComponents(brightMask(g, 190), g.w, g.h);
-    expect(comps.length).toBe(1);
+    expect(comps).toHaveLength(1);
     expect(comps[0]!.w).toBe(10);
     expect(comps[0]!.h).toBe(12);
     expect(comps[0]!.area).toBe(10 * 12 - 3 * 3);
@@ -52,7 +52,7 @@ describe('findCardRects', () => {
     paint(g, 25, 30, 2, 2, 255); // ノイズ
     paint(g, 60, 2, 18, 3, 255); // 横長（aspect 6, 範囲外）
     const rects = findCardRects(g, { minAreaFrac: 0.02 });
-    expect(rects.length).toBe(2);
+    expect(rects).toHaveLength(2);
     expect(rects[0]!.x).toBe(5);
     expect(rects[1]!.x).toBe(40);
     for (const r of rects) {
@@ -74,7 +74,7 @@ describe('dilate / close', () => {
     const m = new Uint8Array([1, 1, 0, 1, 1]);
     const c = close(m, w, h, 1);
     const comps = connectedComponents(c, w, h);
-    expect(comps.length).toBe(1);
+    expect(comps).toHaveLength(1);
     expect(comps[0]!.w).toBe(5);
   });
   it('findCardRects: closeRadius で分断した白枠を1枚として拾う', () => {
@@ -85,7 +85,7 @@ describe('dilate / close', () => {
     const noClose = findCardRects(g, { minAreaFrac: 0.02, minFill: 0.1 });
     const withClose = findCardRects(g, { minAreaFrac: 0.02, minFill: 0.1, closeRadius: 2 });
     // クロージングで全体 bbox の1枚として安定して拾える
-    expect(withClose.length).toBe(1);
+    expect(withClose).toHaveLength(1);
     expect(withClose[0]!.w).toBe(14);
     expect(withClose[0]!.h).toBe(22);
     void noClose;

@@ -107,7 +107,7 @@ function recognizeNorm(
 ): { value: number; conf: number } {
   const mapped = mapFrac(orig, cr);
   const rp = toPx(mapped, img.w, img.h);
-  if (rp.w <= 2 || rp.h <= 2) return { value: NaN, conf: 0 };
+  if (rp.w <= 2 || rp.h <= 2) return { value: Number.NaN, conf: 0 };
   const crop = cropPx(img, rp);
   const tw = Math.max(4, Math.round(orig.w * canonW));
   const th = Math.max(4, Math.round(orig.h * canonH));

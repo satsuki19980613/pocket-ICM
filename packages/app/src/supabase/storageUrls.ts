@@ -17,16 +17,19 @@ import { supabase, SUPABASE_URL } from './client';
 export type ImageBucket = 'thread-images' | 'avatars';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const PATH_RE = new RegExp(`^${UUID}/${UUID}\\.(png|jpg|webp)$`);
+const PATH_RE = new RegExp(String.raw`^${UUID}/${UUID}\.(png|jpg|webp)$`);
 /**
  * 2026-09 初めの版（e1f1dce）が保存したアイコンの形 `<uid>/avatar.(webp|jpg)?v=<数字>`。
  * その版で設定したまま変えていない人のアイコンを表示し続けるために、アイコンだけ認める
  * （DB の制約 0008 も同じ形を認めている）。
  */
-const LEGACY_AVATAR_RE = new RegExp(`^${UUID}/avatar\\.(webp|jpg)$`);
+const LEGACY_AVATAR_RE = new RegExp(String.raw`^${UUID}/avatar\.(webp|jpg)$`);
 
 function publicPrefix(bucket: ImageBucket, base: string): string {
-  return `${base.replace(/\/+$/, '')}/storage/v1/object/public/${bucket}/`;
+  // 末尾の / を落とす（`/\/+$/` の置換と同じ。バックトラックしないよう素朴なループで）。
+  let end = base.length;
+  while (end > 0 && base[end - 1] === '/') end--;
+  return `${base.slice(0, end)}/storage/v1/object/public/${bucket}/`;
 }
 
 /**
@@ -44,7 +47,7 @@ export function storagePathFromRef(
   const path = ref.slice(prefix.length);
   if (PATH_RE.test(path)) return path;
   if (bucket === 'avatars') {
-    const legacy = path.replace(/\?v=[0-9]+$/, '');
+    const legacy = path.replace(/\?v=\d+$/, '');
     if (LEGACY_AVATAR_RE.test(legacy)) return legacy;
   }
   return null;
@@ -85,7 +88,11 @@ export function createSignedUrlResolver(opts: {
   schedule?: (fn: () => void) => void;
 }): SignedUrlResolver {
   const now = opts.now ?? Date.now;
-  const schedule = opts.schedule ?? ((fn: () => void) => void setTimeout(fn, 0));
+  const schedule =
+    opts.schedule ??
+    ((fn: () => void) => {
+      setTimeout(fn, 0);
+    });
   const base = opts.base ?? SUPABASE_URL;
   const cache = new Map<string, { url: string; expiresAt: number; signed: boolean }>();
   const inflight = new Map<string, Promise<string>>();

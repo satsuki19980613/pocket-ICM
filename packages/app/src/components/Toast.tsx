@@ -9,7 +9,7 @@ const AUTO_CLOSE_MS = 5000;
  * のため、呼び出し側（App.tsx）は state を1スロットに保つだけでよい（新しいトーストは
  * 古いものを置き換える）。OS プッシュ通知は使わない（アプリ内のみ・SPEC §5.7）。
  */
-export function Toast(props: {
+export function Toast(props: Readonly<{
   message: string;
   /** 'err' は左のアクセント線を赤にする（失敗通知）。既定は黄（完了通知）。 */
   kind?: 'done' | 'err';
@@ -17,7 +17,7 @@ export function Toast(props: {
   onTap: () => void;
   /** ✕ ボタン・自動消灯で呼ぶ。 */
   onClose: () => void;
-}): JSX.Element {
+}>): JSX.Element {
   const { onClose } = props;
 
   useEffect(() => {
@@ -34,6 +34,14 @@ export function Toast(props: {
           props.onTap();
           props.onClose();
         }}
+        // キーボードでも本文タップと同じ遷移ができるように（✕ ボタンからの Enter は除く）。
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+          e.preventDefault();
+          props.onTap();
+          props.onClose();
+        }}
+        tabIndex={0}
       >
         <span className="toast-msg">{props.message}</span>
         <button

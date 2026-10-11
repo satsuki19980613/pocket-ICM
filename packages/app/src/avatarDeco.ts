@@ -82,7 +82,7 @@ function isNormalFrameColor(v: unknown): v is NormalFrameColor {
  * 光彩はその色の rgba(...,0.28)。式の形自体は元のまま、係数だけ抑えている）。
  */
 export function specialVars(hex: string): Record<string, string> {
-  const n = parseInt(hex.slice(1), 16);
+  const n = Number.parseInt(hex.slice(1), 16);
   const r = (n >> 16) & 255;
   const g = (n >> 8) & 255;
   const b = n & 255;
@@ -113,7 +113,7 @@ const STEEL: AvatarDeco = { ringClass: 'ring-steel', ringStyle: undefined, badge
 export function resolveAvatarDeco(input: AvatarDecoInput | null | undefined): AvatarDeco {
   const rawBadge = input?.badge;
   const badge: BadgeId | null =
-    typeof rawBadge === 'string' && Object.prototype.hasOwnProperty.call(BADGE_SRC, rawBadge)
+    typeof rawBadge === 'string' && Object.hasOwn(BADGE_SRC, rawBadge)
       ? (rawBadge as BadgeId)
       : null;
   const frameColor = input?.frame_color;

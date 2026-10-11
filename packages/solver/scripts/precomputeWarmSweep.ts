@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import type { BoardState, Position } from '@oshihiki/core';
 import { positionsForPlayersLeft } from '@oshihiki/core';
 import { solveMultiway, maxWorkerCap, type MultiwayNSolveOptions, type MultiwayNSolveResult } from '../src/nwaySolver.js';
+import { blindBet } from './blindBet.js';
 
 const log = (s: string): void => void process.stderr.write(s + '\n');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -19,7 +20,7 @@ interface RefFile { setup: { blinds: { sb: number; bb: number }; ante: { scheme:
 function buildState(ref: RefFile, bump: number): BoardState {
   const { sb, bb } = ref.setup.blinds; const ante = ref.setup.ante.amount;
   const seats = ref.players.map((p, i) => {
-    const bet = p.pos === 'SB' ? sb : p.pos === 'BB' ? bb : 0;
+    const bet = blindBet(p.pos, sb, bb);
     const st = p.stack + (i === 0 ? bump : 0);
     return { pos: p.pos, stack: st - bet - ante, state: 'live' as const, bet };
   });
@@ -29,7 +30,14 @@ function buildState(ref: RefFile, bump: number): BoardState {
 function selfDiff(a: MultiwayNSolveResult, b: MultiwayNSolveResult) {
   const bm = new Map(b.nodes.map((n) => [n.key, n.pct]));
   let sum = 0, max = 0, cnt = 0;
-  for (const n of a.nodes) { const o = bm.get(n.key); if (o === undefined) continue; const d = Math.abs(n.pct - o); sum += d; max = Math.max(max, d); cnt++; }
+  for (const n of a.nodes) {
+    const o = bm.get(n.key);
+    if (o === undefined) continue;
+    const d = Math.abs(n.pct - o);
+    sum += d;
+    max = Math.max(max, d);
+    cnt++;
+  }
   return { avg: sum / cnt, max };
 }
 async function timed(state: BoardState, opts: MultiwayNSolveOptions) {
@@ -59,4 +67,4 @@ async function main(): Promise<void> {
     log(`  ${String(I).padStart(6)}    | ${(w.ms/1000).toFixed(1).padStart(5)}s | ${String(w.res.iterations).padStart(4)}  | ${w.res.exploitabilityPt.toFixed(3)} | ${d.avg.toFixed(2)}/${d.max.toFixed(1)}pt        | ${(cold.ms/w.ms).toFixed(1)}x`);
   }
 }
-void main();
+await main();

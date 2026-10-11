@@ -68,7 +68,7 @@ describe('assignSlot (angular ring mapping)', () => {
 describe('yellowNameBlobs', () => {
   it('finds one blob per drawn name and rejects empty felt', () => {
     const blobs = yellowNameBlobs(tableWithNames(['TL', 'TR', 'BC']));
-    expect(blobs.length).toBe(3);
+    expect(blobs).toHaveLength(3);
     // 全塊が席リング内に落ちる。
     for (const b of blobs) expect(isSeatRingBlob(b.cx, b.cy)).toBe(true);
   });

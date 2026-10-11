@@ -70,12 +70,12 @@ function rankLabel(r: string): string {
   return r === 'T' ? '10' : r;
 }
 
-function HeroCards(props: { hand: string }): JSX.Element {
+function HeroCards(props: Readonly<{ hand: string }>): JSX.Element {
   const faces = heroCardFaces(props.hand);
   return (
     <div className="pt-hand">
-      {faces.map((f, i) => (
-        <div key={i} className={`pt-card suit-${f.suit}`}>
+      {faces.map((f) => (
+        <div key={`${f.rank}${f.suit}`} className={`pt-card suit-${f.suit}`}>
           <span className="pt-rank">{rankLabel(f.rank)}</span>
           <span className="pt-suit">{SUIT_GLYPH[f.suit]}</span>
         </div>
@@ -84,7 +84,7 @@ function HeroCards(props: { hand: string }): JSX.Element {
   );
 }
 
-export function PokerTable(props: { state: BoardState; heroHand: string }): JSX.Element {
+export function PokerTable(props: Readonly<{ state: BoardState; heroHand: string }>): JSX.Element {
   const { state } = props;
   const n = state.playersLeft;
   const slots = SLOTS[n] ?? SLOTS[6]!;

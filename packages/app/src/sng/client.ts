@@ -102,7 +102,7 @@ abstract class WsClientBase<TMsg> {
   private readonly onVisible = (): void => {
     if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
     if (this.closing || this.serverClosed) return;
-    if (this.ws && this.ws.readyState === WS_OPEN) return;
+    if (this.ws?.readyState === WS_OPEN) return;
     this.clearReconnectTimer();
     this.attempt = 0;
     this.openSocket();
@@ -190,7 +190,7 @@ abstract class WsClientBase<TMsg> {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      if (this.ws && this.ws.readyState === WS_OPEN) this.rawSend(this.ws, { t: 'ping' });
+      if (this.ws?.readyState === WS_OPEN) this.rawSend(this.ws, { t: 'ping' });
     }, HEARTBEAT_MS);
   }
 
@@ -207,7 +207,7 @@ abstract class WsClientBase<TMsg> {
 
   /** open 中だけ送る（そうでなければ黙って捨てる）。 */
   send(msg: ClientMsg): void {
-    if (this.ws && this.ws.readyState === WS_OPEN) this.rawSend(this.ws, msg);
+    if (this.ws?.readyState === WS_OPEN) this.rawSend(this.ws, msg);
   }
 
   get connected(): boolean {

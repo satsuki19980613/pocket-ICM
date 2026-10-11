@@ -18,8 +18,7 @@ export function summarize(results: CaseResult[]): HarnessSummary {
 export function formatReport(results: CaseResult[]): string {
   const s = summarize(results);
   const lines: string[] = [];
-  lines.push(`照合結果: ${s.passed}/${s.total} 合格, ${s.failed} 不合格`);
-  lines.push('');
+  lines.push(`照合結果: ${s.passed}/${s.total} 合格, ${s.failed} 不合格`, '');
 
   for (const r of results) {
     const mark = r.pass ? '✓' : '✗';

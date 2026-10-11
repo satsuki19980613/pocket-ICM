@@ -10,6 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
+import { safePath } from './safePath.js';
 
 import {
   extractAnchored,
@@ -41,7 +42,7 @@ if (!input) {
   process.exit(1);
 }
 
-const png = decodePng(readFileSync(input));
+const png = decodePng(readFileSync(safePath(input, 'input')));
 const img = { w: png.width, h: png.height, data: png.rgba };
 const aspect = img.w / img.h;
 console.log('=== 入力 ===');

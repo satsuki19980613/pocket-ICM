@@ -9,9 +9,8 @@
 
 import { z } from 'zod';
 import { GAME_MODES } from './gameMode.js';
-import { POSITIONS } from './positions.js';
+import { POSITIONS, positionsMatchPlayersLeft, isValidPlayersLeft } from './positions.js';
 import { isHandClass } from './cards.js';
-import { positionsMatchPlayersLeft, isValidPlayersLeft } from './positions.js';
 
 export const SEAT_STATES = ['live', 'fold', 'allin', 'call', 'empty'] as const;
 export type SeatState = (typeof SEAT_STATES)[number];

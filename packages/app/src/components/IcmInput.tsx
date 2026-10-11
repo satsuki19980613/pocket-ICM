@@ -67,7 +67,7 @@ export function ReadConditionsList(): JSX.Element {
  * 「読み取れる条件」はゲーム選択ボタンと同居すると画面が窮屈になるので**モーダルに格納**した
  * （同指示）。エラー画面側は理由説明そのものなので本文表示のまま。
  */
-export function IcmInput(props: {
+export function IcmInput(props: Readonly<{
   /** スクショ添付 → OCR プリフィル。 */
   onScreenshot: (file: File) => void;
   /** 手入力モーダルを開く。 */
@@ -82,7 +82,7 @@ export function IcmInput(props: {
   /** ゲーム選択（写真より先に決める）。 */
   gameSel: GameSel;
   onGameModeChange: (next: GameSel) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const fileRef = useRef<HTMLInputElement>(null);
   const [showConditions, setShowConditions] = useState(false);
 

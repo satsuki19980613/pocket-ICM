@@ -22,11 +22,11 @@ import type { HandDetailView } from '../history/handView';
 import { sngIcmSpot } from '../history/icmSpot';
 import type { SngIcmSpotResult } from '../history/icmSpot';
 import { sngHandView } from '../history/sngHandView';
-import type { SngHistoryIcm } from '../icmQueue';
+import type { IcmHandStatus, SngHistoryIcm } from '../icmQueue';
 import type { SngGameLocal, SngHandLocal, SngResultLocal } from '../sng/historyStore';
 import { chipsToBbSng, netOf, sngConfigSummary } from '../sng/tenfour';
 import { useSngHands } from '../sng/useSngHands';
-import { Cards, HandDetailModal, fmtBb } from './HandDetailModal';
+import { Cards, HandDetailModal, fmtBb, signClass } from './HandDetailModal';
 
 const PAGE = 50;
 
@@ -58,6 +58,13 @@ function decodeSafe(hand: SngHandLocal): SngHandRecord | null {
 }
 
 /** そのハンドの開始スタックからの「開始 bb」（level 1 の BB は常に 200 チップ）。 */
+/** 試合設定が取れないときの見出し（「6人」または「12ハンド」＋開始スタック）。 */
+function gameMetaFallback(g: { result: { players: number } | null; hands: readonly unknown[] }, startBb: number | null): string {
+  const size = g.result ? `${g.result.players}人` : `${g.hands.length}ハンド`;
+  const start = startBb ? ` ・ ${startBb}bb開始` : '';
+  return `${size}${start}`;
+}
+
 function startBbOf(hands: readonly SngHandLocal[]): number | null {
   const first = hands.find((h) => h.handNo === 1);
   if (!first) return null;
@@ -101,8 +108,8 @@ function useGroups(
     }
     // 新しい試合が先（そのゲームの最後のハンドの playedAt で判定）。
     groups.sort((a, b) => {
-      const at = a.hands[a.hands.length - 1]?.playedAt ?? 0;
-      const bt = b.hands[b.hands.length - 1]?.playedAt ?? 0;
+      const at = a.hands.at(-1)?.playedAt ?? 0;
+      const bt = b.hands.at(-1)?.playedAt ?? 0;
       return bt - at;
     });
     return groups;
@@ -117,20 +124,40 @@ interface OpenModalState {
   readonly spot: SngIcmSpotResult | null;
 }
 
+/** 一覧行の ICM ボタンの文言（見出し・読み上げ）を状態ごとに引く。 */
+function icmRowText(status: IcmHandStatus, handNo: number): { label: string; ariaLabel: string } {
+  switch (status) {
+    case 'none':
+      return { label: 'ICM Calc', ariaLabel: `ICM を計算する（#${handNo}）` };
+    case 'queued':
+      return { label: '待機中', ariaLabel: `ICM 計算の順番待ち（#${handNo}）` };
+    case 'running':
+      return { label: '計算中', ariaLabel: `ICM 計算中（#${handNo}）` };
+    default:
+      return { label: '結果', ariaLabel: `ICM の結果を見る（#${handNo}）` };
+  }
+}
+
+/** モーダル下部の ICM ボタンの文言を状態ごとに引く。 */
+function icmModalLabel(status: IcmHandStatus): string {
+  switch (status) {
+    case 'none':
+      return 'ICM を計算する';
+    case 'queued':
+      return '計算キューに登録済み';
+    case 'running':
+      return '計算中…';
+    default:
+      return '計算結果を見る';
+  }
+}
+
 /** 一覧行の右端に出す ICM 計算ボタン（対象ハンドのみ）。 */
-function IcmRowButton(props: { icm: SngHistoryIcm; spot: SngIcmSpotResult; gameId: string; handNo: number }): JSX.Element | null {
+function IcmRowButton(props: Readonly<{ icm: SngHistoryIcm; spot: SngIcmSpotResult; gameId: string; handNo: number }>): JSX.Element | null {
   const { icm, spot, gameId, handNo } = props;
   if (!spot.ok) return null;
   const status = icm.statusOf(gameId, handNo);
-  const label = status === 'none' ? 'ICM Calc' : status === 'queued' ? '待機中' : status === 'running' ? '計算中' : '結果';
-  const ariaLabel =
-    status === 'none'
-      ? `ICM を計算する（#${handNo}）`
-      : status === 'queued'
-        ? `ICM 計算の順番待ち（#${handNo}）`
-        : status === 'running'
-          ? `ICM 計算中（#${handNo}）`
-          : `ICM の結果を見る（#${handNo}）`;
+  const { label, ariaLabel } = icmRowText(status, handNo);
   return (
     <button
       type="button"
@@ -151,12 +178,12 @@ function IcmRowButton(props: { icm: SngHistoryIcm; spot: SngIcmSpotResult; gameI
   );
 }
 
-function HandRow(props: {
+function HandRow(props: Readonly<{
   hand: SngHandLocal;
   game: SngGameLocal | null;
   icm?: SngHistoryIcm;
   onOpen: (modal: OpenModalState) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const { hand, game, icm, onOpen } = props;
   const rec = useMemo(() => decodeSafe(hand), [hand]);
   const mySeat = hand.mySeat;
@@ -216,7 +243,7 @@ function HandRow(props: {
         <span className="hh-side">
           {view && <span className="hh-tag pot">POT {fmtBb(view.result.finalPotBb)}bb</span>}
           {net !== null ? (
-            <b className={`hh-net${net < 0 ? ' loss' : net > 0 ? ' gain' : ''}`}>
+            <b className={`hh-net${signClass(net)}`}>
               {signedNum(net)}
               <span className="hh-unit">bb</span>
             </b>
@@ -231,20 +258,13 @@ function HandRow(props: {
 }
 
 /** モーダル下部の ICM アクション（対象外なら理由の一言だけ）。 */
-function IcmModalActions(props: { icm: SngHistoryIcm; spot: SngIcmSpotResult; gameId: string; handNo: number }): JSX.Element {
+function IcmModalActions(props: Readonly<{ icm: SngHistoryIcm; spot: SngIcmSpotResult; gameId: string; handNo: number }>): JSX.Element {
   const { icm, spot, gameId, handNo } = props;
   if (!spot.ok) {
     return <p className="hhd-icm-off">ICM 計算の対象外: {spot.note}</p>;
   }
   const status = icm.statusOf(gameId, handNo);
-  const label =
-    status === 'none'
-      ? 'ICM を計算する'
-      : status === 'queued'
-        ? '計算キューに登録済み'
-        : status === 'running'
-          ? '計算中…'
-          : '計算結果を見る';
+  const label = icmModalLabel(status);
   return (
     <button
       type="button"
@@ -263,7 +283,7 @@ function IcmModalActions(props: { icm: SngHistoryIcm; spot: SngIcmSpotResult; ga
   );
 }
 
-export function SngHistoryView(props: { icm?: SngHistoryIcm }): JSX.Element {
+export function SngHistoryView(props: Readonly<{ icm?: SngHistoryIcm }>): JSX.Element {
   const { icm } = props;
   const { hands, results, games, note } = useSngHands();
   const groups = useGroups(hands, results, games);
@@ -298,21 +318,19 @@ export function SngHistoryView(props: { icm?: SngHistoryIcm }): JSX.Element {
         <div className="hh-list">
           {groups.slice(0, limit).map((g) => {
             const startBb = startBbOf(g.hands);
-            const last = g.hands[g.hands.length - 1];
+            const last = g.hands.at(-1);
             return (
               <div key={g.gameId} className="sh-game">
                 <div className="sh-game-head">
                   <span className="sh-game-time">{last ? fmtTime(last.playedAt) : ''}</span>
                   <span className="sh-game-meta">
-                    {g.game
-                      ? sngConfigSummary(g.game.config)
-                      : `${g.result ? `${g.result.players}人` : `${g.hands.length}ハンド`}${startBb ? ` ・ ${startBb}bb開始` : ''}`}
+                    {g.game ? sngConfigSummary(g.game.config) : gameMetaFallback(g, startBb)}
                   </span>
                   <span className="sh-game-result">
                     {g.result ? (
                       <>
                         <b>{g.result.place}位</b>
-                        <span className={`sh-pt${g.result.pt < 0 ? ' loss' : g.result.pt > 0 ? ' gain' : ''}`}>
+                        <span className={`sh-pt${signClass(g.result.pt)}`}>
                           {signedNum(g.result.pt)}pt
                         </span>
                       </>

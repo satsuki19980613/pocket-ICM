@@ -34,6 +34,10 @@ GEN_SCRIPT = os.path.join("scripts", "genNwayTrainData.ts")  # cwd=SOLVER_DIR �
 # ---- 既定設定 --------------------------------------------------------------
 DEFAULTS = {"players": 5, "samples": 40000, "axis": "2,8,14,20,25", "ckpt": 10}
 
+# フォント名（複数箇所で使うので定数化）
+FONT_UI = "Segoe UI"
+FONT_UI_SEMIBOLD = "Segoe UI Semibold"
+
 # ---- 配色（CP2077 調） -----------------------------------------------------
 C = {
     "bg": "#0c0f15", "panel": "#141822", "panel2": "#1b2130", "line": "#2a3243",
@@ -270,20 +274,20 @@ class Monitor:
         f_head = tk.Frame(r, bg=C["bg"])
         f_head.pack(fill="x", padx=22, pady=(20, 4))
         tk.Label(f_head, text="◤ TRAINING DATA GENERATOR", bg=C["bg"], fg=C["cyan"],
-                 font=("Segoe UI Semibold", 14)).pack(anchor="w")
+                 font=(FONT_UI_SEMIBOLD, 14)).pack(anchor="w")
         self.lbl_cfg = tk.Label(r, text="", bg=C["bg"], fg=C["dim"], font=("Consolas", 10))
         self.lbl_cfg.pack(anchor="w", padx=22)
 
         # ETA
         tk.Label(r, text="推定残り時間 / ETA", bg=C["bg"], fg=C["dim"],
-                 font=("Segoe UI", 9)).pack(anchor="w", padx=22, pady=(16, 0))
+                 font=(FONT_UI, 9)).pack(anchor="w", padx=22, pady=(16, 0))
         row_eta = tk.Frame(r, bg=C["bg"])
         row_eta.pack(fill="x", padx=22)
         self.lbl_eta = tk.Label(row_eta, text="—", bg=C["bg"], fg=C["yellow"],
-                                font=("Segoe UI", 40, "bold"))
+                                font=(FONT_UI, 40, "bold"))
         self.lbl_eta.pack(side="left")
         self.lbl_state = tk.Label(row_eta, text="—", bg=C["bg"], fg=C["dim"],
-                                  font=("Segoe UI Semibold", 12))
+                                  font=(FONT_UI_SEMIBOLD, 12))
         self.lbl_state.pack(side="right", pady=18)
 
         # progress bar (canvas)
@@ -315,7 +319,7 @@ class Monitor:
 
         # settings
         f_set = tk.LabelFrame(r, text=" 設定 ", bg=C["panel"], fg=C["dim"],
-                              font=("Segoe UI", 9), bd=1, relief="solid")
+                              font=(FONT_UI, 9), bd=1, relief="solid")
         f_set.pack(fill="x", padx=22, pady=(4, 8))
         f_set.configure(highlightbackground=C["line"])
         row = tk.Frame(f_set, bg=C["panel"])
@@ -327,14 +331,14 @@ class Monitor:
 
         # scheduler
         f_sc = tk.LabelFrame(r, text=" CPU休憩スケジュール ", bg=C["panel"], fg=C["dim"],
-                             font=("Segoe UI", 9), bd=1, relief="solid")
+                             font=(FONT_UI, 9), bd=1, relief="solid")
         f_sc.pack(fill="x", padx=22, pady=(0, 8))
         row2 = tk.Frame(f_sc, bg=C["panel"])
         row2.pack(fill="x", padx=10, pady=8)
         self.v_sched = tk.IntVar(value=0)
         tk.Checkbutton(row2, text="有効", variable=self.v_sched, bg=C["panel"], fg=C["ink"],
                        selectcolor=C["panel2"], activebackground=C["panel"],
-                       activeforeground=C["ink"], font=("Segoe UI", 10)).pack(side="left")
+                       activeforeground=C["ink"], font=(FONT_UI, 10)).pack(side="left")
         tk.Label(row2, text=" 稼働", bg=C["panel"], fg=C["dim"]).pack(side="left")
         self.e_run = self._spin(row2, "50")
         tk.Label(row2, text="分 → 休憩", bg=C["panel"], fg=C["dim"]).pack(side="left")
@@ -342,18 +346,18 @@ class Monitor:
         tk.Label(row2, text="分を繰り返す", bg=C["panel"], fg=C["dim"]).pack(side="left")
         tk.Button(row2, text="適用", command=self.apply_schedule, bg=C["panel2"], fg=C["ink"],
                   activebackground=C["line"], relief="flat", padx=12,
-                  font=("Segoe UI", 9)).pack(side="left", padx=10)
+                  font=(FONT_UI, 9)).pack(side="left", padx=10)
         self.lbl_sched = tk.Label(row2, text="", bg=C["panel"], fg=C["cyan"],
                                   font=("Consolas", 9))
         self.lbl_sched.pack(side="left", padx=6)
 
         # message / note
-        self.lbl_msg = tk.Label(r, text="", bg=C["bg"], fg=C["dim"], font=("Segoe UI", 9),
+        self.lbl_msg = tk.Label(r, text="", bg=C["bg"], fg=C["dim"], font=(FONT_UI, 9),
                                 anchor="w", justify="left", wraplength=700)
         self.lbl_msg.pack(fill="x", padx=22, pady=(2, 0))
         tk.Label(r, text="一時停止・停止・休憩は「次の点の切れ目」（1点あたり数十秒）で反映されます。"
                          "停止すれば checkpoint に保存され、電源を切っても次回ここから再開します。",
-                 bg=C["bg"], fg=C["steel"], font=("Segoe UI", 8), anchor="w",
+                 bg=C["bg"], fg=C["steel"], font=(FONT_UI, 8), anchor="w",
                  justify="left", wraplength=700).pack(fill="x", padx=22, pady=(6, 12))
 
         self._set_msg(f"Node: {self.node or '未検出'}",
@@ -364,23 +368,23 @@ class Monitor:
                         highlightbackground=C["line"])
         cell.grid(row=0, column=col, sticky="nsew", padx=4)
         tk.Label(cell, text=label, bg=C["panel"], fg=C["dim"],
-                 font=("Segoe UI", 8)).pack(anchor="w", padx=10, pady=(8, 0))
+                 font=(FONT_UI, 8)).pack(anchor="w", padx=10, pady=(8, 0))
         val = tk.Label(cell, text="—", bg=C["panel"], fg=C["ink"],
-                       font=("Segoe UI Semibold", 15))
+                       font=(FONT_UI_SEMIBOLD, 15))
         val.pack(anchor="w", padx=10, pady=(0, 8))
         return val
 
     def _btn(self, parent, text, cmd, bg, fg):
         return tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg,
                          activebackground=bg, activeforeground=fg, relief="flat",
-                         font=("Segoe UI Semibold", 11), padx=14, pady=8, bd=0,
+                         font=(FONT_UI_SEMIBOLD, 11), padx=14, pady=8, bd=0,
                          cursor="hand2")
 
     def _field(self, parent, label, default, width):
         box = tk.Frame(parent, bg=C["panel"])
         box.pack(side="left", padx=(0, 14))
         tk.Label(box, text=label, bg=C["panel"], fg=C["dim"],
-                 font=("Segoe UI", 8)).pack(anchor="w")
+                 font=(FONT_UI, 8)).pack(anchor="w")
         e = tk.Entry(box, width=width, bg=C["panel2"], fg=C["ink"], insertbackground=C["ink"],
                      relief="flat", font=("Consolas", 10))
         e.insert(0, default)

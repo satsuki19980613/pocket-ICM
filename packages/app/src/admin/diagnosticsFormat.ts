@@ -125,19 +125,20 @@ export function formatSolveMs(ms: number | null | undefined): string {
   return `${(ms / 1000).toFixed(1)}秒`;
 }
 
+/** UA → OS 名。iPhone の UA は "like Mac OS X" を含むので Mac より先に見る。 */
+function osOf(ua: string): string {
+  if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Macintosh|Mac OS X/.test(ua)) return 'Mac';
+  return 'その他';
+}
+
 /** 端末の種類と画面の大きさ（device = { ua, w, h, ... }）。iPhone の UA は "like Mac OS X" を含むので先に見る。 */
 export function deviceSummary(device: unknown): string {
   if (!isObj(device)) return '—';
   const ua = typeof device.ua === 'string' ? device.ua : '';
-  const os = /iPhone|iPad|iPod/.test(ua)
-    ? 'iOS'
-    : /Android/.test(ua)
-      ? 'Android'
-      : /Windows/.test(ua)
-        ? 'Windows'
-        : /Macintosh|Mac OS X/.test(ua)
-          ? 'Mac'
-          : 'その他';
+  const os = osOf(ua);
   const w = typeof device.w === 'number' && device.w > 0 ? device.w : null;
   const h = typeof device.h === 'number' && device.h > 0 ? device.h : null;
   return w && h ? `${os} ${w}×${h}` : os;

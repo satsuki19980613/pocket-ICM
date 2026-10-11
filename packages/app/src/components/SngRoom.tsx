@@ -60,19 +60,26 @@ function safeStorage(): Storage | null {
   }
 }
 
+/** 結果一覧の pt 表示（プラスには + を付ける。未確定は '-'）。 */
+function ptText(pt: number | null | undefined): string {
+  if (pt == null) return '-';
+  const sign = pt > 0 ? '+' : '';
+  return `${sign}${pt}pt`;
+}
+
 function remainingStackOf(table: PublicTable, seat: number): number {
   const player = table.players[seat];
   const commit = table.hand?.commits[seat] ?? 0;
   return Math.max(0, (player?.stack ?? 0) - commit);
 }
 
-export function SngRoom(props: {
+export function SngRoom(props: Readonly<{
   roomId: string;
   onExit: () => void;
   onSwitchRoom: (roomId: string) => void;
   /** App.tsx のヘッダ「‹」用ガード登録。running/paused の間だけ渡し、抜けたら null で解除する。 */
   registerLeaveGuard: (guard: (() => void) | null) => void;
-}): JSX.Element {
+}>): JSX.Element {
   const { table, you, error, closed, connected, send, serverNow } = useTable(props.roomId);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -292,7 +299,7 @@ export function SngRoom(props: {
                 <span className="sg-place">{p.place ? `${p.place}位` : '-'}</span>
                 <span className="sg-pname">{p.name}</span>
                 <span className={`sg-pt ${(p.pt ?? 0) < 0 ? 'neg' : ''}`}>
-                  {p.pt != null ? `${p.pt > 0 ? '+' : ''}${p.pt}pt` : '-'}
+                  {ptText(p.pt)}
                 </span>
               </li>
             ))}
@@ -376,8 +383,7 @@ export function SngRoom(props: {
       {!settled && showActionArea && (mySitout ? (
         <div className="sb-actions">
           <button type="button" className="sb-act check" onClick={() => send({ t: 'sitin' })}>
-            SIT IN
-            <span className="sb-act-sub">復帰する</span>
+            SIT IN<span className="sb-act-sub">復帰する</span>
           </button>
         </div>
       ) : (
@@ -479,8 +485,7 @@ export function SngRoom(props: {
             )}
             {legal?.callPut != null && (
               <button type="button" className="sb-act call" disabled={!canAct} onClick={() => act('call')}>
-                CALL
-                <span className="sb-act-sub">{formatBbDisplay(legal.callPut / (hand?.bb ?? 200))}bb</span>
+                CALL<span className="sb-act-sub">{formatBbDisplay(legal.callPut / (hand?.bb ?? 200))}bb</span>
               </button>
             )}
             {legal?.betTo && hand && mySeat != null && (

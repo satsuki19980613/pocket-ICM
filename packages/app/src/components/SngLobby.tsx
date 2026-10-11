@@ -31,7 +31,7 @@ function speedLabel(cfg: RoomSummary['config']): string {
   return SPEED_LABEL[cfg.speed];
 }
 
-export function SngLobby(props: { onOpenRoom: (roomId: string) => void }): JSX.Element {
+export function SngLobby(props: Readonly<{ onOpenRoom: (roomId: string) => void }>): JSX.Element {
   const [players, setPlayers] = useState<PlayerCount>(6);
   const [startBb, setStartBb] = useState<StartBb>(100);
   const [speed, setSpeed] = useState<Speed>('normal');

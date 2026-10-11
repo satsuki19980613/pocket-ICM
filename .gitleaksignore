@@ -4,3 +4,4 @@
 94ca37fb5fc09e91381bdece6b9b6546eb3c453a:packages/app/src/sng/historySync.ts:generic-api-key:40
 # テストの入力値（Slumbot の応答を模したもの）。秘密情報ではない
 42741d18b97baa77c8a26bfd73782639fdc2610f:packages/app/src/slumbot/hand.test.ts:generic-api-key:13
+b186db4bde9e10cdf8709f434b2330728b1491d3:packages/app/src/slumbot/hand.test.ts:generic-api-key:13

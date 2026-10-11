@@ -111,7 +111,7 @@
 | [CI](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/ci.yml) | 型チェックとテスト（手札を見せないこと・画像の参照の検証・アカウント削除の手順を含む） | コードを変えるたび |
 | [Live](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/live.yml) | 本番のサイトが届くか、保護ヘッダがリポジトリの設定どおりか、Worker が余計なものを通さないか、ログインしていない人に Supabase が表・画像の一覧・管理用の関数を何も返さないか、下の Observatory の評価 | 毎週と、配信やサーバーを変えたとき |
 | [CodeQL](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/codeql.yml) | GitHub 公式のコードスキャン（危ない書き方が無いか） | コードを変えるたびと毎週 |
-| [Mozilla HTTP Observatory](https://developer.mozilla.org/en-US/observatory/analyze?host=pocket-icm.wsk641.workers.dev) | 公開しているサイトの保護ヘッダ。**A+** を下回ると Live が失敗する | Live が毎週測る。リンク先でいつでも測り直せる |
+| [Mozilla HTTP Observatory](https://developer.mozilla.org/en-US/observatory/analyze?host=pocket-icm.wsk641.workers.dev) | 公開しているサイトの保護ヘッダ。**A+**（125 点、12 項目すべて合格。2026-10-11 に Live で測定）。A+ を下回ると Live が失敗する | Live が毎週測る。リンク先でいつでも測り直せる |
 
 ### 問題を見つけたら
 

@@ -25,7 +25,7 @@
     "wrangler": "^4.131.2"
   },
   "dependencies": {
-    "zod": "^3.24.1"
+    "zod": "^4.6.5"
   },
   "engines": {
     "node": ">=20"

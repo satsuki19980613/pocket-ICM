@@ -34,7 +34,8 @@ export const SolutionNodeSchema = z.object({
   hands: z.array(handClassKey),
   freq: z.record(handClassKey, freqValue),
   ev: z.record(handClassKey, z.number().finite()),
-  equity: z.record(z.enum(POSITIONS), NodeEquitySchema),
+  // 全ポジション分そろうとは限らない（zod 4 の z.record は enum キーを全部必須にするので partialRecord）
+  equity: z.partialRecord(z.enum(POSITIONS), NodeEquitySchema),
   quality: QualitySchema,
 });
 export type SolutionNode = z.infer<typeof SolutionNodeSchema>;

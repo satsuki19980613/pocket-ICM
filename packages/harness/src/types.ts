@@ -21,7 +21,7 @@ export const ExpectedNodeSchema = z.object({
   /** その枝の頻度%（0..100） */
   freqPct: z.number().min(0).max(100).optional(),
   /** EQPre/EQPost（実払い pt 建て）。ポジション → {pre,post} */
-  equity: z.record(z.enum(POSITIONS), z.object({ pre: z.number(), post: z.number() })).optional(),
+  equity: z.partialRecord(z.enum(POSITIONS), z.object({ pre: z.number(), post: z.number() })).optional(),
   /** 各ハンドの EV（実払い pt）。境界ハンド許容の判定に使う */
   ev: z.record(handClass, z.number()).optional(),
 });

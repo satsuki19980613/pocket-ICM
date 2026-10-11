@@ -8,7 +8,7 @@
  *   multi : tsx digitsTool.ts multi <templates.json> <input.png> <name=x,y,w,h=truth> ...
  * x,y,w,h は [0,1] の割合矩形。truth は "13,491" 等（コンマは自動で無視）。
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng } from './pngCodec.js';
 import { safePath } from './safePath.js';
 import { parseAmount } from '../src/digits.js';
@@ -34,9 +34,13 @@ if (mode === 'build') {
     rects.forEach((r, i) => console.error(`  glyph[${i}] x=${r.x} w=${r.w} h=${r.h}`));
     process.exit(1);
   }
-  const store: TplStore = existsSync(tplPath)
-    ? (JSON.parse(readFileSync(tplPath, 'utf8')).templates ?? {})
-    : {};
+  // 存在確認と読み込みの間に差し替えられないよう、読んでみて無ければ空にする。
+  let store: TplStore = {};
+  try {
+    store = JSON.parse(readFileSync(tplPath, 'utf8')).templates ?? {};
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
   rects.forEach((r, i) => {
     const g = normGlyph(strip, r);
     store[chars[i]!] = { w: g.w, h: g.h, data: [...g.data] };

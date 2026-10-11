@@ -7,7 +7,7 @@
  *   recog : tsx detectRecognize.ts recog <templates.json> <input.png> <zx,zy,zw,zh> <threshold> <truth,truth,...>
  * label/truth は検出順（行ごと左→右）。数を合わせること。
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { decodePng, type Raster } from './pngCodec.js';
 import { safePath } from './safePath.js';
 import { findCardRects, cornerOf } from '../src/detect.js';
@@ -50,8 +50,13 @@ const corners = rects.map((r) => resize(cropGray(gray, cornerOf(r)), CW, CH));
 if (mode === 'build') {
   if (labels.length !== rects.length) { console.error('label 数が検出数と不一致'); process.exit(1); }
   // 既存 JSON があればマージ（複数スクショから全ランクを集める）。
-  const templates: Record<string, { w: number; h: number; data: number[] }> =
-    existsSync(tplPath) ? (JSON.parse(readFileSync(tplPath, 'utf8')).templates ?? {}) : {};
+  // 存在確認と読み込みの間に差し替えられないよう、読んでみて無ければ空にする。
+  let templates: Record<string, { w: number; h: number; data: number[] }> = {};
+  try {
+    templates = JSON.parse(readFileSync(tplPath, 'utf8')).templates ?? {};
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
   corners.forEach((c, i) => { templates[labels[i]!] = { w: c.w, h: c.h, data: [...c.data] }; });
   writeFileSync(tplPath, JSON.stringify({ templates }));
   console.log(`built/merged → ${Object.keys(templates).length} templates: ${Object.keys(templates).sort((a, b) => (a < b ? -1 : 1)).join(' ')}`);

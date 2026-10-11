@@ -3,6 +3,7 @@
 [![CI](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/ci.yml)
 [![Live](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/live.yml/badge.svg?branch=master)](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/live.yml)
 [![CodeQL](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/codeql.yml)
+[![Secrets](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/secrets.yml/badge.svg?branch=master)](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/secrets.yml)
 
 ポーカーチェイスのクラブマッチ（6 人 SNG・固定ペイアウト +5/+3/+2/+1/0/−1pt）向けの **push/fold ICM 復習ツール**。招待キーを持つクラブのメンバーだけが利用できる Web アプリ（PWA）である。
 
@@ -118,6 +119,7 @@
 | [CI](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/ci.yml) | 型検査とテスト（手札の秘匿、画像の参照の検証、アカウント削除の手順を含む） | コード変更時 |
 | [Live](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/live.yml) | 本番サイトの疎通、セキュリティヘッダーがリポジトリの設定どおりであること、Worker が不要なリクエストを通さないこと、未ログインの利用者に Supabase がテーブル・画像一覧・管理用の関数を一切返さないこと、下記 Observatory の評価 | 毎週・配信やサーバーの変更時 |
 | [CodeQL](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/codeql.yml) | GitHub CodeQL による静的解析 | コード変更時・毎週 |
+| [Secrets](https://github.com/satsuki19980613/pocket-ICM/actions/workflows/secrets.yml) | gitleaks による秘密情報（API キー・トークン・パスワード・秘密鍵など）の検査。全ブランチの全履歴が対象 | コード変更時・毎週 |
 | [Mozilla HTTP Observatory](https://developer.mozilla.org/en-US/observatory/analyze?host=pocket-icm.wsk641.workers.dev) | 公開サイトのセキュリティヘッダー。**A+**（125 点、12 項目すべて合格。2026-10-11 に Live で測定）。A+ 未満で Live が失敗する | Live が毎週測定。リンク先で随時再測定できる |
 
 このほか、依存パッケージの脆弱性を Dependabot で通知している。
